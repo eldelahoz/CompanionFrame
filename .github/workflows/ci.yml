@@ -46,7 +46,13 @@ jobs:
 
   check:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Release PRs and their merge only bump versions and the changelog of code main already tested;
+    # the Release workflow still compiles it. The branch must be ours, so a fork cannot skip CI by name.
+    if: >-
+      needs.changes.outputs.code == 'true'
+      && !(startsWith(github.head_ref, 'release-please--')
+           && github.event.pull_request.head.repo.full_name == github.repository)
+      && !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(main): release '))
     strategy:
       fail-fast: false
       matrix:
