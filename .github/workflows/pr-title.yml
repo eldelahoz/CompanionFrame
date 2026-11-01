@@ -1,22 +1,27 @@
 name: PR title
 
-# The PR title becomes the merge commit title, so it follows the commit convention (CONTRIBUTING.md).
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   pr-title:
     runs-on: ubuntu-latest
     steps:
-      - name: Check the title is "type(scope): summary"
+      # The PR title becomes the merge commit title, so it follows the commit convention (CONTRIBUTING.md).
+      - name: Check the title format
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: |
-          printf '%s\n' "$TITLE" | grep -Eq '^(feat|fix|refactor|perf|test|docs|build|ci|chore)(\([a-z0-9/-]+\))?!?: [^ ].*' || {
-            echo "::error::PR title must be 'type(scope): summary' (scope optional), e.g. feat(overlay): add click-through window. Got: $TITLE"
+          pattern='^(feat|fix|refactor|perf|test|docs|build|ci|chore)(\([a-z0-9/-]+\))?!?: [^ ].*'
+          if ! printf '%s\n' "$TITLE" | grep -Eq "$pattern"; then
+            echo "::error::PR title must look like 'type(scope): summary', scope optional. Got: $TITLE"
             exit 1
-          }
-          [ "$(printf '%s' "$TITLE" | wc -m)" -le 140 ] || { echo "::error::PR title is over 140 characters."; exit 1; }
+          fi
+          if [ "$(printf '%s' "$TITLE" | wc -m)" -gt 140 ]; then
+            echo "::error::PR title is over 140 characters."
+            exit 1
+          fi
