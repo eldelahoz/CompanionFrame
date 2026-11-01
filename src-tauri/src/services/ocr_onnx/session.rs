@@ -13,6 +13,7 @@ static ENVIRONMENT: OnceLock<Environment> = OnceLock::new();
 /// version against the `ort` API level. Fails (instead of panicking inside `ort`) when the DLL is
 /// absent, unloadable or too old; failures are not cached.
 pub fn environment(dll: &Path) -> Result<&'static Environment, String> {
+    check_dll(dll)?;
     if let Some(env) = ENVIRONMENT.get() {
         return Ok(env);
     }
@@ -20,7 +21,9 @@ pub fn environment(dll: &Path) -> Result<&'static Environment, String> {
     Ok(ENVIRONMENT.get_or_init(|| env))
 }
 
-fn build_environment(dll: &Path) -> Result<Environment, String> {
+/// Checked before the process-wide cache, so a bad path fails the same whether or not another
+/// caller already loaded the runtime.
+fn check_dll(dll: &Path) -> Result<(), String> {
     if !dll.is_absolute() {
         return Err(format!(
             "onnxruntime path is not absolute: {}",
@@ -30,6 +33,10 @@ fn build_environment(dll: &Path) -> Result<Environment, String> {
     if !dll.is_file() {
         return Err(format!("onnxruntime.dll not found at {}", dll.display()));
     }
+    Ok(())
+}
+
+fn build_environment(dll: &Path) -> Result<Environment, String> {
     ort::init_from(dll)
         .map_err(|e| e.to_string())?
         .build()
