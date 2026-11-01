@@ -38,7 +38,7 @@ Do not paste tokens, cookies or account ids. Check the log and screenshots befor
 
 `main` only changes through pull requests that pass CI. They are merged with a merge commit, so the branch's commits stay in the history (no squash or rebase), and the branch is deleted after the merge.
 
-CI builds and tests only when a pull request touches code. Changes limited to Markdown files, `docs/`, `LICENSE` or the issue templates skip the build, and the required `ci-ok` check still passes. Releases are never built from a merge: only pushing a `vX.Y.Z` tag starts the Release workflow.
+CI builds and tests only when a pull request touches code. Changes limited to Markdown files, `docs/`, `LICENSE`, the issue templates or the release and automation files (the release, release-please and PR title workflows, Dependabot and the release-please config) skip the build, and the required `ci-ok` check still passes. An ordinary merge never builds a release: only merging the release-please PR (or pushing a `vX.Y.Z` tag) starts the Release workflow (see Releasing).
 
 **No Digital Extremes art or trademarks in the repository.** Do not commit game icons, textures, screenshots of the game client, sounds, or DE logos, not even in tests or docs. Game art is loaded at run time from public sources. Test fixtures must be text, synthetic images, or crops that contain no player names, chat or ids.
 
