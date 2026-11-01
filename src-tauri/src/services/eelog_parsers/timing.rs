@@ -81,7 +81,7 @@ impl EchoFilter {
 }
 
 // Lowercase to allow a single case-insensitive check without regex cost.
-const FILTER_SUBSTRINGS_LOWER: [&str; 22] = [
+const FILTER_SUBSTRINGS_LOWER: [&str; 23] = [
     "loadingcompleteend",
     "populateinventorygrid",
     "initmapping",
@@ -94,6 +94,8 @@ const FILTER_SUBSTRINGS_LOWER: [&str; 22] = [
     "npcmanager::clearagents",
     "recycled effects",
     "dialog::createokcancel",
+    // The trade result in any language: only the dialog kind is stable.
+    "dialog::createok(",
     "themeddetailedpurchasedialog",
     "tradingpost.lua",
     "you are offering",

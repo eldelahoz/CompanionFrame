@@ -430,3 +430,110 @@ fn drops_a_dialog_that_never_resolves_within_the_timeout() {
     p.feed_line("and will receive from RendiW the following:", 1.0);
     assert!(p.feed_line(SUCCESS_LINE, 61_000.0).is_none());
 }
+
+// -- localized dialogs (French EE.log, partner anonymised) -----------------
+
+const FR_HEAD: &str = "1328.961 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Souhaitez-vous vraiment accepter cet échange? Vous proposez: ";
+const FR_TAIL: &str =
+    ", title= leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel)";
+const FR_OK: &str = "1333.177 Script [Info]: Dialog.lua: Dialog::CreateOk(description=L'échange a réussi!, title= leftItem=/Menu/Confirm_Item_Ok)";
+const SEND_4: &str = "1332.221 Script [Info]: Dialog.lua: Dialog::SendResult(4)";
+
+fn fr_dialog(item: &str, plat: u32) -> Vec<String> {
+    vec![
+        "1327.951 Script [Info]: Trade.lua: Missing icon data!".into(),
+        FR_HEAD.into(),
+        item.into(),
+        String::new(),
+        "et vous recevrez de TraderName ceci: ".into(),
+        format!("Platinum x {plat}{FR_TAIL}"),
+    ]
+}
+
+fn fr_trades(item: &str, plat: u32, rest: &[&str]) -> Vec<ParsedLogTrade> {
+    let mut lines = fr_dialog(item, plat);
+    lines.extend(rest.iter().map(|l| l.to_string()));
+    emit_all(&lines)
+}
+
+#[test]
+fn reads_the_three_french_sales() {
+    for (item, plat) in [
+        ("Nova Prime (Schéma)", 8),
+        ("Wukong Prime - Systèmes (Schéma)", 11),
+        ("Nova Prime - Systèmes (Schéma)", 15),
+    ] {
+        let trades = fr_trades(item, plat, &[SEND_4, FR_OK]);
+        assert_eq!(trades.len(), 1, "{item}");
+        let t = &trades[0];
+        assert_eq!(
+            (t.kind, t.partner.as_str(), t.plat_change),
+            (TradeKind::Sale, "TraderName", plat)
+        );
+        assert_eq!(t.items, [item_of(item)]);
+    }
+}
+
+fn item_of(name: &str) -> ParsedLogTradeItem {
+    item(name, 1, TradeDirection::Given)
+}
+
+#[test]
+fn a_french_trade_without_the_success_dialog_does_not_count() {
+    assert!(fr_trades("Nova Prime (Schéma)", 8, &[SEND_4]).is_empty());
+    assert!(fr_trades("Nova Prime (Schéma)", 8, &[]).is_empty());
+}
+
+#[test]
+fn a_french_trade_that_ends_in_another_dialog_does_not_count() {
+    let failed = "1333.177 Script [Info]: Dialog.lua: Dialog::CreateOk(description=L'échange a échoué., title= leftItem=/Menu/Confirm_Item_Ok)";
+    assert!(fr_trades("Nova Prime (Schéma)", 8, &[SEND_4, failed]).is_empty());
+}
+
+#[test]
+fn a_cancelled_french_trade_does_not_leak_into_the_next_dialog() {
+    let other = "1400.000 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Acheter ceci?, title= leftItem=/x)";
+    assert!(fr_trades("Nova Prime (Schéma)", 8, &[other, SEND_4, FR_OK]).is_empty());
+}
+
+#[test]
+fn a_confirmation_that_is_not_a_trade_does_not_count() {
+    // No Trade.lua line: an unlisted language is read only while the trade window is live.
+    let lines = [
+        "9.0 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Sicher? Du gibst: ",
+        "Rivenmod",
+        "",
+        "und erhältst von Name: ",
+        "Platinum x 5, title= leftItem=/x)",
+        SEND_4,
+        "9.5 Script [Info]: Dialog.lua: Dialog::CreateOk(description=Fertig, title= leftItem=/x)",
+    ];
+    assert!(emit_all(&lines).is_empty());
+}
+
+#[test]
+fn an_unlisted_language_is_read_by_structure_while_the_trade_window_is_live() {
+    let lines = [
+        "9.0 Script [Info]: Trade.lua: Missing icon data!",
+        "9.1 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Sicher? Du gibst: ",
+        "Nova Prime (Bauplan)",
+        "",
+        "und erhältst von Handler ein: ",
+        "Platinum x 5, title= leftItem=/x)",
+        SEND_4,
+        "9.5 Script [Info]: Dialog.lua: Dialog::CreateOk(description=Fertig, title= leftItem=/x)",
+    ];
+    let trades = emit_all(&lines);
+    assert_eq!(trades.len(), 1);
+    assert_eq!(
+        (trades[0].partner.as_str(), trades[0].plat_change),
+        ("Handler", 5)
+    );
+}
+
+#[test]
+fn the_english_flow_still_completes_on_its_success_line() {
+    let mut lines = reported_sale_lines();
+    lines.push(SUCCESS_LINE.into());
+    assert_eq!(emit_all(&lines).len(), 1);
+}
