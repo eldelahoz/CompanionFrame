@@ -2,6 +2,17 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.0 (2026-11-01)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Fixed
+* fix(trade): detect trades in any game language and add a +rep button by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/8
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.1.0...v0.2.0
+
 ## [0.1.0] - 2026-10-31
 
 First public release.
