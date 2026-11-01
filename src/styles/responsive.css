@@ -1,0 +1,15 @@
+@media (max-width: 800px) {
+  :root {
+    --content-gutter: 1rem;
+    --sidebar-width: 4rem;
+    --relic-grid-gap: 0.52rem;
+    --relic-card-icon-size: 2.35rem;
+    --relic-card-min-height: 4.35rem;
+  }
+  .view-header h2 {
+    font-size: 1.5rem;
+  }
+  #relic-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}

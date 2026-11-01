@@ -1,0 +1,354 @@
+[
+ {
+  "uniqueName": "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze",
+  "name": "Axi A1 Intact",
+  "codexSecret": false,
+  "type": "Relic",
+  "imageName": "RelicAxiD.png",
+  "category": "Relics",
+  "tradable": true,
+  "locations": [],
+  "rewards": [
+   {
+    "chance": 11,
+    "item": {
+     "name": "Akstiletto Prime Barrel",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/AkstilettoPrimeBarrel",
+     "warframeMarket": {
+      "id": "573b804a0ec44a47787a6916",
+      "urlName": "akstiletto_prime_barrel"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 25.33,
+    "item": {
+     "name": "Trinity Prime Systems Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/TrinityPrimeSystemsBlueprint",
+     "warframeMarket": {
+      "id": "561536a1b66f836f854b966a",
+      "urlName": "trinity_prime_systems_blueprint"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 25.33,
+    "item": {
+     "name": "Fragor Prime Head",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/FragorPrimeHead",
+     "warframeMarket": {
+      "id": "573b80280ec44a47787a6913",
+      "urlName": "fragor_prime_head"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 11,
+    "item": {
+     "name": "Dual Kamas Prime Handle",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/PrimeDualKamasHandle",
+     "warframeMarket": {
+      "id": "561536e4b66f836f8e15eb18",
+      "urlName": "dual_kamas_prime_handle"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 25.33,
+    "item": {
+     "name": "Braton Prime Stock",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/BratonPrimeStock",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff35",
+      "urlName": "braton_prime_stock"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 2,
+    "item": {
+     "name": "Nikana Prime Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/PrimeNikanaBlueprint",
+     "warframeMarket": {
+      "id": "56c3bbee5d2f0202da32e940",
+      "urlName": "nikana_prime_blueprint"
+     }
+    },
+    "rarity": "Rare"
+   }
+  ],
+  "marketInfo": {
+   "id": "6054dd685221e30057500f63",
+   "urlName": "axi_a1_relic"
+  },
+  "vaulted": true,
+  "masterable": false
+ },
+ {
+  "uniqueName": "/Lotus/Types/Game/Projections/T4VoidProjectionEPlatinum",
+  "name": "Axi A1 Radiant",
+  "codexSecret": false,
+  "type": "Relic",
+  "imageName": "RelicAxiC.png",
+  "category": "Relics",
+  "tradable": true,
+  "locations": [],
+  "rewards": [
+   {
+    "chance": 20,
+    "item": {
+     "name": "Akstiletto Prime Barrel",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/AkstilettoPrimeBarrel",
+     "warframeMarket": {
+      "id": "573b804a0ec44a47787a6916",
+      "urlName": "akstiletto_prime_barrel"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 16.67,
+    "item": {
+     "name": "Trinity Prime Systems Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/TrinityPrimeSystemsBlueprint",
+     "warframeMarket": {
+      "id": "561536a1b66f836f854b966a",
+      "urlName": "trinity_prime_systems_blueprint"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 16.67,
+    "item": {
+     "name": "Fragor Prime Head",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/FragorPrimeHead",
+     "warframeMarket": {
+      "id": "573b80280ec44a47787a6913",
+      "urlName": "fragor_prime_head"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 20,
+    "item": {
+     "name": "Dual Kamas Prime Handle",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/PrimeDualKamasHandle",
+     "warframeMarket": {
+      "id": "561536e4b66f836f8e15eb18",
+      "urlName": "dual_kamas_prime_handle"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 16.67,
+    "item": {
+     "name": "Braton Prime Stock",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/BratonPrimeStock",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff35",
+      "urlName": "braton_prime_stock"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 10,
+    "item": {
+     "name": "Nikana Prime Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/PrimeNikanaBlueprint",
+     "warframeMarket": {
+      "id": "56c3bbee5d2f0202da32e940",
+      "urlName": "nikana_prime_blueprint"
+     }
+    },
+    "rarity": "Rare"
+   }
+  ],
+  "marketInfo": {
+   "id": "6054dd685221e30057500f63",
+   "urlName": "axi_a1_relic"
+  },
+  "vaulted": true,
+  "masterable": false
+ },
+ {
+  "uniqueName": "/Lotus/Types/Game/Projections/T1VoidProjectionGBronze",
+  "name": "Lith A1 Intact",
+  "codexSecret": false,
+  "type": "Relic",
+  "imageName": "RelicLithD.png",
+  "category": "Relics",
+  "tradable": true,
+  "locations": [],
+  "rewards": [
+   {
+    "chance": 11,
+    "item": {
+     "name": "Saryn Prime Neuroptics Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/SarynPrimeHelmetBlueprint",
+     "warframeMarket": {
+      "id": "56c3bbdb5d2f0202da32e93c",
+      "urlName": "saryn_prime_neuroptics_blueprint"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 11,
+    "item": {
+     "name": "Vectis Prime Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/VectisPrimeBlueprint",
+     "warframeMarket": {
+      "id": "559daae8e779897b56bee133",
+      "urlName": "vectis_prime_blueprint"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 25.33,
+    "item": {
+     "name": "Braton Prime Barrel",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/BratonPrimeBarrel",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff32",
+      "urlName": "braton_prime_barrel"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 2,
+    "item": {
+     "name": "Akstiletto Prime Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/AkstilettoPrimeBlueprint",
+     "warframeMarket": {
+      "id": "573b80450ec44a47787a6915",
+      "urlName": "akstiletto_prime_blueprint"
+     }
+    },
+    "rarity": "Rare"
+   },
+   {
+    "chance": 25.33,
+    "item": {
+     "name": "Forma Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/Components/FormaBlueprint"
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 25.33,
+    "item": {
+     "name": "Vasto Prime Receiver",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/VastoPrimeReceiver",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff67",
+      "urlName": "vasto_prime_receiver"
+     }
+    },
+    "rarity": "Uncommon"
+   }
+  ],
+  "marketInfo": {
+   "id": "6054de4e5221e30057501057",
+   "urlName": "lith_a1_relic"
+  },
+  "vaulted": true,
+  "masterable": false
+ },
+ {
+  "uniqueName": "/Lotus/Types/Game/Projections/T2VoidProjectionFGold",
+  "name": "Meso B1 Flawless",
+  "codexSecret": false,
+  "type": "Relic",
+  "imageName": "RelicMesoB.png",
+  "category": "Relics",
+  "tradable": true,
+  "locations": [],
+  "rewards": [
+   {
+    "chance": 6,
+    "item": {
+     "name": "Boar Prime Stock",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/BoarPrimeStock",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff2d",
+      "urlName": "boar_prime_stock"
+     }
+    },
+    "rarity": "Rare"
+   },
+   {
+    "chance": 20,
+    "item": {
+     "name": "Dakra Prime Handle",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/PrimeCronusLongSwordHandle",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff3f",
+      "urlName": "dakra_prime_handle"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 17,
+    "item": {
+     "name": "Mag Prime Chassis Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/MagPrimeChassisBlueprint",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff83",
+      "urlName": "mag_prime_chassis_blueprint"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 20,
+    "item": {
+     "name": "Orthos Prime Handle",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/PrimePolearmHandle",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff52",
+      "urlName": "orthos_prime_handle"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 17,
+    "item": {
+     "name": "Orthos Prime Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/Weapons/PolearmPrimeBlueprint",
+     "warframeMarket": {
+      "id": "54a73e65e779893a797fff51",
+      "urlName": "orthos_prime_blueprint"
+     }
+    },
+    "rarity": "Uncommon"
+   },
+   {
+    "chance": 20,
+    "item": {
+     "name": "Forma Blueprint",
+     "uniqueName": "/Lotus/Types/Recipes/Components/FormaBlueprint"
+    },
+    "rarity": "Uncommon"
+   }
+  ],
+  "marketInfo": {
+   "id": "6054de045221e30057501005",
+   "urlName": "meso_b1_relic"
+  },
+  "vaulted": true,
+  "masterable": false
+ }
+]

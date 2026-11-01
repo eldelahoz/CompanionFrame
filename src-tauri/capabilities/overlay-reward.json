@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay-reward",
+  "description": "Minimal permissions for the reward overlay window",
+  "windows": [
+    "overlay-reward"
+  ],
+  "permissions": [
+    "core:event:default"
+  ]
+}

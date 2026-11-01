@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem do you want to solve?
+      description: Describe what you are trying to do in the game or the app, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Inventory and mastery
+        - Relics and drops
+        - World state
+        - warframe.market
+        - Overlays and scanners
+        - Run analysis
+        - Notifications
+        - Interface and translations
+        - Other
+  - type: checkboxes
+    id: memory
+    attributes:
+      label: Game data
+      options:
+        - label: This does not need reading the game's memory (the default mode must stay memory-free).

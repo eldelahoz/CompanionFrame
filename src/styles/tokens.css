@@ -1,0 +1,267 @@
+/* CompanionFrame design tokens. See DESIGN.md.
+   Dark first, soft greys, one accent (Lotus teal). The theme editor (lib/theme/applyTheme) writes the
+   colour and radius tokens at runtime from the active preset; the values here are the default preset
+   and the first paint. Token names are stable: components, overlays and user custom CSS rely on them. */
+
+:root {
+  /* ---- Type ---- */
+  --font-body: "Geist", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-display: var(--font-body);
+  /* Fixed rem scale (ratio ~1.15); the root size is 14px × the theme font scale. */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9286rem;
+  --text-md: 1rem;
+  --text-lg: 1.1429rem;
+  --text-xl: 1.4286rem;
+  --text-2xl: 1.8571rem;
+
+  /* ---- Spacing (4px grid at 14px root) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  /* ---- Radii (theme "soft" corners; applyTheme swaps them for sharp/round) ---- */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.4375rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-full: 999px;
+
+  /* ---- Elevation ---- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 6px 20px -4px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-3: 0 24px 60px -12px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --scrim: rgba(5, 6, 8, 0.6);
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+
+  /* ---- Layout ----
+     Breakpoints (window width; CSS cannot read vars in @media, so the values are repeated there):
+       narrow  ≤ 640px   sidebar becomes a drawer, modals become bottom sheets
+       compact ≤ 1024px  sidebar becomes an icon rail
+       wide    ≥ 1600px  more grid columns, capped page width
+     Short windows (≤ 640px tall) also get sheets. Cards and tables use container queries on their own width,
+     so pop-out windows (OpenInWindowButton) adapt the same way. */
+  --titlebar-height: 2.5rem;
+  --statusbar-height: 1.875rem;
+  --sidebar-width: 15rem;
+  --sidebar-rail: 3.75rem;
+  --content-gutter: clamp(1rem, 3vw, 2.5rem);
+  --page-max: 1680px;
+  --control-h: 2.25rem;
+  --control-h-sm: 1.875rem;
+  --hit-min: 2.25rem;
+  --size-titlebar-control: 2.875rem;
+  --item-image-max: 96px;
+  --resource-image-wrap: 52px;
+  --resource-image-max: 42px;
+  --detail-image-wrap: 108px;
+  --detail-image-max: 94px;
+  --relic-grid-gap: var(--space-3);
+  --relic-card-icon-size: 2.25rem;
+  --relic-card-min-height: 5.2rem;
+  --relic-card-pad-x: var(--space-4);
+  --size-relic-detail-icon: 3.25rem;
+
+  /* ---- Colour: dark (default preset "CompanionFrame Dark") ---- */
+  --bg-deep: #0e0f11; /* shell: titlebar, sidebar, status bar */
+  --bg-base: #131417; /* content ground */
+  --bg-surface: #18191d; /* cards, panels */
+  --bg-raised: #1f2126; /* controls, inputs */
+  --bg-hover: #25282e;
+  --accent: #3fb8af; /* Lotus teal: primary actions, selection, focus. Never decoration. */
+  --accent-dim: #2d847e;
+  --accent-bright: #5ccac1;
+  --accent-glow: rgba(63, 184, 175, 0.14);
+  --text-primary: #e7e8eb;
+  --text-secondary: #a3a7b0;
+  --text-muted: #80858f;
+  --success: #4cc38a;
+  --warning: #e2b54a;
+  --danger: #ef6f6c;
+  --info: #74a9ee;
+  --accent-blue: var(--info);
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --focus-ring: 0 0 0 2px var(--bg-base), 0 0 0 4px var(--accent);
+  --chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2380858f' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+
+  --surface-panel: var(--bg-surface);
+  --surface-panel-border: var(--border);
+  --surface-card: var(--bg-raised);
+  --surface-hover: rgba(255, 255, 255, 0.04);
+  --surface-selected: var(--accent-glow);
+  --surface-input: var(--bg-raised);
+  --surface-tooltip: var(--bg-deep);
+
+  --text-heading: var(--text-primary);
+  --text-body: var(--text-primary);
+  --text-link: #6fd3ca;
+  --text-on-accent: #04201d;
+  --text-positive: var(--success);
+  --text-negative: var(--danger);
+
+  --success-dim: #2f8a5f;
+  --success-bg: rgba(76, 195, 138, 0.13);
+  --warning-dim: #9d7d2f;
+  --warning-bg: rgba(226, 181, 74, 0.13);
+  --danger-dim: #a84b49;
+  --danger-bg: rgba(239, 111, 108, 0.13);
+  --info-dim: #4f75a6;
+  --info-bg: rgba(116, 169, 238, 0.13);
+
+  --chart-1: var(--accent);
+  --chart-2: var(--info);
+  --chart-3: var(--success);
+  --chart-4: var(--warning);
+  --chart-5: var(--danger);
+  --chart-6: #b18be0;
+  --chart-axis: var(--text-muted);
+
+  /* Surface recipe (applyTheme switches these for the glass / border / minimal styles) */
+  --ui-panel-bg: var(--bg-surface);
+  --ui-modal-bg: var(--bg-surface);
+  --ui-panel-border: var(--border);
+  --ui-panel-shadow: var(--shadow-1);
+  --ui-control-bg: var(--bg-raised);
+  --ui-control-border: var(--border-strong);
+  --ui-backdrop-blur: none;
+
+  /* Per-view accent (theme editor view overrides); defaults to the global accent */
+  --view-accent: var(--accent);
+  --view-accent-dim: var(--accent-dim);
+  --view-accent-bright: var(--accent-bright);
+  --view-accent-glow: var(--accent-glow);
+
+  /* ---- Game data colours: data, not decoration ---- */
+  --relic-lith: #9db58a;
+  --relic-meso: #b9c0cc;
+  --relic-neo: #d9b25c;
+  --relic-axi: #e9a36a;
+  --relic-requiem: #c48bd8;
+  --rarity-common: #c49a6c;
+  --rarity-uncommon: #c3cad6;
+  --rarity-rare: #e3c35c;
+  --riven-pip: #5ec8ff;
+  --riven-reroll: #f06dff;
+  --grade-s: #4cc38a;
+  --grade-a: #7cb98d;
+  --grade-b: #e2c04a;
+  --grade-c: #ec8f4f;
+  --grade-d: #ec8f4f;
+  --grade-f: #ef6f6c;
+  --grade-default: var(--text-secondary);
+
+  --world-state-day-text: #e2b54a;
+  --world-state-night-text: #74a9ee;
+  --world-state-warm-text: #ec8f4f;
+  --world-state-cold-text: #5bbbe8;
+  --world-state-fass-text: #ec8f4f;
+  --world-state-vome-text: #a99be6;
+  --world-state-anger-text: #ef6f6c;
+  --world-state-joy-text: #e2b54a;
+  --world-state-envy-text: #4cc38a;
+  --world-state-sorrow-text: #74a9ee;
+  --world-state-fear-text: #a99be6;
+  --world-badge-lith-text: var(--relic-lith);
+  --world-badge-meso-text: var(--relic-meso);
+  --world-badge-neo-text: var(--relic-neo);
+  --world-badge-axi-text: var(--relic-axi);
+  --world-badge-requiem-text: var(--relic-requiem);
+  --world-badge-omnia-text: #4fc7b8;
+  --world-faction-grineer: #ef6f6c;
+  --world-faction-corpus: #74a9ee;
+  --world-faction-infested: #7cc47a;
+  --world-timer-urgent-text: var(--warning);
+
+  /* ---- Overlays: drawn over the game, sized from the game height ----
+     1.48% of the overlay window height = 16px at 1080p, 21px at 1440p, 32px at 4K, for any aspect ratio. */
+  --ov-font: max(13px, 1.48vh);
+  --ov-surface: rgba(12, 14, 17, 0.78);
+  --ov-surface-strong: rgba(12, 14, 17, 0.9);
+  --ov-border: rgba(255, 255, 255, 0.14);
+  --ov-text: #f2f3f5;
+  --ov-text-secondary: #c2c6ce;
+  --ov-blur: 10px;
+  --ov-radius: 0.6em;
+  --ov-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* ---- Colour: light (preset "CompanionFrame Light") ---- */
+:root[data-theme="light"] {
+  --bg-deep: #f1f2f4;
+  --bg-base: #f8f9fa;
+  --bg-surface: #ffffff;
+  --bg-raised: #f1f2f4;
+  --bg-hover: #e9ebee;
+  --accent: #0f7f78;
+  --accent-dim: #0b5d58;
+  --accent-bright: #0b6c66;
+  --accent-glow: rgba(15, 127, 120, 0.1);
+  --text-primary: #16181d;
+  --text-secondary: #4b505a;
+  --text-muted: #686d77;
+  --success: #1c8a56;
+  --warning: #9a6a00;
+  --danger: #c4342f;
+  --info: #2763b8;
+  --border: rgba(16, 20, 28, 0.085);
+  --border-strong: rgba(16, 20, 28, 0.15);
+  --border-subtle: rgba(16, 20, 28, 0.12);
+  --surface-hover: rgba(16, 20, 28, 0.05);
+  --surface-tooltip: #16181d;
+  --text-link: #0b6f69;
+  --text-on-accent: #ffffff;
+  --success-dim: #146640;
+  --success-bg: rgba(28, 138, 86, 0.1);
+  --warning-dim: #6f4d00;
+  --warning-bg: rgba(181, 128, 0, 0.12);
+  --danger-dim: #8f2622;
+  --danger-bg: rgba(196, 52, 47, 0.09);
+  --info-dim: #1c4885;
+  --info-bg: rgba(39, 99, 184, 0.09);
+  --chart-6: #7d55b8;
+  --shadow-1: 0 1px 2px rgba(16, 20, 28, 0.07);
+  --shadow-2: 0 8px 24px -6px rgba(16, 20, 28, 0.16), 0 1px 3px rgba(16, 20, 28, 0.08);
+  --shadow-3: 0 24px 60px -12px rgba(16, 20, 28, 0.28), 0 2px 8px rgba(16, 20, 28, 0.1);
+  --scrim: rgba(16, 20, 28, 0.32);
+  --relic-lith: #5e7a4a;
+  --relic-meso: #6d7584;
+  --relic-neo: #a37a1c;
+  --relic-axi: #b8662a;
+  --relic-requiem: #8a4fa3;
+  --rarity-common: #94683a;
+  --rarity-uncommon: #6d7584;
+  --rarity-rare: #a37a1c;
+  --grade-s: #1c8a56;
+  --grade-a: #3f7a52;
+  --grade-b: #8a6a00;
+  --grade-c: #b85a16;
+  --grade-d: #b85a16;
+  --grade-f: #c4342f;
+  --world-state-day-text: #8a6200;
+  --world-state-night-text: #2763b8;
+  --world-state-warm-text: #b85a16;
+  --world-state-cold-text: #1f74a3;
+  --world-state-fass-text: #b85a16;
+  --world-state-vome-text: #6a4fb8;
+  --world-state-anger-text: #c4342f;
+  --world-state-joy-text: #8a6200;
+  --world-state-envy-text: #1c8a56;
+  --world-state-sorrow-text: #2763b8;
+  --world-state-fear-text: #6a4fb8;
+  --world-badge-omnia-text: #0f7f78;
+  --world-faction-grineer: #c4342f;
+  --world-faction-corpus: #2763b8;
+  --world-faction-infested: #3d8a3a;
+}

@@ -1,0 +1,20 @@
+{
+  "Results": [
+    {
+      "AccountId": { "$oid": "000000000000000000000000" },
+      "DisplayName": "Tester",
+      "PlayerLevel": 12,
+      "LoadOutInventory": {
+        "Suits": [{ "ItemType": "/Lotus/Powersuits/Excalibur/Excalibur", "XP": 900000 }],
+        "XPInfo": [
+          { "ItemType": "/Lotus/Powersuits/Excalibur/Excalibur", "XP": 900000 },
+          { "ItemType": "/Lotus/Weapons/Tenno/LongGuns/PrimeAcceltra/PrimeAcceltraWeapon", "XP": 112500 }
+        ]
+      },
+      "Missions": [{ "Tag": "SolNode1", "Completes": 3 }]
+    }
+  ],
+  "TechProjects": [],
+  "XpComponents": [],
+  "Stats": { "Scans": [{ "type": "/Lotus/Types/Enemies/Grineer/AIWeek/Avatars/RifleLancerAvatar", "scans": 20 }] }
+}

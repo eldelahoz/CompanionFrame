@@ -1,0 +1,676 @@
+@layer components {
+  .inventory-view {
+    container: inventory / inline-size;
+  }
+
+  /* ---------- Source row and banner ---------- */
+  .inv-source {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .inv-source-label strong {
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .inv-source-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+  }
+  .inv-source-hint {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+  }
+  .inv-source[data-dropping] {
+    outline: 2px dashed var(--accent);
+    outline-offset: 4px;
+    border-radius: var(--radius-lg);
+  }
+  .inv-source-error {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--danger);
+  }
+  .inv-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--warning-bg);
+    font-size: var(--text-sm);
+  }
+  .inv-banner .ui-btn {
+    margin-left: auto;
+  }
+
+  /* ---------- Tabs, toolbar, selection ---------- */
+  .inv-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding-bottom: var(--space-3);
+    background: var(--bg-base);
+  }
+  .inv-sticky > .ui-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .inv-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    padding-top: var(--space-3);
+  }
+  .inv-search {
+    flex: 1 1 14rem;
+    max-width: 22rem;
+  }
+  .inv-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+  .ui-btn.is-active {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+  }
+  .inv-selection-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    margin-top: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-lg);
+    background: var(--accent-glow);
+  }
+  .inv-selection-count {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .inv-selection-save {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .inv-selection-save .ui-input {
+    width: 10rem;
+  }
+
+  /* ---------- Value strip ---------- */
+  .inv-value-strip {
+    display: grid;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+  .inv-value-line {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+  }
+  .inv-plat-custom {
+    display: inline-flex;
+    gap: var(--space-2);
+  }
+  .inv-plat-custom .ui-input {
+    width: 5rem;
+  }
+
+  /* ---------- Layout with the order-book panel ---------- */
+  .inv-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+    align-items: start;
+  }
+  .inv-layout:has(> .inv-book-panel) {
+    grid-template-columns: minmax(0, 1fr) 24rem;
+  }
+
+  /* ---------- Cards ---------- */
+  .inv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--space-3);
+  }
+  @container inventory (min-width: 1500px) {
+    .inv-grid {
+      grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+    }
+  }
+  .inv-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    transition: border-color 0.12s ease, background-color 0.12s ease;
+  }
+  .inv-card:hover {
+    border-color: var(--border-strong);
+  }
+  .inv-card[data-selected] {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+  }
+  .inv-card-main {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .inv-card-art {
+    display: grid;
+    place-items: center;
+    height: 5.5rem;
+    margin-bottom: var(--space-1);
+    border-radius: var(--radius-md);
+    background: var(--bg-raised);
+  }
+  .inv-card-img {
+    max-height: 4.75rem;
+    max-width: 90%;
+  }
+  .inv-card-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .inv-card-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+  .inv-mastery {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  .inv-mastery .game-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .inv-mastery--progress .game-icon {
+    opacity: 0.55;
+  }
+  .inv-mastery--missing .game-icon {
+    opacity: 0.3;
+    filter: grayscale(1);
+  }
+  .inv-card-badges {
+    position: absolute;
+    top: var(--space-4);
+    left: var(--space-4);
+    display: flex;
+    gap: var(--space-1);
+  }
+  .inv-card-book {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    opacity: 0;
+  }
+  .inv-card:hover .inv-card-book,
+  .inv-card:focus-within .inv-card-book {
+    opacity: 1;
+  }
+  @media (pointer: coarse) {
+    .inv-card-book {
+      opacity: 1;
+    }
+  }
+  .inv-card-values {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+    min-height: 1.75rem;
+  }
+  .inv-price-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    min-height: 1.5rem;
+  }
+  .inv-price-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-size: var(--text-xs, 0.75rem);
+  }
+  .inv-price-fig {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .inv-price-row--ducat {
+    justify-content: flex-start;
+    margin-top: var(--space-1);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border-subtle, var(--border));
+  }
+  .inv-median {
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+  .inv-rank {
+    --dot: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px var(--space-4, 6px);
+    color: var(--text-secondary);
+    font-size: var(--text-xs, 0.75rem);
+    font-variant-numeric: tabular-nums;
+  }
+  .inv-rank-dots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+  .inv-rank-text {
+    white-space: nowrap;
+  }
+  /* Past 10 ranks the dots shrink and wrap instead of overflowing the card. */
+  .inv-rank[data-many] {
+    --dot: 4px;
+  }
+  .inv-rank[data-many] .inv-rank-dots {
+    gap: 2px;
+  }
+  .inv-rank[data-max] {
+    color: var(--success);
+  }
+  .inv-rank-dot {
+    width: var(--dot);
+    height: var(--dot);
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  }
+  .inv-rank-dot[data-on] {
+    background: currentColor;
+    border-color: currentColor;
+  }
+  .inv-trend {
+    font-size: var(--text-xs, 0.75rem);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .inv-trend--up {
+    color: var(--success);
+  }
+  .inv-trend--down {
+    color: var(--text-secondary);
+  }
+  .inv-muted {
+    color: var(--text-muted);
+  }
+  .inv-load {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--text-xs, 0.75rem);
+    text-decoration: underline dotted;
+    cursor: pointer;
+  }
+  .inv-load:hover {
+    color: var(--text-primary);
+  }
+  .inv-link {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text-primary);
+    font: inherit;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+  }
+  .inv-link:hover {
+    color: var(--text-link);
+  }
+  .inv-list tr[data-selected] td {
+    background: var(--accent-glow);
+  }
+
+  /* ---------- Order-book panel ---------- */
+  .inv-book-panel {
+    position: sticky;
+    top: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    max-height: calc(100vh - var(--space-10) * 2);
+    overflow-y: auto;
+  }
+  .inv-book-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .inv-book-head h2 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: 600;
+  }
+  .inv-book {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .inv-book-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .inv-book-loading {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .inv-book-sides {
+    display: grid;
+    gap: var(--space-4);
+  }
+  .inv-book-side h3 {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .inv-book-side ul {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .inv-book-side li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--text-sm);
+  }
+  .inv-book-user {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .inv-book-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+  .inv-book-dot[data-status="ingame"] {
+    background: var(--success);
+  }
+  .inv-book-dot[data-status="online"] {
+    background: var(--info);
+  }
+
+  /* ---------- Resources ---------- */
+  .resources-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: var(--space-3);
+  }
+  .resource-tile {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+  .resource-thumb {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  .resource-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+  }
+
+  /* ---------- Pets ---------- */
+  .pets-summary {
+    margin: 0 0 var(--space-4);
+    color: var(--text-secondary);
+  }
+  .pets-heading {
+    margin: var(--space-8) 0 var(--space-3);
+    font-size: var(--text-lg);
+    font-weight: 600;
+  }
+  .pets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+    gap: var(--space-4);
+    align-items: start;
+  }
+  .pet-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+  .pet-card header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .pet-card h3 {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .pet-card p {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+  .pet-art {
+    display: grid;
+    place-items: center;
+    width: 4rem;
+    height: 4rem;
+    flex-shrink: 0;
+  }
+  .pet-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+  .pet-traits {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+  .pet-traits th {
+    padding: var(--space-1) var(--space-2) var(--space-1) 0;
+    font-weight: 500;
+    text-align: left;
+    color: var(--text-muted);
+  }
+  .pet-traits td {
+    padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  }
+  .pet-traits tbody tr {
+    border-top: 1px solid var(--border);
+  }
+  .pet-trait {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .pet-swatch {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: var(--bg-hover);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+  }
+
+  /* ---------- Batching: pricing progress and the end-of-list marker ---------- */
+  .inv-pricing,
+  .inv-more {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+  .inv-pricing {
+    margin-bottom: var(--space-3);
+  }
+  .inv-more {
+    justify-content: center;
+    padding: var(--space-4) 0;
+  }
+
+  /* ---------- Incomplete sets (Full Sets tab) ---------- */
+  .sets-extra {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+  }
+  .sets-missing-price {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    white-space: nowrap;
+    color: var(--text-secondary);
+  }
+  .sets-detail summary {
+    color: var(--danger);
+    cursor: pointer;
+  }
+  /* A popover, so opening one card never pushes its neighbours out of the grid. */
+  .sets-detail-body {
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: max(100%, 20rem);
+    margin-top: var(--space-1);
+    padding: var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--bg-raised);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.35));
+  }
+  .sets-sources {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .sets-missing-head,
+  .sets-relic {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .sets-missing {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+  }
+  .sets-relics {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+  }
+  .sets-relic[data-owned] .sets-relic-name {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+  .sets-relic-owned {
+    color: var(--success);
+  }
+  .sets-link {
+    margin-inline-start: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+  .sets-link:hover {
+    text-decoration: underline;
+  }
+}

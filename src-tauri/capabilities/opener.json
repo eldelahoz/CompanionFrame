@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "opener",
+  "description": "Open http(s) links in the default browser from the main, popout and overlay windows",
+  "windows": ["main", "popout-*", "overlay-*"],
+  "permissions": [
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "http://*" }, { "url": "https://*" }]
+    }
+  ]
+}

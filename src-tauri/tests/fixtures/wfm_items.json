@@ -1,0 +1,69 @@
+{
+ "apiVersion": "0.25.0",
+ "data": [
+  {
+   "id": "54a74454e779892d5e515596",
+   "slug": "serration",
+   "gameRef": "/Lotus/Upgrades/Mods/Rifle/WeaponDamageAmountMod",
+   "tags": [
+    "mod",
+    "uncommon",
+    "rifle",
+    "primary"
+   ],
+   "subtypes": [
+    "regular",
+    "atragraph"
+   ],
+   "maxRank": 10,
+   "i18n": {
+    "en": {
+     "name": "Serration",
+     "icon": "items/images/en/serration.711b19665b2acbac445c68c9e8f8b550.png",
+     "thumb": "items/images/en/thumbs/serration.711b19665b2acbac445c68c9e8f8b550.128x128.png"
+    }
+   }
+  },
+  {
+   "id": "56783f24cbfa8f0432dd898f",
+   "slug": "ash_prime_set",
+   "gameRef": "/Lotus/Powersuits/Ninja/AshPrime",
+   "tags": [
+    "set",
+    "prime",
+    "warframe"
+   ],
+   "ducats": 170,
+   "i18n": {
+    "en": {
+     "name": "Ash Prime Set",
+     "icon": "items/images/en/ash_prime_set.9f3f82bee82a9741531857cf76eb6594.png",
+     "thumb": "items/images/en/thumbs/ash_prime_set.9f3f82bee82a9741531857cf76eb6594.128x128.png"
+    }
+   }
+  },
+  {
+   "id": "5c1e62d3817a0d0092fb1608",
+   "slug": "kitgun_riven_mod_veiled",
+   "gameRef": "/Lotus/Upgrades/Mods/Randomized/LotusModularPistolRandomModRare",
+   "tags": [
+    "mod",
+    "riven_mod",
+    "common",
+    "veiled_riven"
+   ],
+   "subtypes": [
+    "unrevealed",
+    "revealed"
+   ],
+   "i18n": {
+    "en": {
+     "name": "Kitgun Riven Mod (Veiled)",
+     "icon": "items/images/en/kitgun_riven_mod_(veiled).c7cc9acb1a595ed66744e1d2b4f3bb42.png",
+     "thumb": "items/images/en/thumbs/kitgun_riven_mod_(veiled).c7cc9acb1a595ed66744e1d2b4f3bb42.128x128.png"
+    }
+   }
+  }
+ ],
+ "error": null
+}

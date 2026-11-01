@@ -1,0 +1,111 @@
+@import "./styles/fonts/fonts.css";
+@import "tailwindcss";
+
+@theme {
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-raised: var(--bg-raised);
+  --color-bg-hover: var(--bg-hover);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-bright: var(--accent-bright);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-accent-blue: var(--accent-blue);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-subtle: var(--border-subtle);
+  --color-surface-hover: var(--surface-hover);
+  --color-grade-s: var(--grade-s);
+  --color-grade-a: var(--grade-a);
+  --color-grade-b: var(--grade-b);
+  --color-grade-c: var(--grade-c);
+  --color-grade-d: var(--grade-d);
+  --color-grade-f: var(--grade-f);
+  --color-grade-default: var(--grade-default);
+  --color-text-heading: var(--text-heading);
+  --color-text-body: var(--text-body);
+  --color-text-on-accent: var(--text-on-accent);
+  --color-success-dim: var(--success-dim);
+  --color-success-bg: var(--success-bg);
+  --color-warning-dim: var(--warning-dim);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger-dim: var(--danger-dim);
+  --color-danger-bg: var(--danger-bg);
+  --color-info-dim: var(--info-dim);
+  --color-info-bg: var(--info-bg);
+  --color-surface-card: var(--surface-card);
+  --color-surface-selected: var(--surface-selected);
+  --color-surface-input: var(--surface-input);
+  --color-surface-tooltip: var(--surface-tooltip);
+  --color-riven-pip: var(--riven-pip);
+  --color-riven-reroll: var(--riven-reroll);
+  --color-scrim: var(--scrim);
+  /* One family: Geist. font-display stays as an alias so existing classes keep working. */
+  --font-sans: "Geist", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-display: "Geist", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-body: "Geist", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  /* Elevation and motion from tokens.css. Breakpoints keep Tailwind's sm (640px = narrow) and lg (1024px = compact). */
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
+  --ease-out: var(--ease-out);
+
+  --animate-fade-in: fade-in 0.18s ease;
+  --animate-detail-slide-in: detail-slide-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes detail-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@import "./styles/tokens.css";
+@import "./styles/base.css";
+
+/* Shared infrastructure (layout, buttons, filters, modals) */
+@import "./styles/components.css";
+@import "./styles/ui.css";
+@import "./styles/shell.css";
+@import "./styles/settings.css";
+@import "./styles/relics.css";
+@import "./styles/rivens.css";
+@import "./styles/inventory.css";
+
+@import "./styles/responsive.css";
+@import "./styles/mastery.css";
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

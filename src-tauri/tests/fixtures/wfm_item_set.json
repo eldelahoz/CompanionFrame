@@ -1,0 +1,170 @@
+{
+ "apiVersion": "0.25.0",
+ "data": {
+  "id": "56783f24cbfa8f0432dd898f",
+  "items": [
+   {
+    "id": "56783f24cbfa8f0432dd898f",
+    "slug": "ash_prime_set",
+    "gameRef": "/Lotus/Powersuits/Ninja/AshPrime",
+    "tags": [
+     "set",
+     "prime",
+     "warframe"
+    ],
+    "setRoot": true,
+    "setParts": [
+     "559daa9fe779897b3263c2c7",
+     "559daaa7e779897b35d626c6",
+     "559daab7e779897b3d86cb8f",
+     "56783f24cbfa8f0432dd898f",
+     "559daaafe779897b399db0fd"
+    ],
+    "ducats": 170,
+    "reqMasteryRank": 0,
+    "tradingTax": 8000,
+    "tradable": true,
+    "i18n": {
+     "en": {
+      "name": "Ash Prime Set",
+      "wikiLink": "https://wiki.warframe.com/w/Ash/Prime",
+      "icon": "items/images/en/ash_prime_set.9f3f82bee82a9741531857cf76eb6594.png",
+      "thumb": "items/images/en/thumbs/ash_prime_set.9f3f82bee82a9741531857cf76eb6594.128x128.png"
+     }
+    }
+   },
+   {
+    "id": "559daa9fe779897b3263c2c7",
+    "slug": "ash_prime_blueprint",
+    "gameRef": "/Lotus/Types/Recipes/WarframeRecipes/AshPrimeBlueprint",
+    "tags": [
+     "blueprint",
+     "prime",
+     "warframe"
+    ],
+    "setRoot": false,
+    "setParts": [
+     "559daa9fe779897b3263c2c7",
+     "559daaa7e779897b35d626c6",
+     "559daab7e779897b3d86cb8f",
+     "56783f24cbfa8f0432dd898f",
+     "559daaafe779897b399db0fd"
+    ],
+    "quantityInSet": 1,
+    "ducats": 45,
+    "reqMasteryRank": 0,
+    "tradingTax": 2000,
+    "tradable": true,
+    "i18n": {
+     "en": {
+      "name": "Ash Prime Blueprint",
+      "wikiLink": "https://wiki.warframe.com/w/Ash/Prime",
+      "icon": "items/images/en/ash_prime_blueprint.9f3f82bee82a9741531857cf76eb6594.png",
+      "thumb": "items/images/en/thumbs/ash_prime_blueprint.9f3f82bee82a9741531857cf76eb6594.128x128.png",
+      "subIcon": "sub_icons/blueprint_128x128.png"
+     }
+    }
+   },
+   {
+    "id": "559daaa7e779897b35d626c6",
+    "slug": "ash_prime_chassis_blueprint",
+    "gameRef": "/Lotus/Types/Recipes/WarframeRecipes/AshPrimeChassisBlueprint",
+    "tags": [
+     "component",
+     "prime",
+     "warframe",
+     "blueprint"
+    ],
+    "setRoot": false,
+    "setParts": [
+     "559daa9fe779897b3263c2c7",
+     "559daaa7e779897b35d626c6",
+     "559daab7e779897b3d86cb8f",
+     "56783f24cbfa8f0432dd898f",
+     "559daaafe779897b399db0fd"
+    ],
+    "quantityInSet": 1,
+    "ducats": 15,
+    "reqMasteryRank": 0,
+    "tradingTax": 2000,
+    "tradable": true,
+    "i18n": {
+     "en": {
+      "name": "Ash Prime Chassis Blueprint",
+      "wikiLink": "https://wiki.warframe.com/w/Ash/Prime",
+      "icon": "items/images/en/ash_prime_chassis.9f3f82bee82a9741531857cf76eb6594.png",
+      "thumb": "items/images/en/thumbs/ash_prime_chassis.9f3f82bee82a9741531857cf76eb6594.128x128.png",
+      "subIcon": "sub_icons/warframe/prime_chassis_128x128.png"
+     }
+    }
+   },
+   {
+    "id": "559daab7e779897b3d86cb8f",
+    "slug": "ash_prime_neuroptics_blueprint",
+    "gameRef": "/Lotus/Types/Recipes/WarframeRecipes/AshPrimeHelmetBlueprint",
+    "tags": [
+     "component",
+     "prime",
+     "warframe",
+     "blueprint"
+    ],
+    "setRoot": false,
+    "setParts": [
+     "559daa9fe779897b3263c2c7",
+     "559daaa7e779897b35d626c6",
+     "559daab7e779897b3d86cb8f",
+     "56783f24cbfa8f0432dd898f",
+     "559daaafe779897b399db0fd"
+    ],
+    "quantityInSet": 1,
+    "ducats": 45,
+    "reqMasteryRank": 0,
+    "tradingTax": 2000,
+    "tradable": true,
+    "i18n": {
+     "en": {
+      "name": "Ash Prime Neuroptics Blueprint",
+      "wikiLink": "https://wiki.warframe.com/w/Ash/Prime",
+      "icon": "items/images/en/ash_prime_neuroptics.9f3f82bee82a9741531857cf76eb6594.png",
+      "thumb": "items/images/en/thumbs/ash_prime_neuroptics.9f3f82bee82a9741531857cf76eb6594.128x128.png",
+      "subIcon": "sub_icons/warframe/prime_helmet_128x128.png"
+     }
+    }
+   },
+   {
+    "id": "559daaafe779897b399db0fd",
+    "slug": "ash_prime_systems_blueprint",
+    "gameRef": "/Lotus/Types/Recipes/WarframeRecipes/AshPrimeSystemsBlueprint",
+    "tags": [
+     "component",
+     "prime",
+     "warframe",
+     "blueprint"
+    ],
+    "setRoot": false,
+    "setParts": [
+     "559daa9fe779897b3263c2c7",
+     "559daaa7e779897b35d626c6",
+     "559daab7e779897b3d86cb8f",
+     "56783f24cbfa8f0432dd898f",
+     "559daaafe779897b399db0fd"
+    ],
+    "quantityInSet": 1,
+    "ducats": 65,
+    "reqMasteryRank": 0,
+    "tradingTax": 2000,
+    "tradable": true,
+    "i18n": {
+     "en": {
+      "name": "Ash Prime Systems Blueprint",
+      "wikiLink": "https://wiki.warframe.com/w/Ash/Prime",
+      "icon": "items/images/en/ash_prime_systems.9f3f82bee82a9741531857cf76eb6594.png",
+      "thumb": "items/images/en/thumbs/ash_prime_systems.9f3f82bee82a9741531857cf76eb6594.128x128.png",
+      "subIcon": "sub_icons/warframe/prime_systems_128x128.png"
+     }
+    }
+   }
+  ]
+ },
+ "error": null
+}

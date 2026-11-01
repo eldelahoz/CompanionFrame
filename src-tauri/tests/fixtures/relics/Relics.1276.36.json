@@ -1,0 +1,50 @@
+[
+ {
+  "uniqueName": "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze",
+  "name": "Axi A1 Intact",
+  "codexSecret": false,
+  "type": "Relic",
+  "imageName": "RelicAxiD.png",
+  "category": "Relics",
+  "tradable": true,
+  "locations": [],
+  "rewards": [],
+  "masterable": false
+ },
+ {
+  "uniqueName": "/Lotus/Types/Game/Projections/T4VoidProjectionEPlatinum",
+  "name": "Axi A1 Radiant",
+  "codexSecret": false,
+  "type": "Relic",
+  "imageName": "RelicAxiC.png",
+  "category": "Relics",
+  "tradable": true,
+  "locations": [],
+  "rewards": [],
+  "masterable": false
+ },
+ {
+  "uniqueName": "/Lotus/Types/Game/Projections/T1VoidProjectionGBronze",
+  "name": "Lith A1 Intact",
+  "codexSecret": false,
+  "type": "Relic",
+  "imageName": "RelicLithD.png",
+  "category": "Relics",
+  "tradable": true,
+  "locations": [],
+  "rewards": [],
+  "masterable": false
+ },
+ {
+  "uniqueName": "/Lotus/Types/Game/Projections/T2VoidProjectionFGold",
+  "name": "Meso B1 Flawless",
+  "codexSecret": false,
+  "type": "Relic",
+  "imageName": "RelicMesoB.png",
+  "category": "Relics",
+  "tradable": true,
+  "locations": [],
+  "rewards": [],
+  "masterable": false
+ }
+]

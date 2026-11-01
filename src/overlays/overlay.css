@@ -1,0 +1,1366 @@
+@import "../styles/fonts/fonts.css";
+@import "../styles/tokens.css";
+
+/* In-game overlays. Each overlay window covers the game, so vh is the game height: type and spacing scale
+   from --ov-font (1.48vh: 16px at 1080p, 21px at 1440p, 32px at 4K, any aspect ratio). Panels are a
+   translucent, blurred dark surface so text stays legible over bright scenes, in either app theme. */
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+body {
+  font-family: var(--font-body);
+  font-size: var(--ov-font);
+  line-height: 1.4;
+  color: var(--ov-text);
+  -webkit-font-smoothing: antialiased;
+}
+.overlay-shell {
+  position: absolute;
+  inset: 0;
+}
+/* Each overlay's main panel sits where Setup placed it, else at OVERLAY_DEFAULTS (overlayDefaults.ts):
+   OverlayShell sets --ov-x/y/w/h as fractions of the screen and --ov-scale. */
+.overlay-shell .reward-live,
+.overlay-shell .riven-card,
+.overlay-shell .arbi-live {
+  top: calc(var(--ov-y) * 100%);
+  left: calc(var(--ov-x) * 100%);
+  right: auto;
+  transform: scale(var(--ov-scale));
+  transform-origin: left top;
+}
+.overlay-panel {
+  position: absolute;
+  top: 2.5em;
+  left: 2.5em;
+  padding: 0.75em 1em;
+  border-radius: var(--ov-radius);
+  border: 1px solid var(--ov-border);
+  background: var(--ov-surface);
+  box-shadow: var(--ov-shadow);
+  backdrop-filter: blur(var(--ov-blur));
+  font-variant-numeric: tabular-nums;
+}
+.overlay-panel h3 {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+.is-overlay-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+button {
+  font: inherit;
+}
+.overlay-panel button {
+  padding: 0.3em 0.7em;
+  border: 1px solid var(--ov-border);
+  border-radius: calc(var(--ov-radius) * 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  cursor: pointer;
+}
+.overlay-panel button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+.overlay-panel button:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+.overlay-panel a[href] {
+  cursor: pointer;
+}
+.overlay-panel a[href]:hover {
+  text-decoration: underline;
+  filter: brightness(1.2);
+}
+.overlay-panel button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Shared overlay primitives ---------- */
+/* Game-data and state colours are fixed light-on-dark: the panels stay dark in either app theme,
+   so the light theme's darker tokens would lose contrast here. The accent stays the theme's. */
+.overlay-shell {
+  --ov-rarity-common: #c49a6c;
+  --ov-rarity-uncommon: #c3cad6;
+  --ov-rarity-rare: #e3c35c;
+  --ov-success: #78d7a6;
+  --ov-warning: #f0cd77;
+  --ov-info: #9cc2f3;
+  --ov-danger: #f19a97;
+  --ov-text-muted: #9a9fa9;
+  --ov-hair: rgba(255, 255, 255, 0.08);
+  --ov-well: rgba(255, 255, 255, 0.045);
+  --ov-accent-wash: color-mix(in oklab, var(--accent) 16%, transparent);
+  --ov-accent-line: color-mix(in oklab, var(--accent) 70%, transparent);
+}
+.ov-icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+.ov-gi {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  object-fit: contain;
+}
+.ov-art {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+div.ov-art {
+  display: grid;
+  place-items: center;
+  color: var(--ov-text-secondary);
+  opacity: 0.35;
+}
+div.ov-art svg {
+  width: 70%;
+  height: 70%;
+}
+/* Readout: currency art + tabular numerals */
+.ov-ro {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ov-ro .ov-gi {
+  width: 1.05em;
+  height: 1.05em;
+}
+.ov-ro[data-size="lg"] {
+  font-size: 1.375em;
+  letter-spacing: -0.02em;
+  gap: 0.25em;
+}
+.ov-ro[data-size="lg"] .ov-gi {
+  width: 0.95em;
+  height: 0.95em;
+}
+.ov-ro[data-dim] {
+  color: var(--ov-text-muted);
+  font-weight: 500;
+}
+/* Status badges: icon + words, the tone only reinforces them */
+.ov-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  height: 1.75em;
+  padding: 0 0.6em;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.8125em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ov-badge .ov-icon,
+.ov-badge .ov-gi {
+  width: 1.05em;
+  height: 1.05em;
+}
+.ov-badge[data-status="unbuilt"] {
+  background: color-mix(in oklab, var(--ov-warning) 16%, transparent);
+  color: var(--ov-warning);
+}
+.ov-badge[data-status="mastered"] {
+  background: color-mix(in oklab, var(--ov-success) 15%, transparent);
+  color: var(--ov-success);
+}
+.ov-badge[data-status="needed"] {
+  background: color-mix(in oklab, var(--ov-info) 15%, transparent);
+  color: var(--ov-info);
+}
+.ov-badge[data-status="foundry"],
+.ov-badge[data-status="notOwned"] {
+  color: var(--ov-text-secondary);
+}
+.ov-badge[data-status="unknown"] {
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  background: transparent;
+  color: var(--ov-text-muted);
+}
+.ov-badge-count {
+  font-weight: 700;
+}
+.ov-pips {
+  display: inline-flex;
+  gap: 0.15em;
+}
+.ov-pips i {
+  width: 0.35em;
+  height: 0.8em;
+  border-radius: 0.1em;
+  background: currentColor;
+  opacity: 0.3;
+}
+.ov-pips i[data-on] {
+  opacity: 1;
+}
+.overlay-panel .ov-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  height: 2em;
+  padding: 0 0.8em;
+  border-radius: 0.4em;
+  font-size: 0.875em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.overlay-panel .ov-btn-icon {
+  width: 2em;
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--ov-text-secondary);
+}
+.overlay-panel .ov-btn-primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+.overlay-panel .ov-btn-primary:hover:not(:disabled) {
+  background: var(--accent-bright, var(--accent));
+}
+.ov-grade {
+  --g: var(--ov-text-secondary);
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.9em;
+  height: 1.5em;
+  padding: 0 0.3em;
+  border-radius: 0.3em;
+  background: color-mix(in oklab, var(--g) 17%, transparent);
+  color: var(--g);
+  font-size: 0.8125em;
+  font-weight: 700;
+}
+.ov-grade[data-grade="s"] {
+  --g: #4cc38a;
+}
+.ov-grade[data-grade="a"] {
+  --g: #7cb98d;
+}
+.ov-grade[data-grade="b"] {
+  --g: #e2c04a;
+}
+.ov-grade[data-grade="c"],
+.ov-grade[data-grade="d"] {
+  --g: #ec8f4f;
+}
+.ov-grade[data-grade="f"] {
+  --g: #ef6f6c;
+}
+.ov-grade-xl {
+  min-width: 2.3em;
+  height: 2.3em;
+  border-radius: 0.4em;
+  font-size: 1.05em;
+}
+.ov-meter {
+  height: 0.3em;
+  margin: 0.2em 0 0;
+  overflow: hidden;
+  border-radius: 0.15em;
+  background: rgba(255, 255, 255, 0.1);
+}
+.ov-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ov-success);
+}
+
+/* ---------- Reward cards ---------- */
+/* The column is as wide as its default footprint, so the bar and the card row stay centred over the
+   game's cards; the top padding leaves room for the "Best pick" label above a card. */
+.reward-live {
+  position: absolute;
+  width: calc(var(--ov-w) * 100%);
+  padding-top: 1em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+}
+.reward-canvas {
+  position: relative;
+  display: flex;
+  outline: 1px dashed var(--ov-border);
+}
+/* Live, the cards take only the height they need (the inline height is the editor's design size),
+   so the bar below still clears the game's cards. */
+.reward-live .reward-canvas {
+  height: auto !important;
+  align-items: stretch;
+  justify-content: center;
+  outline: none;
+}
+.reward-card {
+  box-sizing: border-box;
+  height: 100%;
+}
+/* auto, so the row stretches every card to the tallest one. */
+.reward-live .reward-card {
+  height: auto;
+}
+.reward-card {
+  padding: 0 0.25em;
+  font-variant-numeric: tabular-nums;
+}
+.rw {
+  --rar: var(--ov-text-secondary);
+  position: relative;
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.75em 0.7em 0.65em;
+  border: 1px solid var(--ov-border);
+  border-radius: var(--ov-radius);
+  background: var(--ov-surface);
+  box-shadow: var(--ov-shadow);
+  backdrop-filter: blur(var(--ov-blur));
+  text-align: center;
+}
+/* Rarity is the top edge plus the game's rarity art and its name, never colour alone. */
+.rw::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0.6em;
+  right: 0.6em;
+  height: 0.2em;
+  border-radius: 0 0 0.2em 0.2em;
+  background: var(--rar);
+}
+[data-rarity="common"] > .rw {
+  --rar: var(--ov-rarity-common);
+}
+[data-rarity="uncommon"] > .rw {
+  --rar: var(--ov-rarity-uncommon);
+}
+[data-rarity="rare"] > .rw {
+  --rar: var(--ov-rarity-rare);
+}
+[data-best] > .rw {
+  border-color: var(--ov-accent-line);
+  background: linear-gradient(180deg, var(--ov-accent-wash), transparent 55%), var(--ov-surface);
+  box-shadow: var(--ov-shadow), 0 0 0 1px var(--ov-accent-line);
+}
+.rw-pick {
+  position: absolute;
+  top: -0.85em;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  height: 1.6em;
+  padding: 0 0.6em;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 0.75em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* Rarity and vaulted sit in the top corners, either side of the art. */
+.rw-meta {
+  position: absolute;
+  top: 0.6em;
+  left: 0.65em;
+  right: 0.65em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rw-rarity,
+.rw-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.8125em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rw-rarity {
+  color: var(--rar);
+}
+.rw-meta > [data-reward-field="vaulted"] {
+  margin-left: auto;
+}
+.rw-tag {
+  color: var(--ov-text-secondary);
+  font-weight: 500;
+}
+.rw-art {
+  width: 3.9em;
+  height: 3.9em;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--rar) 10%, transparent);
+}
+.rw-art img {
+  filter: drop-shadow(0 0.2em 0.4em rgba(0, 0, 0, 0.6));
+}
+.rw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em 0.7em;
+  max-width: 100%;
+}
+.rw-name {
+  display: block;
+  font-size: 0.9375em;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+  text-wrap: balance;
+}
+.rw-noprice {
+  color: var(--ov-text-muted);
+  font-size: 0.875em;
+}
+.rw-set {
+  color: var(--ov-text-muted);
+  font-size: 0.75em;
+  font-weight: 500;
+}
+.rw-status {
+  margin-top: auto;
+  padding-top: 0.15em;
+}
+.reward-field {
+  display: inline-block;
+  white-space: nowrap;
+  cursor: move;
+}
+.reward-field[data-reward-field="itemName"] {
+  white-space: normal;
+}
+.reward-live .reward-field {
+  cursor: default;
+}
+.reward-bar {
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: 2.4em;
+  padding: 0 0.3em 0 0.9em;
+  font-size: 0.875em;
+  pointer-events: auto;
+}
+.reward-bar-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  color: var(--ov-text-secondary);
+}
+.reward-bar-sum strong {
+  color: var(--ov-text);
+  font-weight: 600;
+}
+.reward-bar:not(:has(.reward-bar-sum)) {
+  padding-left: 0.3em;
+}
+.reward-status {
+  position: static;
+  margin: 0;
+  padding: 0.5em 0.9em;
+}
+.reward-pick {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5em;
+  pointer-events: auto;
+}
+.reward-pick button {
+  padding: 0.3em 0.7em;
+  border: 1px solid var(--ov-border);
+  border-radius: 0.4em;
+  background: var(--ov-surface-strong);
+  color: var(--ov-text);
+  backdrop-filter: blur(var(--ov-blur));
+  cursor: pointer;
+}
+.reward-pick button[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+/* ---------- Relic planner ---------- */
+.relic-planner {
+  /* Under the game's currency bar (y 45-90 at 1080p); five rows end above the hint text of the relic screen (y ~540). */
+  top: 7.5em;
+  left: auto;
+  right: 1.5em;
+  width: 23em;
+  padding: 0.7em 0.8em 0.6em;
+  /* MovablePanel sets these: the panel's own offset (net of the shell's) and scale. */
+  transform: translate(var(--pl-x, 0px), var(--pl-y, 0px)) scale(var(--pl-scale, 1));
+  transform-origin: right top;
+}
+.pl-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+}
+.pl-era {
+  width: 1.9em;
+  height: 1.9em;
+  object-fit: contain;
+}
+.pl-title {
+  margin-right: auto;
+}
+.pl-title h3 {
+  line-height: 1.2;
+}
+.pl-sub {
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.relic-planner select {
+  font: inherit;
+  font-size: 0.8125em;
+  padding: 0.2em 0.4em;
+  border: 1px solid var(--ov-border);
+  border-radius: 0.4em;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+}
+.pl-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45em;
+  margin: 0.5em 0 0.1em;
+  padding: 0.45em 0.55em;
+  border-radius: 0.4em;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.pl-note .ov-icon {
+  margin-top: 0.15em;
+  color: var(--ov-text-muted);
+}
+.pl-cols {
+  display: grid;
+  grid-template-columns: 1fr 4.6em 4.6em;
+  gap: 0.55em;
+  margin: 0.6em 0 0.15em;
+  padding: 0 0.4em;
+  color: var(--ov-text-muted);
+  font-size: 0.75em;
+}
+.relic-planner ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.1em;
+}
+.pl-cols .pl-num {
+  text-align: right;
+}
+.pl-row {
+  display: grid;
+  grid-template-columns: 1.8em 1fr 4.6em 4.6em;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0.3em 0.4em;
+  border-radius: 0.4em;
+}
+.pl-row[data-best] {
+  background: var(--ov-accent-wash);
+  box-shadow: inset 0 0 0 1px var(--ov-accent-line);
+}
+.pl-relic {
+  width: 1.8em;
+  height: 1.8em;
+  object-fit: contain;
+}
+.relic-planner-name {
+  font-weight: 600;
+  line-height: 1.2;
+}
+.pl-q {
+  display: flex;
+  gap: 0.5em;
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.pl-row > .ov-ro,
+.relic-planner-ev {
+  justify-content: flex-end;
+  text-align: right;
+}
+.relic-planner-ev {
+  color: var(--ov-text-muted);
+}
+
+/* ---------- Riven ---------- */
+/* Everything is em, at the prototype's 14px (.875 of the overlay font). The compare panel is 640px at
+   1080p; the single card is 392px and stays at the top-right corner of the same footprint. */
+.riven-card {
+  font-size: 0.875em;
+  display: grid;
+  gap: 0.7em;
+  padding: 0.75em;
+}
+.rv-cmp {
+  width: 45.7em;
+}
+.rv-one {
+  width: 28em;
+}
+.overlay-shell .riven-card.rv-one {
+  left: calc(var(--ov-x) * 100% + var(--ov-w) * 100% - 28em * var(--ov-scale));
+}
+.rv-cols {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 0.75em;
+}
+.rv-cols hr {
+  width: 1px;
+  background: var(--ov-hair);
+  border: 0;
+  margin: 0;
+}
+.rv-sep {
+  height: 1px;
+  background: var(--ov-hair);
+  border: 0;
+  margin: 0;
+}
+.rv-col {
+  display: grid;
+  gap: 0.55em;
+  align-content: start;
+  min-width: 0;
+}
+.rv-col-lab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ov-text-muted);
+}
+.rv-tag {
+  text-transform: none;
+  letter-spacing: 0;
+  padding: 0.05em 0.5em;
+  border-radius: 0.3em;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ov-text-secondary);
+}
+.rv-tag[data-new] {
+  background: var(--ov-accent-wash);
+  color: var(--accent);
+}
+
+/* verdict banner */
+.rv-verdict {
+  --c: var(--ov-text-muted);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.7em;
+  align-items: center;
+  padding: 0.55em 0.8em;
+  border-radius: 0.45em;
+  color: var(--c);
+  background: color-mix(in oklab, var(--c) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--c) 45%, transparent);
+}
+.rv-verdict[data-v="take"] {
+  --c: var(--accent);
+}
+.rv-verdict[data-v="close"] {
+  --c: var(--ov-warning);
+}
+.rv-verdict[data-v="keep"] {
+  --c: var(--ov-danger);
+}
+.rv-verdict .ov-icon {
+  width: 1.5em;
+  height: 1.5em;
+}
+.rv-verdict strong {
+  display: block;
+  font-size: 1.125em;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.rv-verdict span {
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.rv-verdict .rv-delta {
+  font-size: 1.25em;
+  font-weight: 650;
+  color: var(--c);
+}
+.rv-reading {
+  font-weight: 600;
+  color: var(--ov-text);
+}
+
+/* head */
+.rv-head {
+  display: grid;
+  grid-template-columns: 3.4em 1fr auto;
+  align-items: center;
+  gap: 0.6em;
+}
+.rv-wpn {
+  width: 3.4em;
+  height: 3.4em;
+  display: grid;
+  place-items: center;
+  padding: 0.2em;
+  box-sizing: border-box;
+  border-radius: 0.45em;
+  background: var(--ov-well);
+}
+.riven-card h3 {
+  font-size: 1.0625em;
+  line-height: 1.2;
+}
+.rv-sub {
+  font-size: 0.8125em;
+  color: var(--ov-text-secondary);
+}
+
+/* stats with the roll-range bar */
+.rv-stats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45em;
+}
+.rv-stats li {
+  display: grid;
+  grid-template-columns: 4.1em 1fr auto;
+  align-items: center;
+  gap: 0.15em 0.5em;
+}
+.rv-v {
+  font-weight: 600;
+  text-align: right;
+}
+.rv-n {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.riven-neg .rv-v,
+.riven-neg .rv-n {
+  color: var(--ov-danger);
+}
+.rv-q {
+  --g: var(--ov-text-secondary);
+  grid-column: 2 / 4;
+  height: 0.28em;
+  border-radius: 0.2em;
+  background: rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+.rv-q[data-grade="s"] {
+  --g: var(--grade-s, #4cc38a);
+}
+.rv-q[data-grade="a"] {
+  --g: var(--grade-a, #7cb98d);
+}
+.rv-q[data-grade="b"] {
+  --g: var(--grade-b, #e2c04a);
+}
+.rv-q[data-grade="c"],
+.rv-q[data-grade="d"] {
+  --g: var(--grade-c, #ec8f4f);
+}
+.rv-q[data-grade="f"] {
+  --g: var(--grade-f, #ef6f6c);
+}
+.rv-q i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--q);
+  border-radius: 0.2em;
+  background: var(--g);
+  opacity: 0.85;
+}
+.rv-q::after {
+  content: "";
+  position: absolute;
+  top: -0.12em;
+  bottom: -0.12em;
+  left: var(--q);
+  width: 2px;
+  background: var(--ov-text);
+  border-radius: 1px;
+}
+.rv-qh {
+  grid-column: 2 / 4;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6875em;
+  color: var(--ov-text-muted);
+  margin-top: 0.1em;
+}
+.riven-note {
+  margin: 0;
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.rv-best {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.9em;
+}
+
+/* Est. value */
+.rv-est {
+  display: grid;
+  gap: 0.3em;
+  padding: 0.5em 0.6em;
+  border-radius: 0.45em;
+  background: var(--ov-well);
+}
+.rv-est-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5em;
+}
+.rv-lab {
+  font-size: 0.8125em;
+  color: var(--ov-text-secondary);
+}
+.rv-faint {
+  font-size: 0.8125em;
+  color: var(--ov-text-muted);
+}
+.rv-low {
+  font-size: 0.8461em;
+  font-weight: 600;
+  padding: 0.1em 0.5em;
+  border-radius: 0.3em;
+  color: var(--ov-warning);
+  background: color-mix(in oklab, var(--ov-warning) 15%, transparent);
+}
+.rv-range {
+  position: relative;
+  height: 0.4em;
+  margin: 0.2em 0;
+  border-radius: 0.2em;
+  background: rgba(255, 255, 255, 0.08);
+}
+.rv-span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 0.2em;
+  background: rgba(255, 255, 255, 0.22);
+}
+.rv-mark {
+  position: absolute;
+  top: -0.25em;
+  width: 0.2em;
+  height: 0.9em;
+  border-radius: 0.1em;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+.rv-dashed {
+  height: 0.4em;
+  margin: 0.3em 0;
+  border-radius: 0.2em;
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+}
+.rv-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75em;
+  color: var(--ov-text-muted);
+}
+.rv-best-match {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 0.75em;
+  color: var(--ov-text-secondary);
+}
+
+/* match chip */
+.rv-m {
+  --c: #b58a8a;
+  display: inline-grid;
+  place-items: center;
+  min-width: 3.1em;
+  height: 1.5em;
+  padding: 0 0.35em;
+  border-radius: 0.3em;
+  font-size: 0.75em;
+  font-weight: 700;
+  color: var(--c);
+  background: color-mix(in oklab, var(--c) 16%, transparent);
+}
+.rv-m[data-tone="hi"] {
+  --c: var(--accent);
+}
+.rv-m[data-tone="md"] {
+  --c: var(--ov-warning);
+}
+
+/* listings */
+.rv-lst {
+  display: grid;
+  gap: 0.1em;
+  margin: 0 -0.35em;
+}
+.rv-lst-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.75em;
+  color: var(--ov-text-muted);
+  margin: 0 0.35em 0.1em;
+}
+.rv-li {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  gap: 0.5em;
+  align-items: center;
+  padding: 0.32em 0.35em;
+  border-radius: 0.4em;
+  color: inherit;
+  text-decoration: none;
+}
+.rv-li:hover,
+.rv-li:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+}
+.rv-ab {
+  display: flex;
+  gap: 0.25em;
+  overflow: hidden;
+}
+.rv-ab em {
+  font-style: normal;
+  font-size: 0.6875em;
+  font-weight: 600;
+  padding: 0.1em 0.38em;
+  border-radius: 0.25em;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ov-text-secondary);
+}
+.rv-ab em[data-hit] {
+  background: var(--ov-accent-wash);
+  color: var(--accent);
+}
+.rv-ab em[data-neg] {
+  color: var(--ov-danger);
+}
+.rv-ab em:not([data-hit]) {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+.rv-st {
+  --sc: #6b707a;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.75em;
+  color: var(--ov-text-secondary);
+}
+.rv-st::before {
+  content: "";
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: var(--sc);
+}
+.rv-st[data-st="online"] {
+  --sc: var(--ov-success);
+}
+.rv-st[data-st="ingame"] {
+  --sc: var(--accent);
+}
+.rv-go {
+  color: var(--ov-text-muted);
+}
+.rv-li:hover .rv-go,
+.rv-li:focus-visible .rv-go {
+  color: var(--accent);
+}
+.rv-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  height: 2.1em;
+  border-radius: 0.4em;
+  border: 1px solid var(--ov-border);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.8125em;
+  font-weight: 600;
+  color: var(--ov-text);
+  text-decoration: none;
+}
+.rv-open:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.rv-open .ov-icon {
+  color: var(--accent);
+}
+.rv-li:focus-visible,
+.rv-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.rv-note {
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-start;
+  font-size: 0.8125em;
+  color: var(--ov-text-secondary);
+  padding: 0.5em 0.6em;
+  border-radius: 0.45em;
+  background: var(--ov-well);
+}
+.rv-note .ov-icon {
+  margin-top: 0.2em;
+  color: var(--ov-warning);
+}
+
+/* loading and partial */
+.rv-sk {
+  display: block;
+  border-radius: 0.3em;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.05));
+  background-size: 200% 100%;
+  animation: rv-shimmer 1.4s linear infinite;
+}
+@keyframes rv-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.rv-spin {
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  animation: rv-rotate 0.8s linear infinite;
+}
+@keyframes rv-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-sk,
+  .rv-spin {
+    animation: none;
+  }
+}
+.rv-unread {
+  display: grid;
+  gap: 0.5em;
+  justify-items: start;
+  align-content: center;
+  min-height: 17em;
+  padding: 0.8em;
+  border-radius: 0.45em;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.rv-unread strong {
+  color: var(--ov-text);
+  font-size: 1.1em;
+}
+.rv-unread .ov-icon {
+  width: 1.4em;
+  height: 1.4em;
+  color: var(--ov-warning);
+}
+
+.rv-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1.1em;
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.rv-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.rv-r {
+  margin-left: auto;
+}
+.riven-chip {
+  top: 0.5em;
+  left: auto;
+  right: 1.5em;
+  padding: 0.15em 0.5em;
+  font-size: 0.75em;
+}
+
+/* ---------- Arbitration ---------- */
+.arbi-live {
+  /* 13.4em + padding = the 15em footprint OVERLAY_DEFAULTS reserves. */
+  width: 13.4em;
+  padding: 0.7em 0.8em 0.75em;
+}
+.ab-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5em;
+}
+.ab-head strong {
+  font-weight: 600;
+}
+.ab-sub {
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.ab-time {
+  margin: 0.35em 0 0.4em;
+  font-size: 1.75em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.ab-time small {
+  margin-left: 0.5em;
+  color: var(--ov-text-muted);
+  font-size: 0.45em;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.ab-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45em 0.8em;
+  margin: 0;
+}
+.ab-grid div {
+  display: grid;
+  gap: 0.05em;
+}
+.ab-grid dt {
+  color: var(--ov-text-muted);
+  font-size: 0.75em;
+}
+.ab-grid dd {
+  margin: 0;
+  font-weight: 600;
+}
+.ab-sat {
+  grid-column: 1 / -1;
+}
+.ab-sat dt {
+  display: flex;
+  justify-content: space-between;
+}
+.ab-sat dt b {
+  color: var(--ov-text);
+  font-weight: 600;
+}
+
+/* ---------- Trade toast ---------- */
+/* Bottom edge fixed so the toast grows upwards with more matches; no scale (fixed size). */
+.overlay-shell .trade-notice {
+  top: auto;
+  left: calc(var(--ov-x) * 100%);
+  bottom: calc((1 - var(--ov-y) - var(--ov-h)) * 100%);
+  width: 20.4em;
+  padding: 0.75em 0.8em 0.8em;
+  overflow: hidden;
+}
+.tr-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+.tr-ok {
+  width: 1.6em;
+  height: 1.6em;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--ov-success) 18%, transparent);
+  color: var(--ov-success);
+}
+.tr-title strong {
+  font-weight: 600;
+}
+.tr-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.75em;
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.tr-items {
+  margin: 0.5em 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ov-text-secondary);
+  font-size: 0.875em;
+}
+.tr-match {
+  display: grid;
+  grid-template-columns: 2.6em 1fr auto;
+  align-items: center;
+  gap: 0.4em 0.6em;
+  margin-top: 0.6em;
+  padding: 0.45em;
+  border-radius: 0.45em;
+  background: var(--ov-well);
+}
+.tr-art {
+  width: 2.6em;
+  height: 2.6em;
+  display: grid;
+  place-items: center;
+}
+.tr-match-name {
+  font-weight: 600;
+  line-height: 1.2;
+}
+.tr-match-q {
+  display: flex;
+  gap: 0.6em;
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.overlay-panel .tr-close {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.tr-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 0.6em;
+}
+.trade-notice .trade-none {
+  margin: 0.5em 0 0;
+  color: var(--ov-text-muted);
+  font-size: 0.8125em;
+}
+.trade-queued {
+  margin-left: auto;
+  color: var(--ov-text-muted);
+  font-size: 0.8125em;
+}
+.trade-timer {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: trade-drain linear forwards;
+}
+@keyframes trade-drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* ---------- Move mode (OverlayShell) ---------- */
+/* A dashed accent frame around each overlay with a tab: grip, "Drag to move" and Done. */
+.overlay-move-frame {
+  position: fixed;
+  z-index: 10;
+  border: 1.5px dashed var(--accent);
+  border-radius: var(--ov-radius);
+  pointer-events: none;
+}
+.overlay-move-chip {
+  position: absolute;
+  top: 0;
+  left: -1.5px;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  height: 1.75em;
+  padding: 0 0.2em 0 0.4em;
+  border-radius: 0.35em 0.35em 0 0;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 0.8em;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: grab;
+}
+/* The reward row sits at the screen top, so its tab hangs below the frame instead. */
+.overlay-move-frame[data-chip-below] .overlay-move-chip {
+  top: auto;
+  bottom: 0;
+  border-radius: 0 0 0.35em 0.35em;
+}
+.overlay-move-chip button {
+  height: 1.45em;
+  padding: 0 0.6em;
+  border: 0;
+  border-radius: 0.25em;
+  background: var(--text-on-accent);
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.overlay-move-resize {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--accent);
+  cursor: nwse-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.overlay-move-chip button:focus-visible {
+  outline: 2px solid var(--ov-text);
+  outline-offset: 1px;
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay-riven",
+  "description": "Minimal permissions for the riven overlay window",
+  "windows": [
+    "overlay-riven"
+  ],
+  "permissions": [
+    "core:event:default"
+  ]
+}

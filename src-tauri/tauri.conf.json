@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CompanionFrame",
+  "version": "0.1.0",
+  "identifier": "com.companionframe.app",
+  "build": {
+    "beforeDevCommand": "pnpm game-data && pnpm fetch-onnx && pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm game-data && pnpm fetch-onnx && pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "CompanionFrame",
+        "label": "main",
+        "decorations": false,
+        "width": 1280,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": {
+      "resources/game-data/": "game-data/",
+      "resources/onnxruntime/": "onnxruntime/",
+      "resources/riven-ocr/": "riven-ocr/"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

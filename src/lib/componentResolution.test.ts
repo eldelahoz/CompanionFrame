@@ -1,0 +1,209 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  buildItemNameIndex,
+  enrichComponents,
+  resolveComponentByName,
+  resolveComponentByUniqueName,
+  resolveComponentLocation,
+  resolveComponentPriceLookup,
+  resolveComponentWikiFallback,
+} from "./componentResolution";
+import type { ComponentInfo, ItemDbEntry } from "../types/inventory";
+import type { WfmItemsLookup } from "./componentResolution";
+
+const parentUniqueName = "/Lotus/Types/Recipes/WarframeRecipes/TrinityPrime";
+const blueprintUniqueName = "/Lotus/Types/Items/MiscItems/TrinityPrimeChassisBlueprint";
+const componentUniqueName = "/Lotus/Types/Items/MiscItems/TrinityPrimeChassisComponent";
+
+function makeItemDb(): Record<string, ItemDbEntry> {
+  return {
+    [parentUniqueName]: {
+      name: "Trinity Prime",
+      components: [
+        {
+          name: "Chassis",
+          uniqueName: componentUniqueName,
+          tradable: true,
+          itemCount: 2,
+          drops: [{ location: "Lith T1", chance: 12.5 }],
+        },
+      ],
+    },
+    [blueprintUniqueName]: {
+      name: "Trinity Prime Chassis",
+      isBuildComponent: true,
+      componentOf: parentUniqueName,
+      tradable: true,
+      description: "A prime warframe component. Location: Lith T1, Meso T2",
+      drops: [{ location: "Fallback drop" }],
+    },
+  };
+}
+
+describe("componentResolution", () => {
+  it("resolves Blueprint/Component uniqueName aliases back to the parent component", () => {
+    const itemDb = makeItemDb();
+    const ownership = new Map([[componentUniqueName, 2]]);
+    const resolved = resolveComponentByName(
+      "Trinity Prime Chassis",
+      itemDb,
+      ownership,
+      buildItemNameIndex(itemDb),
+    );
+
+    expect(resolved?.parentName).toBe("Trinity Prime");
+    expect(resolved?.comp.uniqueName).toBe(componentUniqueName);
+    expect(resolved?.comp.ownedCount).toBe(2);
+    expect(resolved?.comp.owned).toBe(true);
+  });
+
+  it("keeps a duplicated display name on the entry the uniqueName names", () => {
+    const itemDb = makeItemDb();
+    const otherParent = "/Lotus/Types/Recipes/WarframeRecipes/MesaPrime";
+    const otherComponent = "/Lotus/Types/Items/MiscItems/MesaPrimeChassisComponent";
+    itemDb[otherParent] = {
+      name: "Mesa Prime",
+      components: [{ name: "Chassis", uniqueName: otherComponent, itemCount: 1 }],
+    };
+    // Same display name as the Trinity blueprint, so the name index keeps one.
+    itemDb["/Lotus/Types/Items/MiscItems/MesaPrimeChassisBlueprint"] = {
+      name: "Trinity Prime Chassis",
+      isBuildComponent: true,
+      componentOf: otherParent,
+    };
+
+    expect(resolveComponentByName("Trinity Prime Chassis", itemDb, new Map())?.parentName).toBe(
+      "Mesa Prime",
+    );
+    expect(resolveComponentByUniqueName(blueprintUniqueName, itemDb, new Map())?.parentName).toBe(
+      "Trinity Prime",
+    );
+  });
+
+  it("builds full component market names and falls back to Blueprint listings when needed", () => {
+    const comp: ComponentInfo = {
+      name: "Chassis",
+      uniqueName: componentUniqueName,
+      tradable: true,
+    };
+    const directLookup: WfmItemsLookup = {
+      "trinity prime chassis": { url_name: "trinity_prime_chassis" },
+    };
+
+    expect(resolveComponentPriceLookup(comp, "Trinity Prime", null, directLookup)).toEqual({
+      name: "Trinity Prime Chassis",
+      isTradable: true,
+    });
+
+    expect(
+      resolveComponentPriceLookup(comp, "Trinity Prime", { isBuildComponent: true }, {}),
+    ).toEqual({
+      name: "Trinity Prime Chassis Blueprint",
+      isTradable: true,
+      fallbackName: "Trinity Prime Chassis",
+      fallbackTradable: true,
+    });
+  });
+
+  it("strips the Set suffix from set-card parents so parts resolve real market names", () => {
+    const comp: ComponentInfo = {
+      name: "Chassis",
+      uniqueName: componentUniqueName,
+      tradable: true,
+    };
+    const lookup: WfmItemsLookup = {
+      "trinity prime chassis": { url_name: "trinity_prime_chassis" },
+    };
+
+    expect(resolveComponentPriceLookup(comp, "Trinity Prime Set", null, lookup)).toEqual({
+      name: "Trinity Prime Chassis",
+      isTradable: true,
+    });
+
+    const entry: ItemDbEntry = { name: "Trinity Prime Chassis", isBuildComponent: true };
+    expect(resolveComponentWikiFallback(comp, "Trinity Prime Set", entry)).toBe("Trinity Prime");
+  });
+
+  it("extracts component location text and uses parent names for build-component wiki fallback", () => {
+    const entry: ItemDbEntry = {
+      name: "Trinity Prime Chassis",
+      isBuildComponent: true,
+      description: "A prime warframe component. Location: Lith T1, Meso T2",
+    };
+    const comp: ComponentInfo = { name: "Chassis" };
+
+    expect(resolveComponentLocation(entry)).toBe("Location: Lith T1, Meso T2");
+    expect(resolveComponentWikiFallback(comp, "Trinity Prime", entry)).toBe("Trinity Prime");
+  });
+});
+
+describe("enrichComponents", () => {
+  const BRONCO_PRIME = "/Lotus/Weapons/Tenno/Pistol/BroncoPrime";
+  const AKBRONCO_LINK = "/Lotus/Types/Recipes/Weapons/WeaponParts/AkbroncoPrimeLink";
+
+  it("merges a doubled component row so one copy cannot cover both halves", () => {
+    const rows = enrichComponents(
+      [
+        { name: "Bronco Prime", uniqueName: BRONCO_PRIME },
+        { name: "Bronco Prime", uniqueName: BRONCO_PRIME },
+      ],
+      new Map([[BRONCO_PRIME, 1]]),
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.itemCount).toBe(2);
+    expect(rows[0]?.ownedCount).toBe(1);
+    expect(rows[0]?.owned).toBe(false);
+  });
+
+  it("reads a part the inventory holds under its blueprint spelling as owned", () => {
+    const rows = enrichComponents(
+      [{ name: "Link", uniqueName: AKBRONCO_LINK, itemCount: 1 }],
+      new Map([[`${AKBRONCO_LINK}Blueprint`, 1]]),
+    );
+
+    expect(rows[0]?.owned).toBe(true);
+  });
+
+  const BLADE = "/Lotus/Types/Recipes/Weapons/WeaponParts/GhoulsawBlade";
+  const BLADE_DB = {
+    [BLADE]: { name: "Blade", isBuildComponent: true },
+    [`${BLADE}Blueprint`]: { name: "Blade Blueprint", buildsProduct: BLADE },
+  };
+
+  it("does not count a held blueprint as a built part", () => {
+    const rows = enrichComponents(
+      [{ name: "Blade", uniqueName: BLADE, itemCount: 1 }],
+      new Map([[`${BLADE}Blueprint`, 1]]),
+      BLADE_DB,
+    );
+
+    expect(rows[0]?.built).toBe(0);
+    expect(rows[0]?.blueprintHeld).toBe(true);
+    // The readiness rules still see one pile, so their answers do not move.
+    expect(rows[0]?.ownedCount).toBe(1);
+    expect(rows[0]?.owned).toBe(true);
+  });
+
+  it("counts a part that really is built", () => {
+    const rows = enrichComponents(
+      [{ name: "Blade", uniqueName: BLADE, itemCount: 1 }],
+      new Map([[BLADE, 1]]),
+      BLADE_DB,
+    );
+
+    expect(rows[0]?.built).toBe(1);
+    expect(rows[0]?.blueprintHeld).toBe(false);
+  });
+
+  it("leaves the blueprint fields off when no database is passed", () => {
+    const rows = enrichComponents(
+      [{ name: "Blade", uniqueName: BLADE, itemCount: 1 }],
+      new Map([[`${BLADE}Blueprint`, 1]]),
+    );
+
+    expect(rows[0]?.built).toBeUndefined();
+    expect(rows[0]?.blueprintHeld).toBeUndefined();
+  });
+});

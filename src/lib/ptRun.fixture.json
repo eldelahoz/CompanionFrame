@@ -1,0 +1,200 @@
+{
+  "id": "2026-05-28_15-28-09",
+  "startedAt": 1780000089248.0,
+  "endedAt": 1780000202219.0,
+  "durationSec": 112.97099999999956,
+  "flightSec": 11.338999999999942,
+  "shieldSec": 27.25000000000091,
+  "legSec": 27.106999999998152,
+  "bodySec": 2.1309999999994034,
+  "pylonSec": 24.57300000000032,
+  "phases": [
+    {
+      "index": 1,
+      "totalSec": 39.66200000000026,
+      "shieldSec": 12.386999999999716,
+      "legSec": 6.686999999999898,
+      "bodySec": 0.8869999999997162,
+      "pylonSec": 12.228000000000064,
+      "shields": [
+        {
+          "element": "electric",
+          "seconds": 4.487999999999374
+        },
+        {
+          "element": "toxin",
+          "seconds": 4.372000000000298
+        },
+        {
+          "element": "slash",
+          "seconds": 3.520999999999731
+        },
+        {
+          "element": "magnetic",
+          "seconds": 0.006000000000312866
+        }
+      ],
+      "legs": [
+        {
+          "leg": "backLeft",
+          "seconds": 2.016999999999826
+        },
+        {
+          "leg": "frontRight",
+          "seconds": 0.8770000000004075
+        },
+        {
+          "leg": "frontLeft",
+          "seconds": 0.5760000000000218
+        },
+        {
+          "leg": "backRight",
+          "seconds": 3.2169999999996435
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "totalSec": 9.727999999999156,
+      "shieldSec": -0.0,
+      "legSec": 7.281999999999243,
+      "bodySec": 0.20599999999922147,
+      "pylonSec": 0.0,
+      "shields": [],
+      "legs": [
+        {
+          "leg": "frontRight",
+          "seconds": 3.423999999999978
+        },
+        {
+          "leg": "backRight",
+          "seconds": 1.0869999999995343
+        },
+        {
+          "leg": "backLeft",
+          "seconds": 1.84900000000016
+        },
+        {
+          "leg": "frontLeft",
+          "seconds": 0.9219999999995708
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "totalSec": 39.19300000000021,
+      "shieldSec": 10.436000000000604,
+      "legSec": 7.194999999999709,
+      "bodySec": 0.6310000000003129,
+      "pylonSec": 12.345000000000256,
+      "shields": [
+        {
+          "element": "cold",
+          "seconds": 9.575000000000728
+        },
+        {
+          "element": "radiation",
+          "seconds": 0.000999999999294232
+        },
+        {
+          "element": "corrosive",
+          "seconds": 0.0
+        },
+        {
+          "element": "viral",
+          "seconds": 0.24700000000029831
+        },
+        {
+          "element": "puncture",
+          "seconds": 0.5039999999999054
+        },
+        {
+          "element": "heat",
+          "seconds": 0.10900000000037836
+        }
+      ],
+      "legs": [
+        {
+          "leg": "frontRight",
+          "seconds": 3.131999999999607
+        },
+        {
+          "leg": "backLeft",
+          "seconds": 2.3400000000001455
+        },
+        {
+          "leg": "backRight",
+          "seconds": 0.4260000000003856
+        },
+        {
+          "leg": "frontLeft",
+          "seconds": 1.2969999999995707
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "totalSec": 13.048999999999978,
+      "shieldSec": 4.427000000000589,
+      "legSec": 5.9429999999993015,
+      "bodySec": 0.4070000000001528,
+      "pylonSec": 0.0,
+      "shields": [
+        {
+          "element": "gas",
+          "seconds": 3.2799999999997453
+        },
+        {
+          "element": "impact",
+          "seconds": 0.0
+        },
+        {
+          "element": "blast",
+          "seconds": 0.004000000000814907
+        },
+        {
+          "element": "electric",
+          "seconds": 0.9979999999995924
+        },
+        {
+          "element": "toxin",
+          "seconds": 0.14500000000043656
+        }
+      ],
+      "legs": [
+        {
+          "leg": "frontRight",
+          "seconds": 2.8739999999997963
+        },
+        {
+          "leg": "backRight",
+          "seconds": 2.2409999999999854
+        },
+        {
+          "leg": "backLeft",
+          "seconds": 0.475999999999658
+        },
+        {
+          "leg": "frontLeft",
+          "seconds": 0.35199999999986176
+        }
+      ]
+    }
+  ],
+  "players": [
+    "HostPlayer",
+    "ClientOne"
+  ],
+  "complete": true,
+  "bugged": false,
+  "aborted": false,
+  "hostMigration": false,
+  "flightUnreliable": false,
+  "hasLog": true,
+  "logSizeBytes": 1476.0,
+  "endReason": "completed",
+  "source": "live",
+  "tags": [],
+  "notes": null,
+  "duplicateOf": null
+}

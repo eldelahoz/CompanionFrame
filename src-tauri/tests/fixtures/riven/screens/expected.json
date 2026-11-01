@@ -1,0 +1,170 @@
+{
+  "_note": "Boxes are [x, y, w, h] in image pixels, eyeballed (+-10px). Game is French. Capture may be scaled, so use ratios of image size.",
+  "compare-orthos-fr.png": {
+    "layout": "compare-two",
+    "size": [1539, 880],
+    "grade": "new",
+    "cards": {
+      "old": {
+        "box": [80, 365, 280, 365],
+        "dimmed": true,
+        "weapon": "Orthos", "name": "Orthos Croni-puratis", "mr": 10, "rolls": 40,
+        "stats": [
+          {"printed": "+64,6% de Vitesse d'Attaque", "value": 64.6, "tag": "WeaponFireRateMod"},
+          {"printed": "x1,51 points de Dégâts aux Infestés", "value": 1.51, "tag": "WeaponFactionDamageInfested", "multiplier": true},
+          {"printed": "+95,5% de Dégâts Critiques", "value": 95.5, "tag": "WeaponCritDamageMod"},
+          {"printed": "x0,61 points de Dégâts aux Corpus", "value": 0.61, "tag": "WeaponFactionDamageCorpus", "multiplier": true}
+        ]
+      },
+      "new": {
+        "box": [405, 325, 345, 455],
+        "stats_box": [440, 515, 285, 180],
+        "dimmed": false,
+        "weapon": "Orthos", "name": "Orthos Toxitis", "mr": 10, "rolls": 40,
+        "stats": [
+          {"printed": "+145% [toxin icon]Poison", "value": 145, "tag": "WeaponToxinDamageMod", "inline_icon": true},
+          {"printed": "+122,2% de Dégâts Critiques", "value": 122.2, "tag": "WeaponCritDamageMod", "wrapped": true},
+          {"printed": "-70,5% de Chances de Critique pour l'Attaque Glissée", "value": -70.5, "tag": "SlideAttackCritChanceMod", "wrapped": 3, "negative": true}
+        ]
+      }
+    },
+    "caption": {"text": "S'ÉQUIPE SUR / Orthos Prime", "box": [1253, 600, 190, 220]},
+    "buttons": {"CONFIRMER": [360, 806, 440, 54]},
+    "own_toast_box": [1160, 205, 337, 44]
+  },
+  "accepted-orthos-fr.png": {
+    "layout": "single-left",
+    "size": [1300, 774],
+    "grade": "only",
+    "cards": {
+      "new": {
+        "box": [195, 240, 305, 445],
+        "stats_box": [225, 425, 265, 175],
+        "dimmed": false,
+        "weapon": "Orthos", "name": "Orthos Toxitis", "mr": 10, "rolls": 40,
+        "stats": [
+          {"printed": "+145% [toxin icon]Poison", "value": 145, "tag": "WeaponToxinDamageMod", "inline_icon": true},
+          {"printed": "+122,2% de Dégâts Critiques", "value": 122.2, "tag": "WeaponCritDamageMod", "wrapped": true},
+          {"printed": "-70,5% de Chances de Critique pour l'Attaque Glissée", "value": -70.5, "tag": "SlideAttackCritChanceMod", "wrapped": 3, "negative": true}
+        ]
+      }
+    },
+    "caption": {"text": "S'ÉQUIPE SUR / Orthos Prime", "box": [1014, 505, 190, 222]},
+    "buttons": {"RECYCLER POUR 3.500": [120, 713, 442, 50]},
+    "own_toast_box": [920, 112, 338, 45]
+  },
+  "initial-card-orthos-fr.png": {
+    "layout": "single-centre",
+    "note": "Existing fixture (../initial-card-orthos-fr.png): card cropped, Croni-puratis, same stats as the old card above."
+  },
+  "compare-staticor-fr.png": {
+    "layout": "compare-two",
+    "size": [1525, 873],
+    "grade": "new",
+    "note": "Real capture; card sits lower and smaller than the Orthos one. The overlay of an earlier scan is drawn on the right.",
+    "cards": {
+      "old": {"box": [75, 380, 270, 360], "dimmed": true, "weapon": "Staticor", "name": "Staticor Satitio", "mr": 15, "rolls": 4},
+      "new": {
+        "box": [405, 340, 335, 440],
+        "panel_box": [415, 525, 300, 215],
+        "dimmed": false,
+        "weapon": "Staticor", "name": "Staticor Hexatis", "mr": 15, "rolls": 4,
+        "stats": [
+          {"printed": "+134% de Dégâts Critiques", "value": 134, "tag": "WeaponCritDamageMod", "wrapped": true},
+          {"printed": "+144,3% de Chances de Statut", "value": 144.3, "tag": "WeaponProcChance", "wrapped": true},
+          {"printed": "-31,7% de Vitesse de Recharge", "value": -31.7, "tag": "WeaponReloadSpeedMod", "wrapped": true, "negative": true}
+        ]
+      }
+    },
+    "caption": {"text": "S'ÉQUIPE SUR / Staticor", "box": [1240, 605, 190, 225]},
+    "buttons": {"CONFIRMER": [350, 815, 440, 55]}
+  },
+  "weapon_for_grading": {
+    "rule": "Grade against the weapon named on the card ('Orthos'). The caption variant ('Orthos Prime') is informational.",
+    "fact": "Riven dispositions are per weapon family; the Prime variant shares the base weapon's riven disposition, and the caption just shows which variant it is equipped on."
+  },
+  "compare-staticor-hexatron-fr.png": {
+    "layout": "compare-two",
+    "size": [
+      1630,
+      868
+    ],
+    "grade": "new",
+    "note": "Real capture with the overlay drawn on the right; the new card has 3 stats (two wrapped).",
+    "cards": {
+      "old": {
+        "box": [
+          175,
+          365,
+          270,
+          360
+        ],
+        "dimmed": true,
+        "weapon": "Staticor",
+        "name": "Staticor Sati-critatio",
+        "mr": 15,
+        "rolls": 7,
+        "stats": [
+          {
+            "printed": "+94,2% �lectrique",
+            "value": 94.2
+          },
+          {
+            "printed": "+145,2% de Tir Multiple",
+            "value": 145.2
+          },
+          {
+            "printed": "+163,5% de Chances de Critique",
+            "value": 163.5
+          },
+          {
+            "printed": "x0,62 points de D�g�ts aux Infest�s",
+            "value": 0.62,
+            "multiplier": true
+          }
+        ]
+      },
+      "new": {
+        "box": [
+          510,
+          325,
+          320,
+          445
+        ],
+        "dimmed": false,
+        "weapon": "Staticor",
+        "name": "Staticor Hexatron",
+        "mr": 15,
+        "rolls": 7,
+        "stats": [
+          {
+            "printed": "+146,5% de Chances de Statut",
+            "value": 146.5,
+            "wrapped": true
+          },
+          {
+            "printed": "x1,66 points de D�g�ts aux Corpus",
+            "value": 1.66,
+            "multiplier": true,
+            "wrapped": true
+          },
+          {
+            "printed": "+51,2% de Recul de l'Arme",
+            "value": 51.2,
+            "negative": true,
+            "wrapped": true,
+            "note": "curse: more recoil"
+          }
+        ]
+      }
+    },
+    "buttons": {
+      "CONFIRMER": [
+        450,
+        805,
+        440,
+        55
+      ]
+    }
+  }
+}

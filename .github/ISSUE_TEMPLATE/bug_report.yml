@@ -1,0 +1,80 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For a security problem, do not open an issue: use **Security > Report a vulnerability** (see SECURITY.md).
+
+        **Do not paste tokens, cookies, account ids or webhook URLs.** Check logs and screenshots before attaching them.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown in Settings > About.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: languages
+    attributes:
+      label: Game language and app language
+      placeholder: "Game: French, app: English"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Data mode
+      options:
+        - EE.log + OCR (default)
+        - warframe-api-helper
+        - Game memory
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Screenshots are welcome, but crop out anything private.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste the text from Settings > Diagnostics > Copy.
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        The relevant part of `companionframe.log.YYYY-MM-DD` in `%LOCALAPPDATA%\com.companionframe.app\logs` (Windows) or `~/.local/share/com.companionframe.app/logs` (Linux).
+      render: text

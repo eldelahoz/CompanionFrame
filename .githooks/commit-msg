@@ -1,0 +1,27 @@
+#!/bin/sh
+# Enforces CONTRIBUTING.md commit convention. Git passes the message file as $1.
+msg_file="$1"
+
+# Drop '#' comment lines and trailing blank lines.
+msg=$(awk '/^#/{next} {l[n++]=$0} END{while(n>0 && l[n-1]~/^[ \t]*$/) n--; for(i=0;i<n;i++) print l[i]}' "$msg_file")
+
+case "$msg" in
+    'Merge '*|'Revert '*|'fixup! '*|'squash! '*) exit 0 ;;
+esac
+
+first=$(printf '%s\n' "$msg" | head -n 1)
+example='  e.g. feat(overlay): add click-through window'
+
+if ! printf '%s\n' "$first" | grep -Eq '^(feat|fix|refactor|perf|test|docs|build|ci|chore)(\([a-z0-9/-]+\))?!?: [^ ].*'; then
+    echo "commit-msg: first line must be 'type(scope): summary' (scope optional)." >&2
+    echo "  got: $first" >&2
+    echo "$example" >&2
+    exit 1
+fi
+
+len=$(printf '%s' "$msg" | LC_ALL=C.UTF-8 wc -m | tr -d ' ')
+if [ "$len" -gt 140 ]; then
+    echo "commit-msg: message is $len characters; the limit is 140. Split the commit." >&2
+    echo "$example" >&2
+    exit 1
+fi

@@ -1,0 +1,38 @@
+/** Short names for warframe.market riven attribute slugs, as the trade chat writes them. */
+const ABBR: Record<string, string> = {
+  critical_chance: "CC",
+  critical_damage: "CD",
+  multishot: "MS",
+  "fire_rate_/_attack_speed": "FR",
+  "base_damage_/_melee_damage": "DMG",
+  reload_speed: "RLD",
+  status_chance: "SC",
+  status_duration: "SD",
+  punch_through: "PT",
+  magazine_capacity: "MAG",
+  ammo_maximum: "AMMO",
+  recoil: "RCL",
+  zoom: "ZM",
+  projectile_speed: "PS",
+  impact_damage: "IMP",
+  puncture_damage: "PUN",
+  slash_damage: "SLA",
+  cold_damage: "CLD",
+  heat_damage: "HEA",
+  electric_damage: "ELE",
+  toxin_damage: "TOX",
+  damage_vs_grineer: "GR",
+  damage_vs_corpus: "CO",
+  damage_vs_infested: "IN",
+  range: "RNG",
+  combo_duration: "CMB",
+  critical_chance_on_slide_attack: "SCC",
+  finisher_damage: "FIN",
+  channeling_efficiency: "EFF",
+  channeling_damage: "CHD",
+  chance_to_gain_combo_count: "CCC",
+  chance_to_gain_extra_combo_count: "ECC",
+};
+
+/** "CLD", or "−ZM" for a curse; a slug this table lacks shows its first letters. */
+export const statAbbr = (key: string, positive: boolean) => `${positive ? "" : "−"}${ABBR[key] ?? key.replace(/[^a-z]/g, "").slice(0, 3).toUpperCase()}`;

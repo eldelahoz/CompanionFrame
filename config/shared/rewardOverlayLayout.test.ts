@@ -1,0 +1,121 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  DEFAULT_OVERLAY_FIELD_STYLE as DEFAULT_REWARD_FIELD_STYLE,
+  isOverlayField,
+  normalizeOverlayFieldStyle,
+} from "./overlayLayout";
+import { normalizeRewardOverlayLayout } from "./rewardOverlayLayout";
+
+const normalizeRewardFieldStyle = (value: unknown) => normalizeOverlayFieldStyle("reward", value);
+const isRewardOverlayField = (value: unknown) => isOverlayField("reward", value);
+// No reward field ships hidden: the approved design shows every element, Vaulted included.
+const OPT_IN_FIELDS = {};
+
+describe("reward overlay saved layouts", () => {
+  it.each([null, undefined, [], "layout", 7, {}, { version: 2, fields: {} }])(
+    "falls back safely for an invalid or unsupported layout: %j",
+    (raw) => {
+      expect(normalizeRewardOverlayLayout(raw)).toEqual({ version: 1, fields: OPT_IN_FIELDS });
+    },
+  );
+
+  it("shows the vaulted tag until a user hides it", () => {
+    expect(normalizeRewardOverlayLayout(undefined).fields.vaulted).toBeUndefined();
+    const hidden = normalizeRewardOverlayLayout({
+      version: 1,
+      fields: { vaulted: { hidden: true, x: 8 } },
+    });
+    expect(hidden.fields.vaulted).toMatchObject({ hidden: true, x: 8 });
+    expect(normalizeRewardOverlayLayout(hidden)).toEqual(hidden);
+  });
+
+  it("keeps independent value and icon styles without retaining source references", () => {
+    const raw = {
+      version: 1,
+      fields: {
+        platinumIcon: { hidden: true },
+        platinumValue: { scale: 2, color: "#aAcC00", x: 12.345 },
+        rarity: { hidden: true },
+      },
+    };
+    const saved = normalizeRewardOverlayLayout(raw);
+    expect(saved.fields.platinumIcon).toEqual({ ...DEFAULT_REWARD_FIELD_STYLE, hidden: true });
+    expect(saved.fields.platinumValue).toEqual({
+      ...DEFAULT_REWARD_FIELD_STYLE,
+      scale: 2,
+      color: "#aAcC00",
+      x: 12.35,
+    });
+    raw.fields.platinumValue.scale = 3;
+    expect(saved.fields.platinumValue?.scale).toBe(2);
+  });
+
+  it("bounds numeric values and drops malformed styles", () => {
+    expect(
+      normalizeRewardFieldStyle({
+        x: -1e9,
+        y: 1e9,
+        scale: 100,
+        color: "url(https://example.invalid/image)",
+        hidden: "true",
+      }),
+    ).toEqual({ x: -10_000, y: 10_000, scale: 3, color: null, hidden: false });
+    expect(normalizeRewardFieldStyle({ x: NaN, y: Infinity, scale: "2" })).toEqual(
+      DEFAULT_REWARD_FIELD_STYLE,
+    );
+    expect(normalizeRewardFieldStyle({ scale: -1 }).scale).toBe(0.5);
+    expect(normalizeRewardFieldStyle([])).toEqual(DEFAULT_REWARD_FIELD_STYLE);
+  });
+
+  it("keeps bounded offsets for the four reward cards only", () => {
+    expect(
+      normalizeRewardFieldStyle({
+        x: 4,
+        cards: {
+          "0": { x: 1.234, y: -2 },
+          "1": { x: "2", y: 0 },
+          "2": null,
+          "3": { x: 20_000, y: 0 },
+          "4": { x: 1, y: 1 },
+          "-1": { x: 1, y: 1 },
+        },
+      }),
+    ).toEqual({
+      ...DEFAULT_REWARD_FIELD_STYLE,
+      x: 4,
+      cards: { "0": { x: 1.23, y: -2 }, "3": { x: 10_000, y: 0 } },
+    });
+    expect(normalizeRewardFieldStyle({ cards: { "4": { x: 1, y: 1 } } })).toEqual(
+      DEFAULT_REWARD_FIELD_STYLE,
+    );
+    expect(normalizeOverlayFieldStyle("planner", { cards: { "0": { x: 1, y: 1 } } })).toEqual(
+      DEFAULT_REWARD_FIELD_STYLE,
+    );
+  });
+
+  it("loads a layout saved before card offsets unchanged", () => {
+    const legacy = {
+      version: 1,
+      fields: { setOwned: { ...DEFAULT_REWARD_FIELD_STYLE, x: 24, y: -30 } },
+    };
+    const saved = normalizeRewardOverlayLayout(legacy);
+    expect(saved).toEqual({ version: 1, fields: { ...OPT_IN_FIELDS, ...legacy.fields } });
+    expect(saved.fields.setOwned).not.toHaveProperty("cards");
+    expect(normalizeRewardOverlayLayout(saved)).toEqual(saved);
+  });
+
+  it("ignores unknown and prototype field names and inherited field entries", () => {
+    const fields: Record<string, unknown> = JSON.parse(
+      '{"__proto__":{"hidden":true},"constructor":{"hidden":true},"unknown":{"scale":2},"owned":{"hidden":true}}',
+    );
+    Object.setPrototypeOf(fields, { rarity: { hidden: true } });
+    const saved = normalizeRewardOverlayLayout({ version: 1, fields });
+    expect(Object.keys(saved.fields)).toEqual(["owned"]);
+    expect(Object.getPrototypeOf(saved.fields)).toBe(Object.prototype);
+    expect(saved.fields.owned?.hidden).toBe(true);
+    for (const field of ["__proto__", "constructor", "unknown", 1, null]) {
+      expect(isRewardOverlayField(field)).toBe(false);
+    }
+  });
+});
