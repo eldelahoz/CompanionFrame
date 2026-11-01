@@ -70,7 +70,7 @@ CompanionFrame is a third-party tool. DE does not officially approve third-party
 
 ## Download / Install
 
-Get the latest installer from the [Releases page](https://github.com/eldelahoz/CompanionFrame/releases): `CompanionFrame_<version>_x64-setup.exe` installs per user, with no admin rights (the `.msi` installs for all users and needs admin). Requires Windows 10 or 11 and WebView2 (see Requirements). The installer wizard is available in English, German, Chinese and French; the app itself has five languages.
+Get the latest installer from the [Releases page](https://github.com/eldelahoz/CompanionFrame/releases): `CompanionFrame_<version>_x64-setup.exe` installs per user, with no admin rights. Requires Windows 10 or 11 and WebView2 (see Requirements). The installer wizard is available in English, German, Chinese and French; the app itself has five languages.
 
 The installers are not code-signed yet, so Windows SmartScreen shows "Windows protected your PC / Unknown publisher". To continue, click **More info**, then **Run anyway**. You can compare the file with the source in this repository or build it yourself (below).
 
