@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use super::{Line, LineTracker};
 use crate::db::Db;
+use crate::services::eelog::Source;
 use crate::services::eelog_parsers::trade::{
     ParsedLogTrade, TradeDialogParser, TradeDirection, TradeKind,
 };
@@ -85,7 +86,9 @@ impl Recent {
 }
 
 pub struct TradeTracker {
-    parser: TradeDialogParser,
+    // One parser per source: interleaved half-dialogs from the file and DBWIN corrupt each other.
+    file: TradeDialogParser,
+    dbwin: TradeDialogParser,
     recent: Recent,
     on_trade: Box<dyn FnMut(ParsedLogTrade) + Send>,
 }
@@ -93,7 +96,8 @@ pub struct TradeTracker {
 impl TradeTracker {
     pub fn new(on_trade: Box<dyn FnMut(ParsedLogTrade) + Send>) -> Self {
         Self {
-            parser: TradeDialogParser::new(),
+            file: TradeDialogParser::new(),
+            dbwin: TradeDialogParser::new(),
             recent: Recent::default(),
             on_trade,
         }
@@ -102,7 +106,11 @@ impl TradeTracker {
 
 impl LineTracker for TradeTracker {
     fn on_line(&mut self, line: &Line) {
-        if let Some(t) = self.parser.feed_line(line.text, line.now_ms)
+        let parser = match line.source {
+            Source::File => &mut self.file,
+            Source::Dbwin => &mut self.dbwin,
+        };
+        if let Some(t) = parser.feed_line(line.text, line.now_ms)
             && self.recent.is_new(&t, line.now_ms)
         {
             (self.on_trade)(t);
@@ -111,7 +119,8 @@ impl LineTracker for TradeTracker {
 
     // `recent` survives: a restart of the log must not re-record the trade it re-reads.
     fn on_reset(&mut self) {
-        self.parser.reset();
+        self.file.reset();
+        self.dbwin.reset();
     }
 }
 

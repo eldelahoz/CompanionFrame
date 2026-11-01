@@ -263,3 +263,45 @@ fn dialog_names_are_translated_to_english_and_unknown_ones_kept() {
     to_english(&mut t, &english);
     assert_eq!(t.items[0].display_name, "Forma inconnue");
 }
+
+#[test]
+fn interleaved_file_and_dbwin_halves_record_one_trade() {
+    let start = "Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Souhaitez-vous vraiment accepter cet échange? Vous proposez: ";
+    let whole = format!(
+        "{start}\n\rAfuris Prime - Culasse\r\n\r\net vous recevrez de TraderName\u{E000} ceci: \n\rPlatinum x 35, title= leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel)"
+    );
+    let ok = "Script [Info]: Dialog.lua: Dialog::CreateOk(description=L'échange a réussi!, title= leftItem=/Menu/Confirm_Item_Ok)";
+    let seq = [
+        (Source::Dbwin, whole),
+        (Source::File, format!("1082.718 {start}")),
+        (Source::File, "\rAfuris Prime - Culasse\r".into()),
+        (Source::File, "\r".into()),
+        (Source::File, "et vous recevrez de TraderName\u{E000} ceci: ".into()),
+        (Source::Dbwin, "Script [Info]: Dialog.lua: Dialog::SendResult(4)".into()),
+        (Source::Dbwin, ok.into()),
+        (Source::File, "\rPlatinum x 35, title= leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel)".into()),
+        (Source::File, "1086.036 Script [Info]: Dialog.lua: Dialog::SendResult(4)".into()),
+        (Source::File, format!("1086.957 {ok}")),
+    ];
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = seen.clone();
+    let mut t = TradeTracker::new(Box::new(move |p| sink.lock().unwrap().push(p)));
+    for (n, (source, text)) in seq.iter().enumerate() {
+        t.on_line(&Line {
+            text,
+            source: *source,
+            now_ms: n as f64,
+            staleness_ms: 0.0,
+            realtime_active: false,
+        });
+    }
+    let got = seen.lock().unwrap();
+    assert_eq!(got.len(), 1);
+    let g = &got[0];
+    assert_eq!(
+        (g.kind, g.plat_change, g.partner.as_str()),
+        (TradeKind::Sale, 35, "TraderName")
+    );
+    assert_eq!(g.items.len(), 1);
+    assert_eq!(g.items[0].display_name, "Afuris Prime - Culasse");
+}
