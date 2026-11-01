@@ -2228,6 +2228,10 @@ export type NotificationKind = "trade" | "message" | "world" | "app";
 /**  Producers the channel layer routes. `Test` labels a webhook test fire. */
 export type NotificationSource = "worldState" | "arbiSchedule" | "whisper" | "tradeToast" | "marketAlerts" | "test" | "inventorySelections";
 
+/**
+ *  Windows' answer to installing the game language's OCR pack. Defined on every platform so the
+ *  generated bindings are the same everywhere; off Windows only `Unsupported` is ever returned.
+ */
 export type OcrInstallOutcome = "installed" | 
 /**  The user said no at the UAC prompt. */
 "cancelled" | "failed" | 
