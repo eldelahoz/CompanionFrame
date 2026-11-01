@@ -78,6 +78,8 @@ function applyEntry(entry: PriceEntry): boolean {
 export function applyRefreshed(entries: readonly PriceEntry[]): void {
   entries.forEach((e) => e.status === "ok" && applyEntry(e));
   notify();
+  // The refresh also rewrote the statistics history: recompute the medians already shown (a local read, no request).
+  void Promise.all(entries.filter((e) => e.status === "ok" && averages.has(e.slug)).map((e) => loadAverage(e.slug)));
 }
 
 let listening = false;
@@ -155,15 +157,19 @@ const statsQueue: string[] = [];
 const queued = new Set<string>();
 let workers = 0;
 
+async function loadAverage(slug: string): Promise<void> {
+  try {
+    averages.set(slug, mediansOfRecent(await wfmStatsHistory(slug)));
+    notify();
+  } catch {
+    // transient: not stored, asked again next time
+  }
+}
+
 async function statsWorker(): Promise<void> {
   workers++;
   for (let slug = statsQueue.shift(); slug !== undefined; slug = statsQueue.shift()) {
-    try {
-      averages.set(slug, mediansOfRecent(await wfmStatsHistory(slug)));
-      notify();
-    } catch {
-      // transient: not stored, asked again next time
-    }
+    await loadAverage(slug);
     queued.delete(slug);
   }
   workers--;

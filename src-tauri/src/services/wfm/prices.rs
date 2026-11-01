@@ -229,21 +229,32 @@ impl Prices {
         }
     }
 
-    /// Daily history for one item, refreshed when the price cache has expired. A failed refresh
-    /// serves what is stored; only an empty store surfaces the error.
+    /// Daily history for one item. Whatever is stored comes back at once; the second value lists the slug when
+    /// its price entry is past `BULK_FRESH_MS` (the daily medians barely move in 6 h) and no refresh covers it yet:
+    /// hand it to `refresh`. With nothing stored the call waits on WFM; only a failure there surfaces the error.
     pub async fn history(
         &self,
         client: &WfmClient,
         db: &Db,
         slug: &str,
-    ) -> Result<Vec<MarketStatPoint>, WfmError> {
+    ) -> Result<(Vec<MarketStatPoint>, Vec<String>), WfmError> {
         let slug = normalize_slug(slug)?;
-        let refreshed = self.price(client, db, &slug, Priority::Interactive).await;
         let stored = stats_history::load(db, &slug).map_err(WfmError::invalid)?;
-        match refreshed {
-            Err(e) if stored.is_empty() => Err(e),
-            _ => Ok(stored),
+        if stored.is_empty() {
+            let refreshed = self.price(client, db, &slug, Priority::Interactive).await;
+            let stored = stats_history::load(db, &slug).map_err(WfmError::invalid)?;
+            return match refreshed {
+                Err(e) if stored.is_empty() => Err(e),
+                _ => Ok((stored, Vec::new())),
+            };
         }
+        let old = read(db, &slug).is_none_or(|c| c.v < CACHE_V || now_ms() - c.ts >= BULK_FRESH_MS);
+        let todo = if old && self.refreshing.lock().unwrap().insert(slug.clone()) {
+            vec![slug]
+        } else {
+            Vec::new()
+        };
+        Ok((stored, todo))
     }
 
     /// Cached prices come back at once whatever their age; only slugs with nothing cached wait on WFM.
@@ -367,32 +378,41 @@ pub async fn wfm_prices_bulk(
     slugs: Vec<String>,
 ) -> Result<Vec<PriceEntry>, WfmError> {
     let (out, stale) = prices.bulk(session.client(), &db, slugs).await?;
-    if !stale.is_empty() {
-        tauri::async_runtime::spawn(async move {
-            let (session, db, prices) = (
-                app.state::<Session>(),
-                app.state::<Db>(),
-                app.state::<Prices>(),
-            );
-            prices
-                .refresh(session.client(), &db, stale, |batch| {
-                    let _ = app.emit(REFRESHED_EVENT, batch);
-                })
-                .await;
-        });
-    }
+    spawn_refresh(app, stale);
     Ok(out)
+}
+
+/// Background refresh of `stale` slugs; landed prices reach the UI through `REFRESHED_EVENT`.
+fn spawn_refresh(app: tauri::AppHandle, stale: Vec<String>) {
+    if stale.is_empty() {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        let (session, db, prices) = (
+            app.state::<Session>(),
+            app.state::<Db>(),
+            app.state::<Prices>(),
+        );
+        prices
+            .refresh(session.client(), &db, stale, |batch| {
+                let _ = app.emit(REFRESHED_EVENT, batch);
+            })
+            .await;
+    });
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn wfm_stats_history(
+    app: tauri::AppHandle,
     session: State<'_, Session>,
     db: State<'_, Db>,
     prices: State<'_, Prices>,
     slug: String,
 ) -> Result<Vec<MarketStatPoint>, WfmError> {
-    prices.history(session.client(), &db, &slug).await
+    let (points, stale) = prices.history(session.client(), &db, &slug).await?;
+    spawn_refresh(app, stale);
+    Ok(points)
 }
 
 #[cfg(test)]
@@ -600,15 +620,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn history_refreshes_and_survives_an_outage() {
+    async fn history_without_a_store_waits_on_wfm_and_surfaces_an_outage() {
         let m = spawn(vec![reply(200, &stats_body(64.0)), reply(503, "{}")]);
         let (c, db, p) = (client(&m), mem_db(), Prices::default());
-        assert_eq!(p.history(&c, &db, "x").await.unwrap().len(), 1);
-        expire(&db, "x");
-        assert_eq!(p.history(&c, &db, "x").await.unwrap().len(), 1);
+        let (points, todo) = p.history(&c, &db, "x").await.unwrap();
+        assert_eq!((points.len(), todo.len(), hits(&m)), (1, 0, 1));
         // Nothing stored and WFM down: the error is the answer.
-        let m2 = spawn(vec![reply(503, "{}")]);
-        assert!(p.history(&client(&m2), &db, "never").await.is_err());
+        assert!(p.history(&c, &db, "never").await.is_err());
     }
 
     fn age(db: &Db, slug: &str, ms: i64, v: u8) {
@@ -691,5 +709,32 @@ mod tests {
         assert_eq!(read(&db, "old").unwrap().price, Some(65));
         assert_eq!(read(&db, "new").unwrap().price, Some(64));
         assert!(p.refreshing.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn history_with_a_store_answers_at_once_and_schedules_one_refresh() {
+        let m = spawn(vec![
+            reply(200, &stats_body(64.0)),
+            reply(200, &stats_body(80.0)),
+        ]);
+        let (c, db, p) = (client(&m), mem_db(), Prices::default());
+        price(&p, &c, &db, "x").await.unwrap();
+        // Price cache past the 5 min TTL but inside 6 h: nothing to do.
+        age(&db, "x", BULK_FRESH_MS - 60_000, CACHE_V);
+        let (points, todo) = p.history(&c, &db, "x").await.unwrap();
+        assert_eq!((points.len(), todo.len(), hits(&m)), (1, 0, 1));
+        // Past 6 h: stored history comes back without touching the network, refresh queued once.
+        age(&db, "x", 120_000, CACHE_V);
+        let (points, todo) = p.history(&c, &db, "x").await.unwrap();
+        assert_eq!(
+            (points.len(), todo.clone(), hits(&m)),
+            (1, vec!["x".to_string()], 1)
+        );
+        assert!(p.history(&c, &db, "x").await.unwrap().1.is_empty());
+        let landed = std::sync::Mutex::new(Vec::new());
+        p.refresh(&c, &db, todo, |b| landed.lock().unwrap().extend(b))
+            .await;
+        assert_eq!((landed.lock().unwrap()[0].price, hits(&m)), (Some(80), 2));
+        assert!(p.history(&c, &db, "x").await.unwrap().1.is_empty());
     }
 }
