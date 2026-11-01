@@ -6,6 +6,7 @@ import WorldNotifySettings from "../components/settings/WorldNotifySettings";
 import OverlaySettings from "../components/settings/OverlaySettings";
 import DiagnosticsCard from "../components/settings/DiagnosticsCard";
 import AboutCard from "../components/settings/AboutCard";
+import UpdatesCard from "../components/settings/UpdatesCard";
 import HelpCard from "../components/settings/HelpCard";
 import NotificationChannelsSettings from "../components/settings/NotificationChannelsSettings";
 import AppearanceCard from "../components/settings/AppearanceCard";
@@ -118,7 +119,13 @@ export default function SettingsView({ settings, onChange, tr, market }: Props) 
       ),
     },
     { id: "help", title: "help.title", icon: <LifeBuoy />, body: <HelpCard tr={tr} /> },
-    { id: "about", title: "settings.aboutTitle", icon: <Info />, body: <AboutCard tr={tr} locale={settings.language} /> },
+    { id: "about", title: "settings.aboutTitle", icon: <Info />, body: (
+        <>
+          <AboutCard tr={tr} locale={settings.language} />
+          <UpdatesCard tr={tr} settings={settings} onChange={onChange} />
+        </>
+      ),
+    },
     { id: "diagnostics", title: "settings.group.diagnostics", icon: <Stethoscope />, body: <DiagnosticsCard tr={tr} /> },
   ];
 
