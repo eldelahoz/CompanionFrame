@@ -1541,13 +1541,19 @@ pub fn ocr_language_status() -> OcrLanguageStatus {
     }
 }
 
-/// Windows' answer to installing the game language's OCR pack.
-#[cfg(windows)]
-pub use crate::platform::windows::ocr::OcrInstallOutcome;
-#[cfg(not(windows))]
-#[derive(Serialize, specta::Type)]
+/// Windows' answer to installing the game language's OCR pack. Defined on every platform so the
+/// generated bindings are the same everywhere; off Windows only `Unsupported` is ever returned.
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum OcrInstallOutcome {
+    Installed,
+    /// The user said no at the UAC prompt.
+    Cancelled,
+    Failed,
+    /// The command finished but the recognizer never showed up.
+    Timeout,
+    /// No Windows OCR pack exists for the game language.
     Unsupported,
 }
 
