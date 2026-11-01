@@ -62,15 +62,13 @@ describe("GameIcon", () => {
 describe("in the app", () => {
   it("asks the backend cache (gameimg) for every URL of the chain, in order", async () => {
     vi.resetModules();
-    vi.doMock("../../lib/ipc", () => ({ inTauri: () => true }));
-    vi.doMock("@tauri-apps/api/core", () => ({ convertFileSrc: (u: string, scheme: string) => `http://${scheme}.localhost/${encodeURIComponent(u)}` }));
+    vi.doMock("@tauri-apps/api/core", () => ({ isTauri: () => true, convertFileSrc: (u: string, scheme: string) => `http://${scheme}.localhost/${encodeURIComponent(u)}` }));
     const mod = await import("./GameIcon");
     render(<mod.GameIcon name="endo" label="Endo in app" />);
     const img = screen.getByRole("img", { name: "Endo in app" });
     expect(img.getAttribute("src")).toMatch(/^http:\/\/gameimg\.localhost\/https%3A%2F%2Fwiki\.warframe\.com/);
     fireEvent.error(img);
     expect(screen.getByRole("img", { name: "Endo in app" }).getAttribute("src")).toContain("browse.wf");
-    vi.doUnmock("../../lib/ipc");
     vi.doUnmock("@tauri-apps/api/core");
   });
 });
