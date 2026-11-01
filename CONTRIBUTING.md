@@ -115,6 +115,13 @@ Releases are driven by [release-please](https://github.com/googleapis/release-pl
 
 **Token.** PRs and tags created with the default `GITHUB_TOKEN` do not trigger workflows, so the release PR would never get its checks. Create a fine-grained personal access token for this repository only (Repository permissions: Contents read and write, Pull requests read and write) and save it as the Actions secret `RELEASE_PLEASE_TOKEN`. Without the secret the workflow falls back to `GITHUB_TOKEN`: the release still builds, but the checks on the release PR stay pending until you push an empty commit to its branch yourself. Also enable Settings > Actions > General > "Allow GitHub Actions to create and approve pull requests".
 
+**Update signing.** Installed copies update themselves from the published release, and the updater only accepts packages signed with our key. The public key is `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`; the private key never enters the repository. Two Actions secrets are required:
+
+- `TAURI_SIGNING_PRIVATE_KEY`: the key's content (from `pnpm tauri signer generate -w <file>`; a path does not work in CI). The Release workflow fails at once without it, instead of publishing an installer with no `latest.json`.
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: its password (empty if none).
+
+`tauri-action` then uploads the `.sig` files and `latest.json` to the draft release. Copies installed from older versions see the update only after you **publish** the draft, because the endpoint is `releases/latest/download/latest.json` and "latest" skips drafts. Keep the private key in a password manager: if it is lost, installed copies can never update again and users must reinstall by hand (a new key means a new `pubkey` that old copies reject). To test an update between two versions, see [docs/manual-tests/auto-update.md](docs/manual-tests/auto-update.md).
+
 **Manual fallback** (release-please broken or unavailable):
 
 1. `node scripts/bump-version.mjs X.Y.Z` (updates the four version files, `Cargo.lock` included).

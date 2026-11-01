@@ -18,6 +18,7 @@ In scope:
 - The WebView-to-Rust boundary. The WebView is treated as untrusted input: commands validate payloads (`deny_unknown_fields`, range checks, hex ids safe for URL paths), and each overlay window can only use `core:event:default`.
 - Handling of the warframe.market token, webhook URLs and the game's auth string.
 - The opt-in game-memory mode and the warframe-api-helper download (pinned release, SHA-256 checked).
+- Updates: the Tauri updater only installs a package whose minisign signature matches the public key in `tauri.conf.json` (it cannot be disabled). It fetches `https://github.com/eldelahoz/CompanionFrame/releases/latest/download/latest.json`, which skips draft releases, and sends no user data.
 - Network code: requests go through `net.rs` / `wfm/client.rs` (HTTPS, timeouts, body caps, no private targets for user webhooks).
 
 Out of scope:
