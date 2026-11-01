@@ -621,6 +621,7 @@ dependencies = [
  "reqwest",
  "rodio",
  "rusqlite",
+ "rustls",
  "serde",
  "serde_json",
  "sha1",

@@ -239,6 +239,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Two rustls backends are compiled in (ring via the updater, aws-lc-rs via reqwest), so rustls
+    // cannot pick one by itself and panics on the first TLS connection: choose it before any.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let builder = specta_builder();
     #[cfg(debug_assertions)]
     builder
