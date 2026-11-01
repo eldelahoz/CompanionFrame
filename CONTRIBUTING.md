@@ -107,8 +107,17 @@ Never edit a migration that has already shipped; fix forward with a new entry.
 
 ## Releasing
 
-1. `node scripts/bump-version.mjs X.Y.Z` (updates `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `Cargo.lock`).
-2. In `CHANGELOG.md`, rename the top section to `## [X.Y.Z] - YYYY-MM-DD`; its text becomes the release notes.
-3. Merge the change to `main`, then tag it: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-4. The Release workflow builds the Windows installer (NSIS `-setup.exe`) and creates a **draft** release. It fails if the tag differs from the version in `tauri.conf.json`.
-5. Check the draft and its assets, then publish it.
+Releases are driven by [release-please](https://github.com/googleapis/release-please) from the Conventional Commit PR titles on `main` (`feat` bumps the minor version while we are 0.x, `fix` and `perf` the patch; `docs`, `ci`, `chore`, `test`, `build` and `refactor` are left out of the changelog).
+
+1. After each merge to `main`, the Release Please workflow opens or updates a PR titled `chore(main): release X.Y.Z`. It bumps `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`, and writes the new section of `CHANGELOG.md`.
+2. Merge that PR (checks `ci-ok` and `pr-title` must pass, see the token note below). release-please creates the `vX.Y.Z` tag and a **draft** GitHub release, and the Release workflow builds the Windows installer (NSIS `-setup.exe`) into that draft.
+3. Check the draft and its assets, then publish it.
+
+**Token.** PRs and tags created with the default `GITHUB_TOKEN` do not trigger workflows, so the release PR would never get its checks. Create a fine-grained personal access token for this repository only (Repository permissions: Contents read and write, Pull requests read and write) and save it as the Actions secret `RELEASE_PLEASE_TOKEN`. Without the secret the workflow falls back to `GITHUB_TOKEN`: the release still builds, but the checks on the release PR stay pending until you push an empty commit to its branch yourself. Also enable Settings > Actions > General > "Allow GitHub Actions to create and approve pull requests".
+
+**Manual fallback** (release-please broken or unavailable):
+
+1. `node scripts/bump-version.mjs X.Y.Z` (updates the four version files).
+2. In `CHANGELOG.md`, add a `## [X.Y.Z] - YYYY-MM-DD` section; its text becomes the release notes.
+3. Merge the change to `main`, then tag it: `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow builds and creates the draft; it fails if the tag differs from `tauri.conf.json`.
+4. Also set the matching version in `.release-please-manifest.json` so release-please continues from it.
