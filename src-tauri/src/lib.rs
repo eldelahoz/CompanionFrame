@@ -259,6 +259,9 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol("wfmimg", |ctx, req, reply| {
             services::wfm_images::respond(ctx.app_handle().clone(), req, reply)
         })
+        .register_asynchronous_uri_scheme_protocol("gameimg", |ctx, req, reply| {
+            services::wfm_images::respond_game(ctx.app_handle().clone(), req, reply)
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())

@@ -616,6 +616,7 @@ dependencies = [
  "lzma-rs",
  "notify",
  "ort",
+ "percent-encoding",
  "regex",
  "reqwest",
  "rodio",

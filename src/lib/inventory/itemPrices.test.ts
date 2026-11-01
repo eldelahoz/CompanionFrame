@@ -168,3 +168,23 @@ test("a refresh event replaces the cached price; cached answers are known at onc
   expect(hook.result.current.get("b")?.price).toBe(5);
   vi.doUnmock("../ipc");
 });
+
+test("a refresh event recomputes the weekly median of slugs already shown, without a request for the rest", async () => {
+  vi.resetModules();
+  let median = 10;
+  const asked: string[] = [];
+  vi.doMock("../ipc", () => ({
+    wfmPricesBulk: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: "ok", price: 5, maxPrice: null, stale: false, updatedAt: 1 })),
+    wfmStatsHistory: async (slug: string) => (asked.push(slug), [pt(1, median)]),
+    onPricesRefreshed: async () => () => {},
+  }));
+  const { act, renderHook, waitFor } = await import("@testing-library/react");
+  const mod = await import("./itemPrices");
+  const hook = renderHook(() => mod.useItemPrices(["a"], ["a"]));
+  await waitFor(() => expect(hook.result.current.get("a")?.avg).toBe(10));
+  median = 14;
+  await act(async () => mod.applyRefreshed([{ slug: "a", status: "ok", price: 9, stale: false }, { slug: "z", status: "ok", price: 1, stale: false }] as never));
+  await waitFor(() => expect(hook.result.current.get("a")?.avg).toBe(14));
+  expect(asked).toEqual(["a", "a"]);
+  vi.doUnmock("../ipc");
+});

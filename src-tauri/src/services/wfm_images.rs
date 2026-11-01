@@ -19,6 +19,13 @@ use crate::services::cache::kv_get;
 use crate::services::wfm::types::CatalogItem;
 
 const ASSET_PREFIX: &str = "https://warframe.market/static/assets/";
+/// The only places the game-art proxy (`gameimg`) fetches from: the three sources `GameIcon` falls back through.
+const GAME_PREFIXES: [&str; 3] = [
+    "https://wiki.warframe.com/w/Special:FilePath/",
+    "https://browse.wf/Lotus/Interface/Icons/",
+    "https://cdn.warframestat.us/img/",
+];
+const GAME_CACHE_CAP_BYTES: u64 = 32 * 1024 * 1024;
 const ITEMS_KEY: &str = "wfm:v2:items";
 const CACHE_CAP_BYTES: u64 = 96 * 1024 * 1024;
 const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
@@ -117,6 +124,13 @@ pub fn sniff(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
+/// SVG (polarity glyphs) only ever reaches an `<img>` or a CSS mask, where it cannot run script.
+fn sniff_svg(bytes: &[u8]) -> bool {
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(512)]);
+    let head = head.trim_start();
+    head.starts_with("<svg") || (head.starts_with("<?xml") && head.contains("<svg"))
+}
+
 type CookieFuture = Pin<Box<dyn Future<Output = Result<String, String>> + Send>>;
 type CookieFn = Arc<dyn Fn() -> CookieFuture + Send + Sync>;
 
@@ -124,7 +138,9 @@ type CookieFn = Arc<dyn Fn() -> CookieFuture + Send + Sync>;
 pub struct Images {
     cache: DiskCache,
     client: Client,
-    prefix: String,
+    prefixes: Vec<String>,
+    /// Whether SVG passes the sniff (game art only).
+    svg: bool,
     user_agent: String,
     cookie_source: CookieFn,
     cookie: Mutex<Option<String>>,
@@ -140,14 +156,15 @@ impl Images {
     pub fn new(
         cache: DiskCache,
         client: Client,
-        prefix: &str,
+        prefixes: &[&str],
         user_agent: &str,
         cookie_source: CookieFn,
     ) -> Self {
         Self {
             cache,
             client,
-            prefix: prefix.to_owned(),
+            prefixes: prefixes.iter().map(|p| (*p).to_owned()).collect(),
+            svg: false,
             user_agent: user_agent.to_owned(),
             cookie_source,
             cookie: Mutex::new(None),
@@ -159,6 +176,15 @@ impl Images {
         }
     }
 
+    fn with_svg(mut self) -> Self {
+        self.svg = true;
+        self
+    }
+
+    fn kind(&self, bytes: &[u8]) -> Option<&'static str> {
+        sniff(bytes).or_else(|| (self.svg && sniff_svg(bytes)).then_some("image/svg+xml"))
+    }
+
     /// Logs a failed slug or URL once per session; never ids or tokens.
     fn report(&self, what: &str, reason: &str) {
         if self.reported.lock().unwrap().insert(what.to_owned()) {
@@ -168,11 +194,14 @@ impl Images {
 
     /// Image bytes and type for an asset URL; `None` for anything off-host, unreachable or not an image.
     pub async fn load(&self, url: &str) -> Option<(Vec<u8>, &'static str)> {
-        if !url.starts_with(&self.prefix) || url.contains("..") {
+        if !self.prefixes.iter().any(|p| url.starts_with(p))
+            || url.contains("..")
+            || url.to_lowercase().contains("%2e")
+        {
             return None;
         }
         if let Some(bytes) = self.cache.get(url) {
-            return sniff(&bytes).map(|ct| (bytes, ct));
+            return self.kind(&bytes).map(|ct| (bytes, ct));
         }
         if self
             .failed
@@ -185,7 +214,8 @@ impl Images {
         }
         let _permit = self.permits.acquire().await.ok()?;
         let loaded = match self.download(url).await {
-            Ok(bytes) => sniff(&bytes)
+            Ok(bytes) => self
+                .kind(&bytes)
                 .map(|ct| (bytes, ct))
                 .ok_or_else(|| "not an image".to_owned()),
             Err(e) => Err(e),
@@ -344,7 +374,7 @@ pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(20))
             .build()?,
-        ASSET_PREFIX,
+        &[ASSET_PREFIX],
         crate::services::wfm_cookie::CLEARANCE_UA,
         cookie_source,
     );
@@ -352,7 +382,76 @@ pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         images,
         index: StdMutex::default(),
     });
+    let hosts: Vec<String> = GAME_PREFIXES
+        .iter()
+        .filter_map(|p| url::Url::parse(p).ok()?.host_str().map(str::to_owned))
+        .collect();
+    // Redirects (Special:FilePath answers 302/301) may only stay on the allowed hosts.
+    let redirects = reqwest::redirect::Policy::custom(move |a| {
+        if a.previous().len() < 5
+            && a.url()
+                .host_str()
+                .is_some_and(|h| hosts.iter().any(|x| x == h))
+        {
+            a.follow()
+        } else {
+            a.stop()
+        }
+    });
+    let game = Images::new(
+        DiskCache::new(
+            app.path().app_cache_dir()?.join("game-images"),
+            GAME_CACHE_CAP_BYTES,
+        ),
+        Client::builder()
+            .https_only(true)
+            .redirect(redirects)
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(20))
+            .build()?,
+        &GAME_PREFIXES,
+        "CompanionFrame",
+        Arc::new(|| Box::pin(async { Err("no clearance for game art".to_owned()) })),
+    )
+    .with_svg();
+    app.manage(GameImages(game));
     Ok(())
+}
+
+/// Game art (wiki, browse.wf, WFCD) fetched once, kept in the app cache and served through `gameimg`.
+pub struct GameImages(Images);
+
+fn answer(reply: tauri::UriSchemeResponder, found: Option<(Vec<u8>, &'static str)>) {
+    let response = match found {
+        Some((bytes, ct)) => tauri::http::Response::builder()
+            .header("Content-Type", ct)
+            .header("Cache-Control", "max-age=86400")
+            .header("Access-Control-Allow-Origin", "*")
+            .body(bytes),
+        None => tauri::http::Response::builder()
+            .status(404)
+            .body(Vec::new()),
+    };
+    reply.respond(response.expect("static response parts"));
+}
+
+/// Handler of the `gameimg` scheme: the path is the percent-encoded source URL; off-list URLs answer 404.
+pub fn respond_game(
+    app: AppHandle,
+    request: tauri::http::Request<Vec<u8>>,
+    reply: tauri::UriSchemeResponder,
+) {
+    let path = request.uri().path().trim_start_matches('/').to_owned();
+    tauri::async_runtime::spawn(async move {
+        let found = async {
+            let url = percent_encoding::percent_decode_str(&path)
+                .decode_utf8()
+                .ok()?;
+            app.try_state::<GameImages>()?.0.load(&url).await
+        }
+        .await;
+        answer(reply, found);
+    });
 }
 
 /// Handler of the `wfmimg` scheme: the path is the catalog slug.
@@ -372,17 +471,7 @@ pub fn respond(
             state.images.load(&url).await
         }
         .await;
-        let response = match found {
-            Some((bytes, ct)) => tauri::http::Response::builder()
-                .header("Content-Type", ct)
-                .header("Cache-Control", "max-age=86400")
-                .header("Access-Control-Allow-Origin", "*")
-                .body(bytes),
-            None => tauri::http::Response::builder()
-                .status(404)
-                .body(Vec::new()),
-        };
-        reply.respond(response.expect("static response parts"));
+        answer(reply, found);
     });
 }
 
@@ -498,7 +587,7 @@ mod tests {
         Images::new(
             DiskCache::new(tmp(), 1 << 20),
             Client::new(),
-            prefix,
+            &[prefix],
             "test",
             source,
         )
@@ -538,5 +627,61 @@ mod tests {
                 .await
                 .is_none()
         );
+    }
+
+    #[test]
+    fn svg_passes_only_where_enabled() {
+        let svg = b"<?xml version=\"1.0\"?>
+<svg xmlns=\"http://www.w3.org/2000/svg\"/>";
+        assert!(sniff(svg).is_none());
+        assert_eq!(images("https://x/", "x").kind(svg), None);
+        assert_eq!(
+            images("https://x/", "x").with_svg().kind(svg),
+            Some("image/svg+xml")
+        );
+        assert_eq!(images("https://x/", "x").with_svg().kind(b"<html>"), None);
+    }
+
+    #[tokio::test]
+    async fn game_art_is_limited_to_the_three_sources() {
+        let imgs = images("https://x/", "x");
+        let game = Images::new(
+            DiskCache::new(tmp(), 1 << 20),
+            Client::new(),
+            &GAME_PREFIXES,
+            "test",
+            Arc::new(|| Box::pin(async { Err(String::new()) })),
+        );
+        assert_eq!(game.prefixes.len(), 3);
+        for bad in [
+            "https://evil.example/w/Special:FilePath/a.png",
+            "https://wiki.warframe.com.evil.example/w/Special:FilePath/a.png",
+            "https://wiki.warframe.com/other/a.png",
+            "http://browse.wf/Lotus/Interface/Icons/a.png",
+            "https://browse.wf/Lotus/Interface/Icons/../../x.png",
+            "https://browse.wf/Lotus/Interface/Icons/%2e%2e/x.png",
+            "https://cdn.warframestat.us/img",
+        ] {
+            assert!(game.load(bad).await.is_none(), "{bad}");
+        }
+        assert!(
+            imgs.load("https://wiki.warframe.com/w/Special:FilePath/a.png")
+                .await
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn game_art_is_served_from_disk_without_network() {
+        let game = Images::new(
+            DiskCache::new(tmp(), 1 << 20),
+            Client::new(),
+            &GAME_PREFIXES,
+            "test",
+            Arc::new(|| Box::pin(async { Err(String::new()) })),
+        );
+        let url = "https://browse.wf/Lotus/Interface/Icons/StoreIcons/Currency/Ducat.png";
+        game.cache.put(url, PNG);
+        assert_eq!(game.load(url).await.unwrap().1, "image/png");
     }
 }
