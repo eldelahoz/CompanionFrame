@@ -1381,7 +1381,9 @@ Rubico Crita-ata
         }
     }
 
+    #[cfg(windows)]
     struct Still(RgbaImage);
+    #[cfg(windows)]
     impl CaptureSource for Still {
         fn capture(&self) -> Result<Frame, String> {
             Ok(Frame {
@@ -1483,7 +1485,9 @@ Rubico Crita-ata
     }
 
     /// Frames in order, the last one repeating; counts the captures.
+    #[cfg(windows)]
     struct Frames(Mutex<Vec<RgbaImage>>, std::sync::atomic::AtomicUsize);
+    #[cfg(windows)]
     impl CaptureSource for Frames {
         fn capture(&self) -> Result<Frame, String> {
             self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);

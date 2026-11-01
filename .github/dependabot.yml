@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # One weekly PR that bumps every GitHub Action; its title "chore(deps): ..." passes the PR title check.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]

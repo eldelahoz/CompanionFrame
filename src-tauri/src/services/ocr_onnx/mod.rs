@@ -51,7 +51,7 @@ pub struct OnnxStatus {
 
 pub fn status(root: &Path) -> OnnxStatus {
     let has = |p: &str| root.join(p).is_file();
-    let (ready, error) = match paddle(root) {
+    let (ready, error) = match session::environment(&root.join(DLL)).and_then(|_| paddle(root)) {
         Ok(_) => (true, None),
         Err(e) => (false, Some(e)),
     };

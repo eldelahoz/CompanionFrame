@@ -7,6 +7,8 @@ use windows::Media::Ocr::OcrEngine;
 use windows::Storage::Streams::DataWriter;
 use windows::core::HSTRING;
 
+pub use crate::services::item_db::OcrInstallOutcome;
+
 pub struct Line {
     pub text: String,
     pub words: Vec<String>,
@@ -87,19 +89,6 @@ pub fn capability_tag(code: &str) -> Option<&'static str> {
         "tc" => "zh-TW",
         _ => return None,
     })
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub enum OcrInstallOutcome {
-    Installed,
-    /// The user said no at the UAC prompt.
-    Cancelled,
-    Failed,
-    /// The command finished but the recognizer never showed up.
-    Timeout,
-    /// No Windows OCR pack exists for the game language.
-    Unsupported,
 }
 
 /// Absolute path of the system PowerShell, so the elevated launch never resolves an exe via PATH.

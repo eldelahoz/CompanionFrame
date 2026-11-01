@@ -2,17 +2,51 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+# A newer push to the same pull request cancels the run still going; main keeps every run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 jobs:
+  # Docs-only changes skip the build. Skipped by a job `if:`, not by `paths` on the trigger:
+  # a workflow that never starts leaves its required checks pending forever.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!docs/**'
+              - '!LICENSE'
+              - '!.github/ISSUE_TEMPLATE/**'
+
   check:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - if: runner.os == 'Linux'
         run: >
@@ -20,11 +54,11 @@ jobs:
           libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
           libdbus-1-dev libasound2-dev libssl-dev libxdo-dev patchelf build-essential curl
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -36,6 +70,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Saved from main only (even when a test fails), so pull requests reuse it instead of
+          # filling the 10 GB cache with one copy per branch and evicting main's.
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - run: pnpm install --frozen-lockfile
       # Linux runtime arrives with F7-T4b; the tests that need it are cfg(windows) until then.
@@ -53,3 +91,18 @@ jobs:
 
       - run: pnpm bindings
       - run: git diff --exit-code src/bindings.ts
+
+  # The one required check: passes when the build passed or was skipped as docs-only.
+  ci-ok:
+    if: always()
+    needs: [changes, check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CHECK: ${{ needs.check.result }}
+        run: |
+          echo "changes: $CHANGES, check: $CHECK"
+          [ "$CHANGES" = success ] || exit 1
+          [ "$CHECK" = success ] || [ "$CHECK" = skipped ] || exit 1
