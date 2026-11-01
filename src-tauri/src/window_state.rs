@@ -166,6 +166,9 @@ pub fn on_event(window: &Window, event: &WindowEvent) {
             if keep {
                 api.prevent_close();
                 let _ = window.hide();
+            } else {
+                // Hidden overlay windows would keep the process (and tray icon) alive.
+                app.exit(0);
             }
         }
         _ => {}

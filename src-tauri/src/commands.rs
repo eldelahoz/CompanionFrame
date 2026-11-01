@@ -59,6 +59,7 @@ pub fn set_settings(
     if crate::services::item_db::apply_ui_language(&app, &settings.language)? {
         let _ = app.emit("game-locale-updated", ());
     }
+    crate::tray::set_language(&app, &settings.language);
     crate::services::memory_gate::apply(&settings);
     crate::services::scan_captures::apply(&settings);
     let _ = app.emit(overlay::settings::CHANGED_EVENT, ());
