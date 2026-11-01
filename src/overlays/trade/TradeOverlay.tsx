@@ -1,10 +1,10 @@
 import { Check } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ItemImage from "../../components/ItemImage";
-import { inTauri } from "../../lib/ipc";
+import { inTauri, wfmSendPlusRep, wfmSessionStatus } from "../../lib/ipc";
 import { useMarketArt } from "../../lib/useMarketArt";
 import { OvReadout } from "../common/OvReadout";
-import { commands, type TradeItem, type TradeOverlayView_Serialize as TradeOverlayView } from "../../bindings";
+import { commands, type SendRepResult, type TradeItem, type TradeOverlayView_Serialize as TradeOverlayView } from "../../bindings";
 import type { OverlayContext } from "../common/OverlayShell";
 import { SAMPLE_TRADE } from "../common/moveSamples";
 
@@ -16,6 +16,9 @@ export interface TradeApi {
   closeMatch(token: number | null, orderId: string): Promise<boolean>;
   /** Clickable area in physical screen pixels; empty = click-through again. */
   setRegions(rects: { x: number; y: number; w: number; h: number }[]): Promise<unknown>;
+  /** Whether a warframe.market session is open (the +rep button needs one). */
+  signedIn(): Promise<boolean>;
+  plusRep(username: string): Promise<SendRepResult>;
 }
 
 // Outside Tauri (browser mock, tests) the calls are inert, like tauriOverlayIpc.
@@ -27,7 +30,19 @@ const tauriTradeApi: TradeApi = {
     return r.status === "ok" && r.data;
   },
   setRegions: async (rects) => inTauri() && commands.overlaySetRegions("trade", rects),
+  signedIn: async () => inTauri() && (await wfmSessionStatus()).logged_in,
+  plusRep: wfmSendPlusRep,
 };
+
+type RepState = "idle" | "sending" | SendRepResult;
+const REP_TEXT = {
+  sending: "overlay.trade.plusRepSending",
+  sent: "overlay.trade.plusRepSent",
+  "already-exists": "overlay.trade.plusRepAlready",
+  "user-not-found": "overlay.trade.plusRepNotFound",
+  "profile-unresolved": "overlay.trade.plusRepFailed",
+  failed: "overlay.trade.plusRepFailed",
+} as const;
 
 const line = (i: TradeItem) => `${i.direction === "given" ? "−" : "+"} ${i.count > 1 ? `${i.count}x ` : ""}${i.displayName}`;
 
@@ -43,6 +58,8 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
   const view = moving && !live?.current ? SAMPLE_TRADE : live;
   const [failed, setFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
+  const [rep, setRep] = useState<RepState>("idle");
   const box = useRef<HTMLDivElement>(null);
   const art = useMarketArt();
   useEffect(() => ipc.on<TradeOverlayView>(TRADE_OVERLAY_EVENT, setView), [ipc]);
@@ -50,7 +67,13 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
   const token = view?.token ?? null;
   const shown = !!view?.current;
   // A new trade clears the last one's error.
-  useEffect(() => setFailed(null), [token]);
+  useEffect(() => {
+    setFailed(null);
+    setRep("idle");
+  }, [token]);
+  useEffect(() => {
+    void api.signedIn().then(setSignedIn, () => setSignedIn(false));
+  }, [api, token]);
   useLayoutEffect(() => {
     // Move mode reports the shell's region; afterwards the real box is sent again.
     if (moving) return;
@@ -64,6 +87,12 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
   const t = view?.current;
   if (!t) return null;
   const { trade, matches } = t;
+  // Only a known partner can be thanked; a failed send may be retried.
+  const repOpen = signedIn && !!trade.partner && (rep === "idle" || rep === "failed" || rep === "profile-unresolved");
+  const sendRep = async (partner: string | null | undefined) => {
+    setRep("sending");
+    setRep(await api.plusRep(partner ?? "").catch((): SendRepResult => "failed"));
+  };
   const close = async (orderId: string) => {
     setBusy(orderId);
     const ok = await api.closeMatch(token, orderId).catch(() => false);
@@ -81,6 +110,12 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
           <span className="tr-who">
             {trade.partner && <span>{tr("overlay.trade.with", { partner: trade.partner })}</span>}
             {trade.type !== "trade" && trade.platChange != null && <OvReadout currency="platinum" value={trade.platChange} />}
+            {repOpen && (
+              <button type="button" className="ov-btn" onClick={() => void sendRep(trade.partner)}>
+                {tr("overlay.trade.plusRep")}
+              </button>
+            )}
+            {signedIn && rep !== "idle" && <span role="status">{tr(REP_TEXT[rep as keyof typeof REP_TEXT])}</span>}
           </span>
         </div>
       </div>

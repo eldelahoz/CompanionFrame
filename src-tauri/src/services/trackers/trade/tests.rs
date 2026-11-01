@@ -61,7 +61,7 @@ fn dialog() -> Vec<String> {
         HEAD.into(),
         "\rVicious Bond (RARE RANK 0)".into(),
         "".into(),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12{TAIL}"),
         SUCCESS.into(),
     ]
@@ -93,7 +93,7 @@ fn a_logged_sale_is_delivered_once_even_when_the_log_repeats_it() {
     feed(&mut t, &dialog(), 5_000.0);
     let seen = seen.lock().unwrap();
     assert_eq!(seen.len(), 1);
-    assert_eq!(seen[0].partner, "RendiW");
+    assert_eq!(seen[0].partner, "TraderName");
     assert_eq!(seen[0].plat_change, 12);
 }
 
@@ -248,4 +248,18 @@ fn the_workbench_trade_mirrors_the_event() {
         (w.items[0].display_name.as_str(), w.items[0].count),
         ("Vicious Bond", 1)
     );
+}
+
+#[test]
+fn dialog_names_are_translated_to_english_and_unknown_ones_kept() {
+    let english = HashMap::from([(
+        "nova prime - systèmes (schéma)".to_string(),
+        "Nova Prime Systems Blueprint".to_string(),
+    )]);
+    let mut t = parsed_with("Nova Prime - Systèmes (Schéma)");
+    to_english(&mut t, &english);
+    assert_eq!(t.items[0].display_name, "Nova Prime Systems Blueprint");
+    let mut t = parsed_with("Forma inconnue");
+    to_english(&mut t, &english);
+    assert_eq!(t.items[0].display_name, "Forma inconnue");
 }

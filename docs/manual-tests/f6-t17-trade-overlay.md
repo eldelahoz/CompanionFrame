@@ -11,6 +11,8 @@ Automated: `cargo test -p companionframe overlay::trade` (queue, order, stale to
 6. A trade with no matching listing shows "No Listing Matched" and Dismiss only.
 7. Outside the popup box, clicks still go to the game (the rest of the window is click-through).
 8. Off switch: from the main window devtools run `window.__TAURI_INTERNALS__.invoke("trade_overlay_set_visible", { visible: false })`; the next trade shows no popup but the desktop toast and the ledger row still appear.
+9. **+rep:** signed in to warframe.market, the popup shows "+rep" next to the partner. Click it: it reads "Sent" (or "Already given" on a second trade with the same person) and the review shows on their warframe.market profile. Signed out, the button is not shown.
+10. **Game language:** set Warframe to French (or any non-English language) and repeat step 2. The popup, the toast and the ledger row appear, and the ledger lists the items by their English names. Cancel a trade at the confirmation: nothing is recorded.
 
 If step 3 steals focus or the click reaches the game, the region/click-through mode of the overlay manager (see f6-t1-overlay-manager.md) is not working as designed: report it as a bug with the Windows version and display scaling.
 

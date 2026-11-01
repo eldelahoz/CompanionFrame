@@ -201,14 +201,14 @@ fn reads_the_reported_vicious_bond_sale_as_12p() {
         DIALOG_HEAD.to_string(),
         "\rVicious Bond (RARE RANK 0)".into(),
         String::new(),
-        format!("and will receive from RendiW{GLYPH} the following:"),
+        format!("and will receive from TraderName{GLYPH} the following:"),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}\r{NEXT_ENTRY}"),
     ]
     .join("\n");
     let t = parse_trade_dialog(&from_raw_log(&raw)).unwrap();
     assert_eq!(t.kind, TradeKind::Sale);
     assert_eq!(t.plat_change, 12);
-    assert_eq!(t.partner, "RendiW");
+    assert_eq!(t.partner, "TraderName");
     assert_eq!(
         t.items,
         [item("Vicious Bond (RARE RANK 0)", 1, TradeDirection::Given)]
@@ -221,7 +221,7 @@ fn reads_the_same_dialog_when_cr_is_its_only_separator() {
     let one = [
         DIALOG_HEAD.to_string(),
         "Vicious Bond (RARE RANK 0)".into(),
-        format!("and will receive from RendiW{GLYPH} the following:"),
+        format!("and will receive from TraderName{GLYPH} the following:"),
         format!("Platinum x 12{DIALOG_TAIL_ARGS}"),
         NEXT_ENTRY.into(),
     ]
@@ -229,7 +229,7 @@ fn reads_the_same_dialog_when_cr_is_its_only_separator() {
     let t = parse_trade_dialog(&[one]).unwrap();
     assert_eq!(t.kind, TradeKind::Sale);
     assert_eq!(t.plat_change, 12);
-    assert_eq!(t.partner, "RendiW");
+    assert_eq!(t.partner, "TraderName");
     assert_eq!(names(&t), ["Vicious Bond (RARE RANK 0)"]);
 }
 
@@ -286,7 +286,7 @@ fn reported_sale_lines() -> Vec<String> {
         DIALOG_HEAD.to_string(),
         "\rVicious Bond (RARE RANK 0)".into(),
         String::new(),
-        format!("and will receive from RendiW{GLYPH} the following:"),
+        format!("and will receive from TraderName{GLYPH} the following:"),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}\r{NEXT_ENTRY}"),
     ]
 }
@@ -294,7 +294,7 @@ fn reported_sale_lines() -> Vec<String> {
 fn assert_reported_sale(t: &ParsedLogTrade) {
     assert_eq!(t.kind, TradeKind::Sale);
     assert_eq!(t.plat_change, 12);
-    assert_eq!(t.partner, "RendiW");
+    assert_eq!(t.partner, "TraderName");
     assert_eq!(
         t.items,
         [item("Vicious Bond (RARE RANK 0)", 1, TradeDirection::Given)]
@@ -325,7 +325,7 @@ fn still_seals_the_dialog_at_a_log_entry_on_its_own_line() {
     let trades = emit_all(&[
         DIALOG_HEAD.to_string(),
         "\rVicious Bond (RARE RANK 0)".into(),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}"),
         NEXT_ENTRY.into(),
         "Arcane Energize (LEGENDARY RANK 5)".into(),
@@ -344,7 +344,7 @@ fn keeps_an_item_line_that_the_next_entry_was_glued_behind() {
     let trades = emit_all(&[
         DIALOG_HEAD.to_string(),
         format!("\rVicious Bond (RARE RANK 0)\r{NEXT_ENTRY}"),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}"),
         SUCCESS_LINE.into(),
     ]);
@@ -361,7 +361,7 @@ fn does_not_take_what_follows_a_glued_entry_on_the_same_line_for_items() {
     let trades = emit_all(&[
         DIALOG_HEAD.to_string(),
         format!("\rVicious Bond (RARE RANK 0)\r{NEXT_ENTRY}\rArcane Energize (LEGENDARY RANK 5)"),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}"),
         SUCCESS_LINE.into(),
     ]);
@@ -378,7 +378,7 @@ fn cuts_an_unsealed_dialog_at_the_glue_when_its_tail_never_arrives() {
     let trades = emit_all(&[
         DIALOG_HEAD.to_string(),
         "\rVicious Bond (RARE RANK 0)".into(),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12\r{NEXT_ENTRY}"),
         "Arcane Energize (LEGENDARY RANK 5)".into(),
         SUCCESS_LINE.into(),
@@ -390,7 +390,7 @@ fn cuts_an_unsealed_dialog_at_the_glue_when_its_tail_never_arrives() {
             trades[0].plat_change,
             trades[0].partner.as_str()
         ),
-        (TradeKind::Sale, 12, "RendiW")
+        (TradeKind::Sale, 12, "TraderName")
     );
     assert_eq!(names(&trades[0]), ["Vicious Bond (RARE RANK 0)"]);
 }
@@ -410,7 +410,7 @@ fn seals_a_single_line_dialog_at_once() {
     let single = [
         DIALOG_HEAD.to_string(),
         "Vicious Bond (RARE RANK 0)".into(),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("Platinum x 12{DIALOG_TAIL_ARGS}"),
     ]
     .join("\r");
@@ -427,6 +427,113 @@ fn seals_a_single_line_dialog_at_once() {
 fn drops_a_dialog_that_never_resolves_within_the_timeout() {
     let mut p = TradeDialogParser::new();
     p.feed_line(DIALOG_HEAD, 0.0);
-    p.feed_line("and will receive from RendiW the following:", 1.0);
+    p.feed_line("and will receive from TraderName the following:", 1.0);
     assert!(p.feed_line(SUCCESS_LINE, 61_000.0).is_none());
+}
+
+// -- localized dialogs (French EE.log, partner anonymised) -----------------
+
+const FR_HEAD: &str = "1328.961 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Souhaitez-vous vraiment accepter cet échange? Vous proposez: ";
+const FR_TAIL: &str =
+    ", title= leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel)";
+const FR_OK: &str = "1333.177 Script [Info]: Dialog.lua: Dialog::CreateOk(description=L'échange a réussi!, title= leftItem=/Menu/Confirm_Item_Ok)";
+const SEND_4: &str = "1332.221 Script [Info]: Dialog.lua: Dialog::SendResult(4)";
+
+fn fr_dialog(item: &str, plat: u32) -> Vec<String> {
+    vec![
+        "1327.951 Script [Info]: Trade.lua: Missing icon data!".into(),
+        FR_HEAD.into(),
+        item.into(),
+        String::new(),
+        "et vous recevrez de TraderName ceci: ".into(),
+        format!("Platinum x {plat}{FR_TAIL}"),
+    ]
+}
+
+fn fr_trades(item: &str, plat: u32, rest: &[&str]) -> Vec<ParsedLogTrade> {
+    let mut lines = fr_dialog(item, plat);
+    lines.extend(rest.iter().map(|l| l.to_string()));
+    emit_all(&lines)
+}
+
+#[test]
+fn reads_the_three_french_sales() {
+    for (item, plat) in [
+        ("Nova Prime (Schéma)", 8),
+        ("Wukong Prime - Systèmes (Schéma)", 11),
+        ("Nova Prime - Systèmes (Schéma)", 15),
+    ] {
+        let trades = fr_trades(item, plat, &[SEND_4, FR_OK]);
+        assert_eq!(trades.len(), 1, "{item}");
+        let t = &trades[0];
+        assert_eq!(
+            (t.kind, t.partner.as_str(), t.plat_change),
+            (TradeKind::Sale, "TraderName", plat)
+        );
+        assert_eq!(t.items, [item_of(item)]);
+    }
+}
+
+fn item_of(name: &str) -> ParsedLogTradeItem {
+    item(name, 1, TradeDirection::Given)
+}
+
+#[test]
+fn a_french_trade_without_the_success_dialog_does_not_count() {
+    assert!(fr_trades("Nova Prime (Schéma)", 8, &[SEND_4]).is_empty());
+    assert!(fr_trades("Nova Prime (Schéma)", 8, &[]).is_empty());
+}
+
+#[test]
+fn a_french_trade_that_ends_in_another_dialog_does_not_count() {
+    let failed = "1333.177 Script [Info]: Dialog.lua: Dialog::CreateOk(description=L'échange a échoué., title= leftItem=/Menu/Confirm_Item_Ok)";
+    assert!(fr_trades("Nova Prime (Schéma)", 8, &[SEND_4, failed]).is_empty());
+}
+
+#[test]
+fn a_cancelled_french_trade_does_not_leak_into_the_next_dialog() {
+    let other = "1400.000 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Acheter ceci?, title= leftItem=/x)";
+    assert!(fr_trades("Nova Prime (Schéma)", 8, &[other, SEND_4, FR_OK]).is_empty());
+}
+
+#[test]
+fn a_confirmation_that_is_not_a_trade_does_not_count() {
+    // No Trade.lua line: an unlisted language is read only while the trade window is live.
+    let lines = [
+        "9.0 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Sicher? Du gibst: ",
+        "Rivenmod",
+        "",
+        "und erhältst von Name: ",
+        "Platinum x 5, title= leftItem=/x)",
+        SEND_4,
+        "9.5 Script [Info]: Dialog.lua: Dialog::CreateOk(description=Fertig, title= leftItem=/x)",
+    ];
+    assert!(emit_all(&lines).is_empty());
+}
+
+#[test]
+fn an_unlisted_language_is_read_by_structure_while_the_trade_window_is_live() {
+    let lines = [
+        "9.0 Script [Info]: Trade.lua: Missing icon data!",
+        "9.1 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Sicher? Du gibst: ",
+        "Nova Prime (Bauplan)",
+        "",
+        "und erhältst von Handler ein: ",
+        "Platinum x 5, title= leftItem=/x)",
+        SEND_4,
+        "9.5 Script [Info]: Dialog.lua: Dialog::CreateOk(description=Fertig, title= leftItem=/x)",
+    ];
+    let trades = emit_all(&lines);
+    assert_eq!(trades.len(), 1);
+    assert_eq!(
+        (trades[0].partner.as_str(), trades[0].plat_change),
+        ("Handler", 5)
+    );
+}
+
+#[test]
+fn the_english_flow_still_completes_on_its_success_line() {
+    let mut lines = reported_sale_lines();
+    lines.push(SUCCESS_LINE.into());
+    assert_eq!(emit_all(&lines).len(), 1);
 }
