@@ -2,6 +2,16 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.1 (2026-11-01)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+
+## New Contributors
+* @dependabot[bot] made their first contribution in https://github.com/eldelahoz/CompanionFrame/pull/12
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.2.0...v0.2.1
+
 ## 0.2.0 (2026-11-01)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
