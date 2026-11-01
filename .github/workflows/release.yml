@@ -4,6 +4,12 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing tag to build (vX.Y.Z)
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,24 +20,29 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Read version and changelog section
         id: meta
         shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           ver=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v${ver}" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${ver} in src-tauri/tauri.conf.json"
+          if { [ -n "${INPUT_TAG}" ] || [ "${GITHUB_REF_TYPE}" = "tag" ]; } && [ "${TAG}" != "v${ver}" ]; then
+            echo "::error::Tag ${TAG} does not match version ${ver} in src-tauri/tauri.conf.json"
             exit 1
           fi
           echo "version=${ver}" >> "$GITHUB_OUTPUT"
           notes=$(awk -v v="$ver" '/^## \[/{p=index($0,"["v"]")>0; next} p' CHANGELOG.md)
-          [ -n "$notes" ] || notes="See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
+          [ -n "$notes" ] || notes="See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md)."
           {
             echo "body<<CF_EOF"
             echo "$notes"
             echo
-            echo "Full history: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)"
+            echo "Full history: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md)"
             echo "CF_EOF"
           } >> "$GITHUB_OUTPUT"
 
