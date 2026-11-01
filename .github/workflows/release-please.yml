@@ -22,7 +22,7 @@ jobs:
         run: echo "has_pat=${{ secrets.RELEASE_PLEASE_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
       # A PAT makes the release PR run ci-ok and pr-title (GITHUB_TOKEN events trigger no workflows).
       - id: rp
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
