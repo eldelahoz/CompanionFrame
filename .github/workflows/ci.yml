@@ -36,6 +36,13 @@ jobs:
               - '!docs/**'
               - '!LICENSE'
               - '!.github/ISSUE_TEMPLATE/**'
+              # Release and repo automation; ci.yml itself stays code so a CI change tests itself.
+              - '!.github/workflows/release.yml'
+              - '!.github/workflows/release-please.yml'
+              - '!.github/workflows/pr-title.yml'
+              - '!.github/dependabot.yml'
+              - '!release-please-config.json'
+              - '!.release-please-manifest.json'
 
   check:
     needs: changes
