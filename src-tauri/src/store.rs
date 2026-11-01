@@ -53,6 +53,8 @@ pub struct Settings {
     pub auto_inventory_sync: bool,
     /// Diagnostics: keep the last scan frames and OCR text in the log folder (`scan_captures`).
     pub save_scan_captures: bool,
+    /// Look for a newer release on start and every 6 h (`src/stores/updater.ts`); the check asks github.com for `latest.json` only.
+    pub auto_update_check: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -87,6 +89,7 @@ impl Default for Settings {
             memory_consent_at: None,
             auto_inventory_sync: true,
             save_scan_captures: false,
+            auto_update_check: true,
         }
     }
 }
@@ -141,6 +144,7 @@ mod tests {
         assert_eq!(store.get().language, "en");
         assert_eq!(store.get().game_language, "auto");
         assert!(store.get().riven_similar_auctions_shown);
+        assert!(store.get().auto_update_check);
         assert_eq!(store.get().data_source_mode, DataSourceMode::Passive);
         let s = Settings {
             language: "de".into(),
