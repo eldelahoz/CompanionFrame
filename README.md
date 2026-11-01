@@ -9,6 +9,7 @@ CompanionFrame is a free, open-source desktop companion for Warframe. It tracks 
 <p align="center">
 <a href="https://github.com/eldelahoz/CompanionFrame/releases/latest"><img src="https://img.shields.io/github/v/release/eldelahoz/CompanionFrame?style=flat-square&label=release" alt="Latest release"></a>
 <a href="https://github.com/eldelahoz/CompanionFrame/releases"><img src="https://img.shields.io/github/downloads/eldelahoz/CompanionFrame/total?style=flat-square&label=downloads" alt="Downloads"></a>
+<a href="https://ko-fi.com/eldelahoz"><img src="https://img.shields.io/badge/Ko--fi-support-FF5E5B?style=flat-square&logo=kofi&logoColor=white" alt="Support on Ko-fi"></a>
 </p>
 
 <p align="center">
@@ -96,6 +97,10 @@ The app talks only to public sources (DE's public endpoints, warframe.market, WF
 - [Contributing](CONTRIBUTING.md): reporting problems, commits, pull requests
 - [Security policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
+
+## Support
+
+CompanionFrame is free and always will be. If it saves you time and you want to say thanks, you can [buy me a coffee on Ko-fi](https://ko-fi.com/eldelahoz). Bug reports, ideas and pull requests help just as much.
 
 ## License and credits
 
