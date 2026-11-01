@@ -35,6 +35,8 @@ jobs:
       tag: ${{ needs.release-please.outputs.tag_name }}
     permissions:
       contents: write
+    # workflow_call does not pass secrets on its own; the signing key is needed.
+    secrets: inherit
 
   # release-please cannot update Cargo.lock (its toml updater only edits plain tables), so refresh the workspace entries here.
   lockfile:
