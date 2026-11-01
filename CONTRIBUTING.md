@@ -34,7 +34,9 @@ Do not paste tokens, cookies or account ids. Check the log and screenshots befor
    ```
 
    CI (`.github/workflows/ci.yml`) runs them on Windows and Ubuntu 22.04.
-5. Open the pull request and fill in the template.
+5. Open the pull request and fill in the template. Its title follows the commit convention (`type(scope): summary`, at most 140 characters), because it becomes the merge commit title; the `PR title` check enforces it.
+
+`main` only changes through pull requests that pass CI. They are merged with a merge commit, so the branch's commits stay in the history (no squash or rebase), and the branch is deleted after the merge.
 
 **No Digital Extremes art or trademarks in the repository.** Do not commit game icons, textures, screenshots of the game client, sounds, or DE logos, not even in tests or docs. Game art is loaded at run time from public sources. Test fixtures must be text, synthetic images, or crops that contain no player names, chat or ids.
 
