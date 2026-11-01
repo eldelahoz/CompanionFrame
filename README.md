@@ -6,6 +6,10 @@
 <p align="center">
 CompanionFrame is a free, open-source desktop companion for Warframe. It tracks your inventory, mastery, warframe.market prices and world state, and puts in-game overlays on relic rewards and rivens. Not affiliated with Digital Extremes.
 </p>
+<p align="center">
+<a href="https://github.com/eldelahoz/CompanionFrame/releases/latest"><img src="https://img.shields.io/github/v/release/eldelahoz/CompanionFrame?style=flat-square&label=release" alt="Latest release"></a>
+<a href="https://github.com/eldelahoz/CompanionFrame/releases"><img src="https://img.shields.io/github/downloads/eldelahoz/CompanionFrame/total?style=flat-square&label=downloads" alt="Downloads"></a>
+</p>
 
 <p align="center">
 <img src="https://img.shields.io/badge/Tauri-2-24C8D8?style=flat-square&logo=tauri&logoColor=white" alt="Tauri">
