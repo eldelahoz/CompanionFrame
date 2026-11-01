@@ -49,6 +49,17 @@ pub fn setup(app: &App) -> tauri::Result<()> {
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("CompanionFrame")
         .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, e| {
+            if let tauri::tray::TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = e
+            {
+                toggle_main(tray.app_handle());
+            }
+        })
         .on_menu_event(|app, e| match e.id().as_ref() {
             "show" => toggle_main(app),
             "quit" => app.exit(0),
