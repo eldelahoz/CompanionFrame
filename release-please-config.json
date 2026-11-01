@@ -3,26 +3,15 @@
   "packages": {
     ".": {
       "release-type": "node",
+      "changelog-type": "github",
       "include-component-in-tag": false,
       "pull-request-title-pattern": "chore${scope}: release ${version}",
       "bump-minor-pre-major": true,
       "draft": true,
       "force-tag-creation": true,
-      "changelog-sections": [
-        { "type": "feat", "section": "Added" },
-        { "type": "fix", "section": "Fixed" },
-        { "type": "perf", "section": "Performance" },
-        { "type": "refactor", "section": "Changed", "hidden": true },
-        { "type": "docs", "section": "Documentation", "hidden": true },
-        { "type": "test", "section": "Tests", "hidden": true },
-        { "type": "build", "section": "Build", "hidden": true },
-        { "type": "ci", "section": "CI", "hidden": true },
-        { "type": "chore", "section": "Chores", "hidden": true }
-      ],
       "extra-files": [
         { "type": "json", "path": "src-tauri/tauri.conf.json", "jsonpath": "$.version" },
-        { "type": "toml", "path": "src-tauri/Cargo.toml", "jsonpath": "$.package.version" },
-        { "type": "toml", "path": "src-tauri/Cargo.lock", "jsonpath": "$.package[?(@.name=='companionframe')].version" }
+        { "type": "toml", "path": "src-tauri/Cargo.toml", "jsonpath": "$.package.version" }
       ]
     }
   }

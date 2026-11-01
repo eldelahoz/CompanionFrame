@@ -34,7 +34,7 @@ Do not paste tokens, cookies or account ids. Check the log and screenshots befor
    ```
 
    CI (`.github/workflows/ci.yml`) runs them on Windows and Ubuntu 22.04.
-5. Open the pull request and fill in the template. Its title follows the commit convention (`type(scope): summary`, at most 140 characters), because it becomes the merge commit title; the `PR title` check enforces it.
+5. Open the pull request and fill in the template. Its title follows the commit convention (`type(scope): summary`, at most 140 characters), because it becomes the merge commit title; the `PR title` check enforces it, and a second job then sets the matching label on the pull request (`feat`, `fix`, `perf`, `docs`, `ci`, `chore`, `test`, `build` or `refactor`, plus `breaking` when the title has `!`), replacing the old one if you edit the title. Pull requests from forks are labelled by a maintainer. The release notes are built from these labels.
 
 `main` only changes through pull requests that pass CI. They are merged with a merge commit, so the branch's commits stay in the history (no squash or rebase), and the branch is deleted after the merge.
 
@@ -107,9 +107,9 @@ Never edit a migration that has already shipped; fix forward with a new entry.
 
 ## Releasing
 
-Releases are driven by [release-please](https://github.com/googleapis/release-please) from the Conventional Commit PR titles on `main` (`feat` bumps the minor version while we are 0.x, `fix` and `perf` the patch; `docs`, `ci`, `chore`, `test`, `build` and `refactor` are left out of the changelog).
+Releases are driven by [release-please](https://github.com/googleapis/release-please) from the Conventional Commit PR titles on `main` (`feat` bumps the minor version while we are 0.x, `fix` and `perf` the patch). The changelog lists merged pull requests, not commits, using GitHub's generated release notes: `.github/release.yml` groups them by label into Added (`feat`), Fixed (`fix`) and Performance (`perf`); every other label, an unlabelled pull request and Dependabot are left out.
 
-1. After each merge to `main`, the Release Please workflow opens or updates a PR titled `chore(main): release X.Y.Z`. It bumps `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`, and writes the new section of `CHANGELOG.md`.
+1. After each merge to `main`, the Release Please workflow opens or updates a PR titled `chore(main): release X.Y.Z`. It bumps `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, and writes the new section of `CHANGELOG.md`. A follow-up job in the same workflow runs `cargo update --workspace` on that branch and pushes a `chore(main): update cargo.lock for the release` commit (only with the token below, so the checks run again).
 2. Merge that PR (checks `ci-ok` and `pr-title` must pass, see the token note below). release-please creates the `vX.Y.Z` tag and a **draft** GitHub release, and the Release workflow builds the Windows installer (NSIS `-setup.exe`) into that draft.
 3. Check the draft and its assets, then publish it.
 
@@ -117,7 +117,7 @@ Releases are driven by [release-please](https://github.com/googleapis/release-pl
 
 **Manual fallback** (release-please broken or unavailable):
 
-1. `node scripts/bump-version.mjs X.Y.Z` (updates the four version files).
-2. In `CHANGELOG.md`, add a `## [X.Y.Z] - YYYY-MM-DD` section; its text becomes the release notes.
+1. `node scripts/bump-version.mjs X.Y.Z` (updates the four version files, `Cargo.lock` included).
+2. In `CHANGELOG.md`, add a `## X.Y.Z (YYYY-MM-DD)` section (`## [X.Y.Z] - YYYY-MM-DD` also works); its text becomes the release notes.
 3. Merge the change to `main`, then tag it: `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow builds and creates the draft; it fails if the tag differs from `tauri.conf.json`.
 4. Also set the matching version in `.release-please-manifest.json` so release-please continues from it.

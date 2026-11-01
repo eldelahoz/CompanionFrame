@@ -1,0 +1,13 @@
+# Release notes by pull request label (release-please uses "changelog-type": "github").
+# Pull requests whose label is not listed under a category are left out: there is no "*" catch-all on purpose.
+changelog:
+  exclude:
+    labels: [docs, ci, chore, test, build, refactor, dependencies, "autorelease: pending", "autorelease: tagged"]
+    authors: [dependabot, "dependabot[bot]", "github-actions[bot]"]
+  categories:
+    - title: Added
+      labels: [feat]
+    - title: Fixed
+      labels: [fix]
+    - title: Performance
+      labels: [perf]

@@ -36,7 +36,8 @@ jobs:
             exit 1
           fi
           echo "version=${ver}" >> "$GITHUB_OUTPUT"
-          notes=$(awk -v v="$ver" '/^## \[/{p=index($0,"["v"]")>0; next} p' CHANGELOG.md)
+          notes=$(awk -v v="$ver" '/^## \[?[0-9]+\.[0-9]+\.[0-9]+/{p=(index($0,"## "v" ")==1||index($0,"## ["v"]")==1); next} p' CHANGELOG.md)
+          # release-please writes "## X.Y.Z (date)"; the manual fallback writes "## [X.Y.Z] - date". Both end at the next version heading.
           [ -n "$notes" ] || notes="See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md)."
           {
             echo "body<<CF_EOF"
