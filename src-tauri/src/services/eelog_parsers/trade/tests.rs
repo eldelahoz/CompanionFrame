@@ -201,14 +201,14 @@ fn reads_the_reported_vicious_bond_sale_as_12p() {
         DIALOG_HEAD.to_string(),
         "\rVicious Bond (RARE RANK 0)".into(),
         String::new(),
-        format!("and will receive from RendiW{GLYPH} the following:"),
+        format!("and will receive from TraderName{GLYPH} the following:"),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}\r{NEXT_ENTRY}"),
     ]
     .join("\n");
     let t = parse_trade_dialog(&from_raw_log(&raw)).unwrap();
     assert_eq!(t.kind, TradeKind::Sale);
     assert_eq!(t.plat_change, 12);
-    assert_eq!(t.partner, "RendiW");
+    assert_eq!(t.partner, "TraderName");
     assert_eq!(
         t.items,
         [item("Vicious Bond (RARE RANK 0)", 1, TradeDirection::Given)]
@@ -221,7 +221,7 @@ fn reads_the_same_dialog_when_cr_is_its_only_separator() {
     let one = [
         DIALOG_HEAD.to_string(),
         "Vicious Bond (RARE RANK 0)".into(),
-        format!("and will receive from RendiW{GLYPH} the following:"),
+        format!("and will receive from TraderName{GLYPH} the following:"),
         format!("Platinum x 12{DIALOG_TAIL_ARGS}"),
         NEXT_ENTRY.into(),
     ]
@@ -229,7 +229,7 @@ fn reads_the_same_dialog_when_cr_is_its_only_separator() {
     let t = parse_trade_dialog(&[one]).unwrap();
     assert_eq!(t.kind, TradeKind::Sale);
     assert_eq!(t.plat_change, 12);
-    assert_eq!(t.partner, "RendiW");
+    assert_eq!(t.partner, "TraderName");
     assert_eq!(names(&t), ["Vicious Bond (RARE RANK 0)"]);
 }
 
@@ -286,7 +286,7 @@ fn reported_sale_lines() -> Vec<String> {
         DIALOG_HEAD.to_string(),
         "\rVicious Bond (RARE RANK 0)".into(),
         String::new(),
-        format!("and will receive from RendiW{GLYPH} the following:"),
+        format!("and will receive from TraderName{GLYPH} the following:"),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}\r{NEXT_ENTRY}"),
     ]
 }
@@ -294,7 +294,7 @@ fn reported_sale_lines() -> Vec<String> {
 fn assert_reported_sale(t: &ParsedLogTrade) {
     assert_eq!(t.kind, TradeKind::Sale);
     assert_eq!(t.plat_change, 12);
-    assert_eq!(t.partner, "RendiW");
+    assert_eq!(t.partner, "TraderName");
     assert_eq!(
         t.items,
         [item("Vicious Bond (RARE RANK 0)", 1, TradeDirection::Given)]
@@ -325,7 +325,7 @@ fn still_seals_the_dialog_at_a_log_entry_on_its_own_line() {
     let trades = emit_all(&[
         DIALOG_HEAD.to_string(),
         "\rVicious Bond (RARE RANK 0)".into(),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}"),
         NEXT_ENTRY.into(),
         "Arcane Energize (LEGENDARY RANK 5)".into(),
@@ -344,7 +344,7 @@ fn keeps_an_item_line_that_the_next_entry_was_glued_behind() {
     let trades = emit_all(&[
         DIALOG_HEAD.to_string(),
         format!("\rVicious Bond (RARE RANK 0)\r{NEXT_ENTRY}"),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}"),
         SUCCESS_LINE.into(),
     ]);
@@ -361,7 +361,7 @@ fn does_not_take_what_follows_a_glued_entry_on_the_same_line_for_items() {
     let trades = emit_all(&[
         DIALOG_HEAD.to_string(),
         format!("\rVicious Bond (RARE RANK 0)\r{NEXT_ENTRY}\rArcane Energize (LEGENDARY RANK 5)"),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12{DIALOG_TAIL_ARGS}"),
         SUCCESS_LINE.into(),
     ]);
@@ -378,7 +378,7 @@ fn cuts_an_unsealed_dialog_at_the_glue_when_its_tail_never_arrives() {
     let trades = emit_all(&[
         DIALOG_HEAD.to_string(),
         "\rVicious Bond (RARE RANK 0)".into(),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("\rPlatinum x 12\r{NEXT_ENTRY}"),
         "Arcane Energize (LEGENDARY RANK 5)".into(),
         SUCCESS_LINE.into(),
@@ -390,7 +390,7 @@ fn cuts_an_unsealed_dialog_at_the_glue_when_its_tail_never_arrives() {
             trades[0].plat_change,
             trades[0].partner.as_str()
         ),
-        (TradeKind::Sale, 12, "RendiW")
+        (TradeKind::Sale, 12, "TraderName")
     );
     assert_eq!(names(&trades[0]), ["Vicious Bond (RARE RANK 0)"]);
 }
@@ -410,7 +410,7 @@ fn seals_a_single_line_dialog_at_once() {
     let single = [
         DIALOG_HEAD.to_string(),
         "Vicious Bond (RARE RANK 0)".into(),
-        "and will receive from RendiW the following:".into(),
+        "and will receive from TraderName the following:".into(),
         format!("Platinum x 12{DIALOG_TAIL_ARGS}"),
     ]
     .join("\r");
@@ -427,7 +427,7 @@ fn seals_a_single_line_dialog_at_once() {
 fn drops_a_dialog_that_never_resolves_within_the_timeout() {
     let mut p = TradeDialogParser::new();
     p.feed_line(DIALOG_HEAD, 0.0);
-    p.feed_line("and will receive from RendiW the following:", 1.0);
+    p.feed_line("and will receive from TraderName the following:", 1.0);
     assert!(p.feed_line(SUCCESS_LINE, 61_000.0).is_none());
 }
 
