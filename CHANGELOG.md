@@ -2,6 +2,19 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.0 (2026-11-01)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Added
+* feat(updater): check for updates and install them from the app by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/14
+
+## New Contributors
+* @dependabot[bot] made their first contribution in https://github.com/eldelahoz/CompanionFrame/pull/12
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.2.0...v0.3.0
+
 ## 0.2.0 (2026-11-01)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
