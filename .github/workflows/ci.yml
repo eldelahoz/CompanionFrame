@@ -70,6 +70,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Saved from main only (even when a test fails), so pull requests reuse it instead of
+          # filling the 10 GB cache with one copy per branch and evicting main's.
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - run: pnpm install --frozen-lockfile
       # Linux runtime arrives with F7-T4b; the tests that need it are cfg(windows) until then.
