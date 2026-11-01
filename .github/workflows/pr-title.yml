@@ -25,3 +25,37 @@ jobs:
             echo "::error::PR title is over 140 characters."
             exit 1
           fi
+
+  # Release notes group pull requests by label (.github/release.yml), so the title's type becomes a label.
+  # A separate job keeps the write permission away from the check itself and keeps `pr-title` the required check.
+  label:
+    needs: pr-title
+    # Pull requests from forks get a read-only token; they are labelled by a maintainer.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Set the type label
+        # Dependabot runs also get a read-only token; its labels come from dependabot.yml.
+        continue-on-error: true
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          types="feat fix refactor perf test docs build ci chore breaking"
+          [[ "$TITLE" =~ ^([a-z]+)(\([a-z0-9/-]+\))?(!?): ]]
+          want="${BASH_REMATCH[1]}"
+          [ -n "${BASH_REMATCH[3]}" ] && want="$want breaking"
+          have=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name')
+          add=(); remove=()
+          for t in $types; do
+            case " $want " in *" $t "*) wanted=1 ;; *) wanted=0 ;; esac
+            if grep -qx "$t" <<<"$have"; then present=1; else present=0; fi
+            [ "$wanted" = 1 ] && [ "$present" = 0 ] && add+=(--add-label "$t")
+            [ "$wanted" = 0 ] && [ "$present" = 1 ] && remove+=(--remove-label "$t")
+          done
+          if [ "${#add[@]}" -gt 0 ] || [ "${#remove[@]}" -gt 0 ]; then
+            gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" "${add[@]}" "${remove[@]}"
+          fi

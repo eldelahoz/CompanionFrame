@@ -5,6 +5,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    labels: [chore, dependencies]
     commit-message:
       prefix: chore
       include: scope
