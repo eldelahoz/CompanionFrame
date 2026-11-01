@@ -804,3 +804,43 @@ fn wfcd_art_is_exposed_as_fallback_when_de_icon_wins() {
             .ends_with("/AfentisPrime.png")
     );
 }
+
+#[test]
+fn french_trade_dialog_names_map_back_to_english_items() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
+    if !root.join("pep").exists() {
+        return;
+    }
+    let bundled = BundledData::new(&root);
+    let db = ItemDb::build(&Sources::load(&bundled, None));
+    let fr = db.english_by_localized(&GameLocale::load("fr", &bundled));
+    for (shown, english) in [
+        ("Nova Prime (Schéma)", "Nova Prime Blueprint"),
+        (
+            "Wukong Prime - Systèmes (Schéma)",
+            "Wukong Prime Systems Blueprint",
+        ),
+        (
+            "Nova Prime - Systèmes (Schéma)",
+            "Nova Prime Systems Blueprint",
+        ),
+    ] {
+        assert_eq!(
+            fr.get(&shown.to_lowercase()).map(String::as_str),
+            Some(english),
+            "{shown}"
+        );
+    }
+    assert!(db.english_by_localized(&GameLocale::default()).is_empty());
+}
+
+#[test]
+fn localized_names_translate_back_through_the_blueprint_pattern() {
+    let db = ItemDb::build(&mod_sources());
+    let map = db.english_by_localized(&de());
+    assert_eq!(map.get("einkerbung").map(String::as_str), Some("Serration"));
+    assert_eq!(
+        map.get("aeolak barrel bauplan").map(String::as_str),
+        Some("Aeolak Barrel Blueprint")
+    );
+}

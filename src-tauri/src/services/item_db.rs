@@ -1239,6 +1239,21 @@ impl ItemDb {
         self.localized_pair(locale, unique_name, key, english).1
     }
 
+    /// Game-language name (lowercase) -> English name, for text the game printed in its own
+    /// language (trade dialogs). Empty in English, where nothing needs translating.
+    pub fn english_by_localized(&self, locale: &GameLocale) -> HashMap<String, String> {
+        if !locale.is_localizing() {
+            return HashMap::new();
+        }
+        self.items
+            .iter()
+            .filter_map(|(key, item)| {
+                let local = self.localized_name(locale, key, &item.name)?;
+                Some((local.to_lowercase(), item.name.clone()))
+            })
+            .collect()
+    }
+
     pub fn renderer_lookup(&self, locale: &GameLocale) -> BTreeMap<String, ItemDbEntry> {
         self.items
             .iter()

@@ -14,6 +14,7 @@ use crate::services::eelog_parsers::trade::{
     ParsedLogTrade, TradeDialogParser, TradeDirection, TradeKind,
 };
 use crate::services::gdpr_import::{Direction, EventSource, TradeEvent, TradeItem, TradeType};
+use crate::services::item_db::ItemDbState;
 use crate::services::ledger;
 use crate::services::notify::channels::NotificationSource;
 use crate::services::notify::{NotificationDispatch, Notifications, Notifier};
@@ -229,7 +230,19 @@ async fn known_items(app: &AppHandle) -> HashMap<String, Known> {
         .collect()
 }
 
-async fn record(app: AppHandle, parsed: ParsedLogTrade) {
+/// The dialog prints names in the game language; the ledger, WFM catalog and inventory use English.
+/// Unknown names (no dict for the language, or not an item) stay as printed.
+fn to_english(trade: &mut ParsedLogTrade, english: &HashMap<String, String>) {
+    for i in &mut trade.items {
+        if let Some(name) = english.get(&i.display_name.to_lowercase()) {
+            i.display_name.clone_from(name);
+        }
+    }
+}
+
+async fn record(app: AppHandle, mut parsed: ParsedLogTrade) {
+    let (db, locale) = app.state::<ItemDbState>().snapshot();
+    to_english(&mut parsed, &db.english_by_localized(&locale));
     let date = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     let id = format!("{date}-{}", &uuid::Uuid::new_v4().simple().to_string()[..4]);
     let event = to_event(&parsed, &known_items(&app).await, id, date);

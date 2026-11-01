@@ -249,3 +249,17 @@ fn the_workbench_trade_mirrors_the_event() {
         ("Vicious Bond", 1)
     );
 }
+
+#[test]
+fn dialog_names_are_translated_to_english_and_unknown_ones_kept() {
+    let english = HashMap::from([(
+        "nova prime - systèmes (schéma)".to_string(),
+        "Nova Prime Systems Blueprint".to_string(),
+    )]);
+    let mut t = parsed_with("Nova Prime - Systèmes (Schéma)");
+    to_english(&mut t, &english);
+    assert_eq!(t.items[0].display_name, "Nova Prime Systems Blueprint");
+    let mut t = parsed_with("Forma inconnue");
+    to_english(&mut t, &english);
+    assert_eq!(t.items[0].display_name, "Forma inconnue");
+}
