@@ -28,6 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "resources": {
       "resources/game-data/": "game-data/",
       "resources/onnxruntime/": "onnxruntime/",
@@ -40,5 +41,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_UPDATER_PUBKEY",
+      "endpoints": ["https://github.com/eldelahoz/CompanionFrame/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
   }
 }

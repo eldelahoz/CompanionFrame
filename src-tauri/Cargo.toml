@@ -61,6 +61,8 @@ ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "
 # riven card text repair needs lookahead, which `regex` lacks.
 fancy-regex = "0.14"
 tauri-plugin-opener = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
