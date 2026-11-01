@@ -150,8 +150,11 @@ fn an_alecaframe_file_is_imported_and_reimported_when_it_changes() {
     i.import_path(&db, &f).unwrap();
     assert_eq!(i.status().source, InventorySource::Aleca);
 
-    // The size changes, so the stamp differs even on a coarse mtime clock.
-    fs::write(&f, aleca::encrypt(&sample(7_000_000))).unwrap();
+    // A much longer payload: the size differs for sure (AES pads to 16 bytes, so a few more digits
+    // can keep it equal and the stamp then hangs on a coarse mtime clock).
+    let mut bigger = sample(7_000_000);
+    bigger["Filler"] = json!("x".repeat(64));
+    fs::write(&f, aleca::encrypt(&bigger)).unwrap();
     // The first tick sees the change, the second confirms the writer is done.
     for _ in 0..2 {
         i.poll(&db);
