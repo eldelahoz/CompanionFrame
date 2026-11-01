@@ -104,3 +104,11 @@ refactor(wfm)!: split order validators per endpoint
 
 A new migration is a named entry added **at the end** of `MIGRATIONS` (`src-tauri/src/db/mod.rs`), with idempotent SQL (`IF NOT EXISTS`).
 Never edit a migration that has already shipped; fix forward with a new entry.
+
+## Releasing
+
+1. `node scripts/bump-version.mjs X.Y.Z` (updates `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `Cargo.lock`).
+2. In `CHANGELOG.md`, rename the top section to `## [X.Y.Z] - YYYY-MM-DD`; its text becomes the release notes.
+3. Merge the change to `main`, then tag it: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+4. The Release workflow builds the Windows installers (NSIS and MSI) and creates a **draft** release. It fails if the tag differs from the version in `tauri.conf.json`.
+5. Check the draft and its assets, then publish it.

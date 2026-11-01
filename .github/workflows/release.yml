@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Windows only: overlays, capture and OCR do not exist on Linux yet, so a Linux package would be a stripped app.
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read version and changelog section
+        id: meta
+        shell: bash
+        run: |
+          ver=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v${ver}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${ver} in src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          echo "version=${ver}" >> "$GITHUB_OUTPUT"
+          notes=$(awk -v v="$ver" '/^## \[/{p=index($0,"["v"]")>0; next} p' CHANGELOG.md)
+          [ -n "$notes" ] || notes="See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)."
+          {
+            echo "body<<CF_EOF"
+            echo "$notes"
+            echo
+            echo "Full history: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md)"
+            echo "CF_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: pnpm install --frozen-lockfile
+      # Both are idempotent; tauri's beforeBuildCommand runs them again as a no-op.
+      - run: pnpm game-data
+      - run: pnpm fetch-onnx
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: pnpm tauri
+          tagName: v__VERSION__
+          releaseName: CompanionFrame v__VERSION__
+          releaseBody: ${{ steps.meta.outputs.body }}
+          releaseDraft: true
+          prerelease: false
