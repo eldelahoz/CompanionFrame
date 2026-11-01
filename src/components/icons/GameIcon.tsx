@@ -1,6 +1,8 @@
 
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { CircleDashed } from "lucide-react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { inTauri } from "../../lib/ipc";
 
 // Game art (© Digital Extremes) is never bundled: each icon is fetched at runtime from the first URL that loads
 // (WARFRAME Wiki thumbnails first, then DE's public export on browse.wf / WFCD), else a generic glyph.
@@ -74,8 +76,10 @@ const a11y = (label?: string) => (label ? { role: "img", "aria-label": label } :
 /** First index worth trying per icon, so a dead primary URL is not retried by every instance. */
 const failedFrom = new Map<string, number>();
 
-function RemoteIcon({ urls, masked = false, label, className = "" }: IconProps & { urls: readonly string[]; masked?: boolean }) {
-  const key = urls.join("|");
+function RemoteIcon({ urls: sources, masked = false, label, className = "" }: IconProps & { urls: readonly string[]; masked?: boolean }) {
+  const key = sources.join("|");
+  // In the app the backend fetches each URL once and serves it from the disk cache (the wiki redirect is not cached by the webview).
+  const urls = useMemo(() => (inTauri() ? sources.map((u) => convertFileSrc(u, "gameimg")) : sources), [key]); // eslint-disable-line react-hooks/exhaustive-deps -- `key` stands for the list
   const [i, setI] = useState(() => failedFrom.get(key) ?? 0);
   const [loaded, setLoaded] = useState<string | null>(null);
   const next = () => {

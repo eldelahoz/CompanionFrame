@@ -32,6 +32,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
 tokio = { version = "1.54.1", features = ["time", "rt-multi-thread", "sync", "macros", "process"] }
 url = "2.5.8"
+percent-encoding = "2"
 keyring = { version = "3", features = ["windows-native", "apple-native", "sync-secret-service"] }
 lzma-rs = "0.3"
 tauri-plugin-single-instance = "2"
