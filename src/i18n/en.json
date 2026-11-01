@@ -2406,5 +2406,18 @@
   "detail.partReady": "Ready",
   "detail.partToBuild": "To build",
   "detail.partMissingN": "{n} missing",
-  "detail.partMarket": "Market"
+  "detail.partMarket": "Market",
+  "update.available": "Version {version} is available",
+  "update.downloading": "Downloading the update...",
+  "update.installing": "Installing, the app restarts by itself...",
+  "update.failed": "Update failed: {reason}",
+  "update.now": "Update now",
+  "update.notes": "Release notes",
+  "update.later": "Later",
+  "update.auto": "Check for updates automatically",
+  "update.autoDesc": "On start and every 6 hours the app asks github.com whether a newer version exists. Nothing about you is sent.",
+  "update.current": "Current version: v{version}",
+  "update.checkNow": "Check now",
+  "update.checking": "Checking...",
+  "update.upToDate": "You are up to date"
 }

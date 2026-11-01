@@ -2406,5 +2406,18 @@
   "detail.partReady": "就绪",
   "detail.partToBuild": "待制造",
   "detail.partMissingN": "缺少 {n} 个",
-  "detail.partMarket": "市场"
+  "detail.partMarket": "市场",
+  "update.available": "版本 {version} 已发布",
+  "update.downloading": "正在下载更新...",
+  "update.installing": "正在安装，应用会自动重启...",
+  "update.failed": "更新失败：{reason}",
+  "update.now": "立即更新",
+  "update.notes": "发行说明",
+  "update.later": "稍后",
+  "update.auto": "自动检查更新",
+  "update.autoDesc": "启动时以及每 6 小时，应用会向 github.com 查询是否有新版本。不会发送任何与你有关的数据。",
+  "update.current": "当前版本：v{version}",
+  "update.checkNow": "立即检查",
+  "update.checking": "正在检查...",
+  "update.upToDate": "已是最新版本"
 }

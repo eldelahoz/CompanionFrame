@@ -32,6 +32,8 @@ import Sidebar from "./components/shell/Sidebar";
 import { TooltipHost } from "./components/ui";
 import { useThemeSettings } from "./lib/theme/themeStore";
 import ToastHost from "./components/shell/ToastHost";
+import UpdateBanner from "./components/shell/UpdateBanner";
+import { startAutoCheck } from "./stores/updater";
 import ConfirmHost from "./components/shell/ConfirmHost";
 import ErrorBoundary from "./components/shell/ErrorBoundary";
 import WfmStatusPill from "./components/market/WfmStatusPill";
@@ -43,7 +45,7 @@ import NotificationHistory from "./components/NotificationHistory";
 import ModalHost from "./modals/ModalHost";
 import { markNotificationsSeen, useNotificationFeed, useNotificationsUnread } from "./stores/notifications";
 
-const DEFAULTS: Settings = { language: "en", game_language: "auto", theme: "dark", reward_scan_hotkey: "F8", overlay_move_hotkey: "F7", riven_rescan_hotkey: "F6", eelog_path: null, overlay_layouts: {}, overlay_enabled: {}, overlay_opacity: {}, message_notifications_enabled: true, message_notifications_while_focused: false, riven_similar_auctions_shown: true, theme_settings: "", ui_scale: 1, keep_running_on_close: false, data_source_mode: "passive", memory_consent_at: null, auto_inventory_sync: true, save_scan_captures: false };
+const DEFAULTS: Settings = { language: "en", game_language: "auto", theme: "dark", reward_scan_hotkey: "F8", overlay_move_hotkey: "F7", riven_rescan_hotkey: "F6", eelog_path: null, overlay_layouts: {}, overlay_enabled: {}, overlay_opacity: {}, message_notifications_enabled: true, message_notifications_while_focused: false, riven_similar_auctions_shown: true, theme_settings: "", ui_scale: 1, keep_running_on_close: false, data_source_mode: "passive", memory_consent_at: null, auto_inventory_sync: true, save_scan_captures: false, auto_update_check: true };
 
 export default function App() {
   const [settings, setLocal] = useState<Settings>(DEFAULTS);
@@ -108,6 +110,7 @@ export default function App() {
   // The theme store saves on its own debounce, so it needs the latest `update`, not the one it was bound with.
   const updateRef = useRef(update);
   updateRef.current = update;
+  useEffect(() => (settings.auto_update_check && !popoutView ? startAutoCheck() : undefined), [settings.auto_update_check]);
   useEffect(() => bindThemePersistence((json) => void updateRef.current({ theme_settings: json, theme: legacyThemeOf(getThemeSettings()) })), []);
 
   setUiLocale(settings.language);
@@ -213,6 +216,7 @@ export default function App() {
       />
       )}
       <ToastHost tr={tr} />
+      {!popoutView && <UpdateBanner tr={tr} />}
       <ConfirmHost tr={tr} />
       <TooltipHost />
       <Tour tr={tr} enabled={!popoutView} />

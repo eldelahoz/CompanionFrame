@@ -33,7 +33,7 @@ Start with the [project README](../README.md). Contributors: [CONTRIBUTING.md](.
 
 ## Testing with the game
 
-[manual-tests/](manual-tests/): checklists for everything that needs Warframe running (overlays, hotkeys, capture, ONNX, reward and riven scanners, the Linux build, the installer, warframe.market web sign-in). The file prefixes (`f6-t…`) are historical task ids.
+[manual-tests/](manual-tests/): checklists for everything that needs Warframe running (overlays, hotkeys, capture, ONNX, reward and riven scanners, the Linux build, the installer, auto-update, warframe.market web sign-in). The file prefixes (`f6-t…`) are historical task ids.
 
 ## Performance
 

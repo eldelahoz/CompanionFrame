@@ -2406,5 +2406,18 @@
   "detail.partReady": "Prête",
   "detail.partToBuild": "À construire",
   "detail.partMissingN": "{n} manquante(s)",
-  "detail.partMarket": "Marché"
+  "detail.partMarket": "Marché",
+  "update.available": "La version {version} est disponible",
+  "update.downloading": "Téléchargement de la mise à jour...",
+  "update.installing": "Installation en cours, l'application redémarre toute seule...",
+  "update.failed": "Échec de la mise à jour : {reason}",
+  "update.now": "Mettre à jour maintenant",
+  "update.notes": "Notes de version",
+  "update.later": "Plus tard",
+  "update.auto": "Rechercher les mises à jour automatiquement",
+  "update.autoDesc": "Au démarrage puis toutes les 6 heures, l'application demande à github.com si une version plus récente existe. Aucune donnée vous concernant n'est envoyée.",
+  "update.current": "Version actuelle : v{version}",
+  "update.checkNow": "Vérifier maintenant",
+  "update.checking": "Recherche en cours...",
+  "update.upToDate": "Vous êtes à jour"
 }

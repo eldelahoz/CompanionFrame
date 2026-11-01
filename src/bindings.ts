@@ -3542,6 +3542,8 @@ export type Settings_Deserialize = {
 	auto_inventory_sync?: boolean,
 	/**  Diagnostics: keep the last scan frames and OCR text in the log folder (`scan_captures`). */
 	save_scan_captures?: boolean,
+	/**  Look for a newer release on start and every 6 h (`src/stores/updater.ts`); the check asks github.com for `latest.json` only. */
+	auto_update_check?: boolean,
 } & ({
 	/**  Scans the reward screen (or closes the shown card). Was `overlay_hotkey`. */
 	reward_scan_hotkey?: string,
@@ -3604,6 +3606,8 @@ export type Settings_Serialize = {
 	auto_inventory_sync: boolean,
 	/**  Diagnostics: keep the last scan frames and OCR text in the log folder (`scan_captures`). */
 	save_scan_captures: boolean,
+	/**  Look for a newer release on start and every 6 h (`src/stores/updater.ts`); the check asks github.com for `latest.json` only. */
+	auto_update_check: boolean,
 };
 
 /**  How far the similar search had to be loosened before listings turned up. */

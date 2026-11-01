@@ -87,7 +87,7 @@ No account with us, no telemetry, no server of ours. Data stays on your PC:
 - Logs: `%LOCALAPPDATA%\com.companionframe.app\logs` (Windows) or `~/.local/share/com.companionframe.app/logs` (Linux), one file per day. The last 20 OCR scan captures are kept in its `scans` subfolder only if you turn that setting on.
 - Your warframe.market login token and webhook URLs, in the OS credential store (Windows Credential Manager, Secret Service on Linux). Your password is never stored.
 
-The app talks only to public sources (DE's public endpoints, warframe.market, WFCD/warframestat, browse.wf, npm/jsDelivr, a community riven sheet) and to the webhooks you configure. The full list is in [Architecture](docs/ARCHITECTURE.md#external-data-sources). Details and how to report a vulnerability: [SECURITY.md](SECURITY.md).
+The app talks only to public sources (DE's public endpoints, warframe.market, WFCD/warframestat, browse.wf, npm/jsDelivr, a community riven sheet) and to the webhooks you configure. Update checks request one file, `latest.json` from github.com, and send nothing about you; you can turn them off in Settings > About. The full list is in [Architecture](docs/ARCHITECTURE.md#external-data-sources). Details and how to report a vulnerability: [SECURITY.md](SECURITY.md).
 
 ## Documentation
 

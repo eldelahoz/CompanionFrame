@@ -47,6 +47,17 @@ jobs:
             echo "CF_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # Without the key the build would publish an installer and no latest.json, and installed copies could never update.
+      - name: Require the updater signing key
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY is not set. Updates must be signed; see CONTRIBUTING.md, Releasing."
+            exit 1
+          fi
+
       - uses: pnpm/action-setup@v6
         with:
           version: 11
@@ -70,6 +81,8 @@ jobs:
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tauriScript: pnpm tauri
           tagName: v__VERSION__
@@ -77,3 +90,6 @@ jobs:
           releaseBody: ${{ steps.meta.outputs.body }}
           releaseDraft: true
           prerelease: false
+          # Default true; explicit because the app depends on latest.json.
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
