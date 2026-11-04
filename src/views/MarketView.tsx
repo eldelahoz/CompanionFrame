@@ -15,7 +15,7 @@ import { Button, Card, EmptyState, IconButton, PageHeader, Skeleton, Table } fro
 import { askConfirm } from "../stores/confirm";
 import { addToast } from "../stores/toasts";
 import type { Translator } from "../lib/i18n";
-import { wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, type ItemDatabase, type MyOrder, type MyOrders } from "../lib/ipc";
+import { onWfmOrderClosed, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, type ItemDatabase, type MyOrder, type MyOrders } from "../lib/ipc";
 import type { WfmPresenceState, PresenceOptions, WfmStatus, WfmSession } from "../lib/ipc";
 import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
@@ -76,6 +76,22 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     const t = setInterval(() => !document.hidden && void fetchOrders(true), POLL_MS);
     return () => clearInterval(t);
   }, [loggedIn, fetchOrders]);
+
+  // A trade match closed units elsewhere: patch just that row; the poll reconciles the rest.
+  useEffect(() => {
+    if (!loggedIn) return;
+    let off: (() => void) | undefined;
+    let dead = false;
+    void onWfmOrderClosed(({ order_id, quantity }) => {
+      const lower = (list: MyOrder[]) =>
+        list.flatMap((o) => (o.id !== order_id ? [o] : o.quantity - quantity > 0 ? [{ ...o, quantity: o.quantity - quantity }] : []));
+      setOrders((cur) => ({ sell: lower(cur.sell), buy: lower(cur.buy) }));
+    }).then((u) => (dead ? u() : (off = u)));
+    return () => {
+      dead = true;
+      off?.();
+    };
+  }, [loggedIn]);
 
   // One write per order at a time; the lock also covers the refetch that follows.
   const guarded = async (id: string, run: () => Promise<void>) => {

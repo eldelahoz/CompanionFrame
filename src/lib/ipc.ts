@@ -276,6 +276,10 @@ export const onItemDbUpdated = async (cb: () => void): Promise<UnlistenFn> => {
 export const onPricesRefreshed = async (cb: (entries: PriceEntry[]) => void): Promise<UnlistenFn> =>
   inTauri() ? listen<PriceEntry[]>("wfm-prices-refreshed", (e) => cb(e.payload)) : () => {};
 
+/** A listing lost `quantity` units because a trade match closed it (popup or Workbench). */
+export const onWfmOrderClosed = async (cb: (e: { order_id: string; quantity: number }) => void): Promise<UnlistenFn> =>
+  inTauri() ? listen<{ order_id: string; quantity: number }>("wfm-order-closed", (e) => cb(e.payload)) : () => {};
+
 /** Mastery progress from the inventory snapshot, else from the public profile (`fromProfile`), else null. */
 export const getMasteryProgress = async (): Promise<MasteryProgress | null> => {
   if (inTauri()) return unwrap(await commands.getMasteryProgress());
