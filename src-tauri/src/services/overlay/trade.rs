@@ -162,6 +162,7 @@ pub async fn trade_notification_close_match(
     };
     let closed = matcher.close_match(&m).await;
     if closed {
+        crate::services::workbench::commands::announce_order_closed(&app, &m);
         if let Err(e) = crate::services::ledger::mark_wfm_closed(&db.0.lock().unwrap(), &event_id) {
             tracing::warn!("[Trade] could not flag ledger row {event_id} as closed: {e:?}");
         }
