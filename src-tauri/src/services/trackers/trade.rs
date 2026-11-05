@@ -23,7 +23,7 @@ use crate::services::wfm::{catalog, session::Session};
 use crate::services::workbench::commands::WfmHost;
 use crate::services::workbench::matcher::{
     Matcher, WorkbenchTrade, WorkbenchTradeItem, WorkbenchTradeMatch, normalize_name,
-    parse_traded_name,
+    parse_traded_name, split_paren_suffix,
 };
 
 /// The same log entry reaches us from the file and the live stream; stamped ones dedupe exactly.
@@ -245,6 +245,11 @@ fn to_english(trade: &mut ParsedLogTrade, english: &HashMap<String, String>) {
     for i in &mut trade.items {
         if let Some(name) = english.get(&i.display_name.to_lowercase()) {
             i.display_name.clone_from(name);
+        } else if let Some((base, suffix)) = split_paren_suffix(&i.display_name) {
+            // Mods/arcanes carry a rank suffix the dictionary keys lack; keep it as printed.
+            if let Some(name) = english.get(&base.to_lowercase()) {
+                i.display_name = format!("{name} {suffix}");
+            }
         }
     }
 }
