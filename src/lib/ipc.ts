@@ -881,6 +881,37 @@ export const wfmOrdersMy = async (): Promise<MyOrders> => {
   return orders;
 };
 
+/** The cached copy of my orders at once (`orders: null`: nothing fetched yet); `refreshing` says a background refresh was started and will arrive through `onWfmOrdersUpdated`. */
+export const wfmOrdersMyCached = async (): Promise<{ orders: MyOrders | null; refreshing: boolean }> =>
+  inTauri() ? unwrapWfm(await commands.wfmOrdersMyCached()) : { orders: mockOrderSplit(), refreshing: false };
+
+/** The Refresh button: always asks warframe.market. */
+export const wfmOrdersRefresh = async (): Promise<MyOrders> => (inTauri() ? unwrapWfm(await commands.wfmOrdersRefresh()) : mockOrderSplit());
+
+/** A bulk run started (`true`) or ended (`false`): the backend pauses its 30 s poll meanwhile. */
+export const wfmOrdersHold = async (hold: boolean): Promise<void> => {
+  if (inTauri()) await commands.wfmOrdersHold(hold);
+};
+
+/** Hides or shows every order of one side in a single request; the new state arrives through `onWfmOrdersUpdated`. Returns how many changed. */
+export const wfmOrdersSetAllVisible = async (orderType: "sell" | "buy", visible: boolean): Promise<number> => {
+  if (inTauri()) return unwrapWfm(await commands.wfmOrdersSetAllVisible(orderType, visible));
+  const changed = mockOrders.filter((o) => o.orderType === orderType && o.visible !== visible).length;
+  mockOrders = mockOrders.map((o) => (o.orderType === orderType ? { ...o, visible } : o));
+  notifyMockOrders();
+  return changed;
+};
+
+const mockOrderListeners = new Set<(o: MyOrders) => void>();
+const notifyMockOrders = () => mockOrderListeners.forEach((cb) => cb(mockOrderSplit()));
+
+/** Every change to my orders (fetch, confirmed write, trade close, sign-out): the whole new copy. */
+export const onWfmOrdersUpdated = async (cb: (o: MyOrders) => void): Promise<UnlistenFn> => {
+  if (inTauri()) return listen<MyOrders>("wfm-orders-updated", (e) => cb(e.payload));
+  mockOrderListeners.add(cb);
+  return () => void mockOrderListeners.delete(cb);
+};
+
 export const wfmOrderCreate = async (order: CreateOrder): Promise<MyOrder> => {
   if (inTauri()) return unwrapWfm(await commands.wfmOrderCreate(order));
   const item = MOCK_WFM_ITEMS.find((i) => i.id === order.itemId);
@@ -901,6 +932,7 @@ export const wfmOrderCreate = async (order: CreateOrder): Promise<MyOrder> => {
     updatedAt: null,
   };
   mockOrders = [...mockOrders, created];
+  notifyMockOrders();
   return created;
 };
 
@@ -915,6 +947,7 @@ export const wfmOrderUpdate = async (orderId: string, updates: OrderUpdates): Pr
     ...(updates.subtype != null && { subtype: updates.subtype.toLowerCase() }),
   };
   mockOrders = mockOrders.map((o) => (o.id === orderId ? next : o));
+  notifyMockOrders();
   return next;
 };
 
@@ -922,10 +955,11 @@ export const wfmOrderDelete = async (orderId: string): Promise<{ id: string }> =
   if (inTauri()) return unwrapWfm(await commands.wfmOrderDelete(orderId));
   mockOrderById(orderId);
   mockOrders = mockOrders.filter((o) => o.id !== orderId);
+  notifyMockOrders();
   return { id: orderId };
 };
 
-/** Closes `quantity` units (a whole trade for bulk listings). Re-fetch the orders afterwards: the API reports no remainder. */
+/** Closes `quantity` units (a whole trade for bulk listings). The backend lowers its copy of my orders and announces it. */
 export const wfmOrderClose = async (orderId: string, quantity: number, perTrade: number | null = null): Promise<{ id: string }> => {
   if (inTauri()) return unwrapWfm(await commands.wfmOrderClose(orderId, quantity, perTrade));
   const o = mockOrderById(orderId);
@@ -933,6 +967,7 @@ export const wfmOrderClose = async (orderId: string, quantity: number, perTrade:
     o.quantity <= quantity
       ? mockOrders.filter((x) => x.id !== orderId)
       : mockOrders.map((x) => (x.id === orderId ? { ...x, quantity: x.quantity - quantity } : x));
+  notifyMockOrders();
   return { id: orderId };
 };
 

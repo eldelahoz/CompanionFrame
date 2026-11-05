@@ -2,7 +2,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../lib/i18n";
-import { resetMock, wfmOrderCreate, wfmOrdersMy } from "../lib/ipc";
+import { resetMock, wfmOrderClose, wfmOrderCreate, wfmOrdersMy } from "../lib/ipc";
+import { resetMyOrders } from "../stores/myOrders";
 import { useWfmSession } from "../stores/wfmSession";
 import { usePresence } from "../lib/wfm/presence";
 import ConfirmHost from "../components/shell/ConfirmHost";
@@ -10,8 +11,8 @@ import ToastHost from "../components/shell/ToastHost";
 import { clearToasts } from "../stores/toasts";
 import MarketView from "./MarketView";
 
-// Captures the closed-order listener so a test can fire the backend event by hand.
-let closedCb: ((e: { order_id: string; quantity: number }) => void) | undefined;
+// While set, the backend's cached copy answers with this and its refresh never lands.
+let cached: { orders: import("../lib/ipc").MyOrders | null; refreshing: boolean } | null = null;
 let reputation: number | null = null;
 // While set, order updates wait for it: lets a test observe a bulk action mid-run.
 let updateGate: Promise<void> | null = null;
@@ -29,10 +30,7 @@ vi.mock("../lib/ipc", async (orig) => ({
     if (++calls.update > through) await updateGate;
     return (await orig<typeof import("../lib/ipc")>()).wfmOrderUpdate(...a);
   },
-  onWfmOrderClosed: async (cb: typeof closedCb) => {
-    closedCb = cb;
-    return () => {};
-  },
+  wfmOrdersMyCached: async () => cached ?? (await orig<typeof import("../lib/ipc")>()).wfmOrdersMyCached(),
 }));
 
 const tr = translator("en");
@@ -50,6 +48,8 @@ function Harness() {
 
 beforeEach(() => {
   reputation = null;
+  cached = null;
+  resetMyOrders();
   updateGate = null;
   through = Infinity;
   calls.update = 0;
@@ -174,24 +174,30 @@ test("each order row has an item thumbnail whose larger preview opens on hover a
   expect(document.querySelector("[data-item-preview]")).toBeNull();
 });
 
-test("a listing closed from a trade match lowers its row, and a full close removes it", async () => {
+test("a listing closed behind our back lowers its row from the backend's update, and a full close removes it", async () => {
   await wfmOrderCreate({ itemId: "mock_serration", orderType: "SELL", platinum: 5, quantity: 3 } as never);
   render(<Harness />);
   await signIn();
   await waitFor(() => expect(document.querySelector("[data-market-order]")).toBeTruthy());
-  await waitFor(() => expect(closedCb).toBeTruthy());
   const { id } = (await wfmOrdersMy()).sell[0];
   // price then quantity steppers: the last number input is the quantity
   const qty = () => [...document.querySelectorAll<HTMLInputElement>("[data-market-order] input[type=number]")].pop()?.value;
 
-  act(() => closedCb!({ order_id: "someone-else", quantity: 1 }));
-  expect(document.querySelectorAll("[data-market-order]")).toHaveLength(1);
-
-  act(() => closedCb!({ order_id: id, quantity: 1 }));
+  // The mock backend announces a close the way the real one does (wfm-orders-updated).
+  await act(async () => void (await wfmOrderClose(id, 1)));
   await waitFor(() => expect(qty()).toBe("2"));
 
-  act(() => closedCb!({ order_id: id, quantity: 2 }));
+  await act(async () => void (await wfmOrderClose(id, 2)));
   await waitFor(() => expect(document.querySelector("[data-market-order]")).toBeNull());
+});
+
+test("a returning visit paints the cached rows at once while the refresh spins", async () => {
+  await wfmOrderCreate({ itemId: "mock_serration", orderType: "SELL", platinum: 5, quantity: 3 } as never);
+  cached = { orders: await wfmOrdersMy(), refreshing: true };
+  render(<Harness />);
+  await signIn();
+  await waitFor(() => expect(document.querySelector("[data-market-order]")).toBeTruthy());
+  expect(screen.getByLabelText("Refresh").getAttribute("aria-busy")).toBe("true");
 });
 
 test("the header dot follows the wfm status and the reputation shows only when known", async () => {

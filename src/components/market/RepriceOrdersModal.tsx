@@ -25,7 +25,7 @@ interface Props {
   ownUserName: string | null;
   onClose: () => void;
   /** Called when at least one price went out, so the list refetches. */
-  onApplied: () => void;
+  onApplied?: () => void;
   tr: Translator;
 }
 
@@ -99,11 +99,11 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApp
       onProgress: (applied, bad) => setProgress({ phase: "applying", done: applied + bad.length, total: sending.length }),
     });
     // closed mid-run: the orders already sent still changed, so the table must refresh
-    if (cancelled.current) return void (result.applied.length > 0 && onApplied());
+    if (cancelled.current) return void (result.applied.length > 0 && onApplied?.());
     setProgress(null);
     setFailed(result.failed);
     setStopped(result.stopReason === "auth");
-    if (result.applied.length > 0) onApplied();
+    if (result.applied.length > 0) onApplied?.();
     // applied rows now sit at their new price; drop them from the preview
     const done = new Set(result.applied.map((a) => a.id));
     setRows((rs) => rs.filter((r) => !done.has(r.rowId)));

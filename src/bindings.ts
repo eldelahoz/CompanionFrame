@@ -86,6 +86,17 @@ export const commands = {
 	wfmPresenceSetOptions: (options: PresenceOptions) => typedError<null, WfmError_Serialize>(__TAURI_INVOKE("wfm_presence_set_options", { options })),
 	wfmWsStatus: () => __TAURI_INVOKE<WsStatus>("wfm_ws_status"),
 	wfmOrdersMy: () => typedError<MyOrders_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_my")),
+	/**
+	 *  The last copy at once, however old; a refresh starts in the background when it is stale or missing
+	 *  and its result arrives as `wfm-orders-updated`.
+	 */
+	wfmOrdersMyCached: () => typedError<CachedOrders_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_my_cached")),
+	/**  The Refresh button: always asks WFM. */
+	wfmOrdersRefresh: () => typedError<MyOrders_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_refresh")),
+	/**  A bulk run started (`true`) or ended (`false`): the poll waits meanwhile. */
+	wfmOrdersHold: (hold: boolean) => __TAURI_INVOKE<void>("wfm_orders_hold", { hold }),
+	/**  Hides or shows all sell (or all buy) orders in one request, then refreshes the copy. */
+	wfmOrdersSetAllVisible: (orderType: string, visible: boolean) => typedError<number, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_set_all_visible", { orderType, visible })),
 	wfmOrderCreate: (order: CreateOrder_Deserialize) => typedError<MyOrder_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_create", { order })),
 	wfmOrderUpdate: (orderId: string, updates: OrderUpdates_Deserialize) => typedError<MyOrder_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_update", { orderId, updates })),
 	wfmOrderDelete: (orderId: string) => typedError<OrderAck, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_delete", { orderId })),
@@ -699,6 +710,30 @@ export type BountyJob_Serialize = {
 	standingStages: number[],
 	minMr: number,
 	challengeDesc: string | null,
+};
+
+/**
+ *  What `wfm_orders_my_cached` answers: the last copy (`None`: nothing fetched yet) and whether a
+ *  refresh was started because the copy is older than 30 s or missing.
+ */
+export type CachedOrders = CachedOrders_Serialize | CachedOrders_Deserialize;
+
+/**
+ *  What `wfm_orders_my_cached` answers: the last copy (`None`: nothing fetched yet) and whether a
+ *  refresh was started because the copy is older than 30 s or missing.
+ */
+export type CachedOrders_Deserialize = {
+	orders?: MyOrders_Deserialize | null,
+	refreshing: boolean,
+};
+
+/**
+ *  What `wfm_orders_my_cached` answers: the last copy (`None`: nothing fetched yet) and whether a
+ *  refresh was started because the copy is older than 30 s or missing.
+ */
+export type CachedOrders_Serialize = {
+	orders: MyOrders_Serialize | null,
+	refreshing: boolean,
 };
 
 export type CalendarDay = CalendarDay_Serialize | CalendarDay_Deserialize;

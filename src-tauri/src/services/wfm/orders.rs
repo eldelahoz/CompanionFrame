@@ -379,6 +379,43 @@ pub async fn set_visible(
     Ok(out)
 }
 
+/// Hides or shows every order of one side with a single `PATCH /v2/orders/group/all`; returns how many
+/// WFM says it changed.
+pub async fn set_all_visible(
+    client: &WfmClient,
+    order_type: &str,
+    visible: bool,
+) -> Result<u32, WfmError> {
+    authed(client)?;
+    if !matches!(order_type, "sell" | "buy") {
+        return Err(WfmError::invalid("order type must be sell or buy"));
+    }
+    let v = client
+        .request(
+            Api::V2,
+            Method::PATCH,
+            "/orders/group/all",
+            body(json!({ "visible": visible, "type": order_type })),
+        )
+        .await?;
+    Ok(data(v).and_then(|d| u32_of(d.get("updated"))).unwrap_or(0))
+}
+
+/// Fills in the item name, slug and thumbnail of an order WFM answered without them.
+pub(crate) async fn named(client: &WfmClient, db: &Db, mut o: MyOrder) -> MyOrder {
+    let Some(id) = o.item_id.clone() else {
+        return o;
+    };
+    if let Ok(items) = catalog::items(client, db).await
+        && let Some(i) = items.iter().find(|i| i.id == id)
+    {
+        o.item_name = i.name.clone();
+        o.item_slug = Some(i.slug.clone());
+        o.item_thumb = i.thumb.as_deref().and_then(asset_url);
+    }
+    o
+}
+
 /// Public orders of one item. `top` asks for the best 5 per side from online users and may filter by
 /// `rank`/`subtype`; leave `rank` unset for veiled rivens (they have none, PR #57). 400/404 = no
 /// orders; any other failure is an error, never an empty book.
@@ -438,66 +475,6 @@ async fn subtype_choices(client: &WfmClient, db: &Db, item_id: &str) -> Vec<Stri
         Ok(Some(item)) => item.subtypes,
         _ => vec![],
     }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn wfm_orders_my(
-    session: State<'_, Session>,
-    db: State<'_, Db>,
-) -> Result<MyOrders, WfmError> {
-    my_orders(session.client(), &db).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn wfm_order_create(
-    session: State<'_, Session>,
-    db: State<'_, Db>,
-    order: CreateOrder,
-) -> Result<MyOrder, WfmError> {
-    let client = session.client();
-    create(client, &db, order, &SEND_PER_TRADE).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn wfm_order_update(
-    session: State<'_, Session>,
-    order_id: String,
-    updates: OrderUpdates,
-) -> Result<MyOrder, WfmError> {
-    update(session.client(), &order_id, updates).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn wfm_order_delete(
-    session: State<'_, Session>,
-    order_id: String,
-) -> Result<OrderAck, WfmError> {
-    delete(session.client(), &order_id).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn wfm_order_close(
-    session: State<'_, Session>,
-    order_id: String,
-    quantity: u32,
-    per_trade: Option<u32>,
-) -> Result<OrderAck, WfmError> {
-    close(session.client(), &order_id, quantity, per_trade).await
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn wfm_orders_set_visible(
-    session: State<'_, Session>,
-    order_ids: Vec<String>,
-    visible: bool,
-) -> Result<Vec<VisibilityResult>, WfmError> {
-    set_visible(session.client(), &order_ids, visible).await
 }
 
 #[tauri::command]

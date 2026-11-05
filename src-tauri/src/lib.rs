@@ -60,6 +60,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<services::overlay::trade::TradeOverlayView>()
         .typ::<services::reward_scan::payload::RewardOverlayView>()
         .typ::<services::wfm::catalog::SetLookup>()
+        .typ::<services::wfm::my_orders::CachedOrders>()
         .typ::<services::overlay::riven::RivenOverlayView>()
         .typ::<services::relic_planner::RelicPlannerEvent>()
         .commands(collect_commands![
@@ -120,12 +121,16 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::wfm::live::wfm_presence_set,
             services::wfm::live::wfm_presence_set_options,
             services::wfm::live::wfm_ws_status,
-            services::wfm::orders::wfm_orders_my,
-            services::wfm::orders::wfm_order_create,
-            services::wfm::orders::wfm_order_update,
-            services::wfm::orders::wfm_order_delete,
-            services::wfm::orders::wfm_order_close,
-            services::wfm::orders::wfm_orders_set_visible,
+            services::wfm::my_orders::wfm_orders_my,
+            services::wfm::my_orders::wfm_orders_my_cached,
+            services::wfm::my_orders::wfm_orders_refresh,
+            services::wfm::my_orders::wfm_orders_hold,
+            services::wfm::my_orders::wfm_orders_set_all_visible,
+            services::wfm::my_orders::wfm_order_create,
+            services::wfm::my_orders::wfm_order_update,
+            services::wfm::my_orders::wfm_order_delete,
+            services::wfm::my_orders::wfm_order_close,
+            services::wfm::my_orders::wfm_orders_set_visible,
             services::wfm::orders::wfm_orders_item,
             services::notify::notif_get_state,
             services::notify::notif_set_webhook,
@@ -295,6 +300,8 @@ pub fn run() {
             services::wfm_images::setup(app)?;
             services::wfm::live::setup(app);
             app.manage(services::wfm::prices::Prices::default());
+            app.manage(services::wfm::my_orders::MyOrdersCache::default());
+            services::wfm::my_orders::start_poller(app.handle().clone());
             services::item_db::setup(app);
             services::mastery::setup(app)?;
             services::eelog::start(app.handle());

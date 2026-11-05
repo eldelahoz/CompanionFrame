@@ -17,6 +17,7 @@ use crate::services::wfm::catalog::{self, SetLookup};
 use crate::services::wfm::contracts::{self, Contracts, WfmContract};
 use crate::services::wfm::errors::WfmError;
 use crate::services::wfm::legacy_v1;
+use crate::services::wfm::my_orders::{MyOrdersCache, UPDATED_EVENT};
 use crate::services::wfm::orders::{self, MyOrder, MyOrders, SEND_PER_TRADE};
 use crate::services::wfm::scheduler::{self, Priority};
 use crate::services::wfm::session::Session;
@@ -275,6 +276,12 @@ pub async fn workbench_match_trade(
 pub fn announce_order_closed(app: &AppHandle, m: &WorkbenchTradeMatch) {
     if !matches!(m.kind, WorkbenchMatchKind::Order) {
         return;
+    }
+    // The Market copy shrinks first, so the views see it through `wfm-orders-updated`.
+    if let Some(cache) = app.try_state::<MyOrdersCache>() {
+        cache.lower(&m.order_id, m.quantity, |o| {
+            let _ = app.emit(UPDATED_EVENT, o);
+        });
     }
     let payload = serde_json::json!({ "order_id": m.order_id, "quantity": m.quantity });
     if let Err(e) = app.emit(ORDER_CLOSED_EVENT, payload) {
