@@ -165,6 +165,7 @@ pub async fn trade_notification_close_match(
     let first = !already_closed;
     let closed = !close_trade_matches(&app, &event_id, &[m], first)
         .await
+        .0
         .is_empty();
     if closed {
         dismiss(&app, token);
@@ -174,13 +175,13 @@ pub async fn trade_notification_close_match(
 
 /// The one close path, for the click and the automatic close: closes `matches` of trade
 /// `event_id`, tells the Market view, flags the ledger row, and (when `thank`) copies the
-/// thank-you once. Returns the order ids WFM accepted.
+/// thank-you once. Returns the order ids WFM accepted and whether the thank-you was copied.
 pub async fn close_trade_matches(
     app: &AppHandle,
     event_id: &str,
     matches: &[WorkbenchTradeMatch],
     thank: bool,
-) -> Vec<String> {
+) -> (Vec<String>, bool) {
     let closed = app
         .state::<Matcher<WfmHost>>()
         .close_all(matches, |m| {
@@ -188,7 +189,7 @@ pub async fn close_trade_matches(
         })
         .await;
     if closed.is_empty() {
-        return closed;
+        return (closed, false);
     }
     if let Err(e) =
         crate::services::ledger::mark_wfm_closed(&app.state::<Db>().0.lock().unwrap(), event_id)
@@ -202,13 +203,17 @@ pub async fn close_trade_matches(
     let text = app
         .state::<Store>()
         .read(|s| if thank { thanks_text(s, kinds) } else { None });
-    if let Some(text) = text {
-        match app.clipboard().write_text(text) {
-            Ok(()) => tracing::info!("[Trade] thank-you message copied to the clipboard"),
-            Err(e) => tracing::warn!("[Trade] could not copy the thank-you message: {e}"),
+    let copied = text.is_some_and(|text| match app.clipboard().write_text(text) {
+        Ok(()) => {
+            tracing::info!("[Trade] thank-you message copied to the clipboard");
+            true
         }
-    }
-    closed
+        Err(e) => {
+            tracing::warn!("[Trade] could not copy the thank-you message: {e}");
+            false
+        }
+    });
+    (closed, copied)
 }
 
 /// The message to copy: only for a closed sale, when the user enabled it and wrote something.
@@ -242,6 +247,7 @@ mod tests {
             },
             matches: vec![],
             closed: vec![],
+            thanks_copied: false,
         }
     }
 

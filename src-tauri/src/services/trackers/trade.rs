@@ -41,6 +41,8 @@ pub struct TradeDetected {
     pub matches: Vec<WorkbenchTradeMatch>,
     /// Order ids of `matches` already closed (automatically); the popup shows them without a button.
     pub closed: Vec<String>,
+    /// The automatic close copied the thank-you message; the popup says so.
+    pub thanks_copied: bool,
 }
 
 #[derive(Default)]
@@ -291,15 +293,16 @@ async fn record(app: AppHandle, mut parsed: ParsedLogTrade) {
             notification_body(&event),
         ));
     let auto_close = app.state::<Store>().read(|s| s.auto_close_trade_listings);
-    let closed = if auto_close {
+    let (closed, thanks_copied) = if auto_close {
         crate::services::overlay::trade::close_trade_matches(&app, &event.id, &matches, true).await
     } else {
-        Vec::new()
+        (Vec::new(), false)
     };
     let detected = TradeDetected {
         trade: event,
         matches,
         closed,
+        thanks_copied,
     };
     crate::services::overlay::trade::enqueue(&app, detected.clone());
     let _ = app.emit(EVENT, detected);

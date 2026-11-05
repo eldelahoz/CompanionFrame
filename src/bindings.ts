@@ -3862,6 +3862,8 @@ export type TradeDetected_Deserialize = {
 	matches: WorkbenchTradeMatch_Deserialize[],
 	/**  Order ids of `matches` already closed (automatically); the popup shows them without a button. */
 	closed: string[],
+	/**  The automatic close copied the thank-you message; the popup says so. */
+	thanksCopied: boolean,
 };
 
 /**  A recorded trade and the listings it would close (empty when signed out or nothing matches). */
@@ -3870,6 +3872,8 @@ export type TradeDetected_Serialize = {
 	matches: WorkbenchTradeMatch_Serialize[],
 	/**  Order ids of `matches` already closed (automatically); the popup shows them without a button. */
 	closed: string[],
+	/**  The automatic close copied the thank-you message; the popup says so. */
+	thanksCopied: boolean,
 };
 
 export type TradeEvent = TradeEvent_Serialize | TradeEvent_Deserialize;
