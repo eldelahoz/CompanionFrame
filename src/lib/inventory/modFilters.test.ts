@@ -8,9 +8,9 @@ const row = (internalName: string, over: Partial<ParsedItem> = {}, group: Parsed
 
 const on = (over: Partial<typeof NO_MOD_FILTERS>) => ({ ...NO_MOD_FILTERS, ...over });
 
-test("copies add up across rank rows of one mod and ignore other groups", () => {
-  const copies = modCopies([row("a", { amount: 2 }), row("a", { rank: 3 }), row("b"), row("c", {}, "arcanes")]);
-  expect([copies.get("a"), copies.get("b"), copies.has("c")]).toEqual([3, 1, false]);
+test("copies add up across rank rows of one mod and count arcanes too, but ignore other groups", () => {
+  const copies = modCopies([row("a", { amount: 2 }), row("a", { rank: 3 }), row("b"), row("c", {}, "arcanes"), row("d", {}, "misc")]);
+  expect([copies.get("a"), copies.get("b"), copies.get("c"), copies.has("d")]).toEqual([3, 1, 1, false]);
 });
 
 test("duplicates needs two copies in total, not two in one row", () => {
@@ -34,9 +34,14 @@ test("not equipped hides equipped rows only", () => {
   expect(passesModFilters(row("a"), new Map(), f)).toBe(true);
 });
 
+test("arcanes follow the chips like mods", () => {
+  const a = row("x", { equipped: true, rank: 5 }, "arcanes");
+  expect([passesModFilters(a, new Map([["x", 1]]), on({ duplicates: true })), passesModFilters(a, new Map(), on({ notEquipped: true }))]).toEqual([false, false]);
+});
+
 test("non-mod rows always pass, and no chip passes everything", () => {
   const all = on({ duplicates: true, notMax: true, notEquipped: true });
-  expect(passesModFilters(row("x", { equipped: true, rank: 5 }, "arcanes"), new Map(), all)).toBe(true);
+  expect(passesModFilters(row("x", { equipped: true, rank: 5 }, "misc"), new Map(), all)).toBe(true);
   expect(passesModFilters(row("a", { equipped: true }), new Map(), NO_MOD_FILTERS)).toBe(true);
   expect([modFiltersOn(NO_MOD_FILTERS), modFiltersOn(on({ notMax: true }))]).toEqual([false, true]);
 });

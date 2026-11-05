@@ -8,6 +8,8 @@ import type { PriceInfo } from "../../lib/inventory/itemPrices";
 import type { InvRow } from "../../lib/inventory/inventoryRows";
 import type { MasteryMark as Mark } from "../../lib/inventory/masteryMark";
 import MasteryMark from "./MasteryMark";
+import SellableTag from "./SellableTag";
+import type { Sellable } from "../../lib/inventory/sellable";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
 
 interface Props {
@@ -22,7 +24,7 @@ interface Props {
   onBook: (row: InvRow) => void;
   extraOf?: (row: InvRow) => ReactNode;
   masteryOf?: (row: InvRow) => Mark | null;
-  sellableOf?: (row: InvRow) => number | undefined;
+  sellableOf?: (row: InvRow) => Sellable | undefined;
   tr: Translator;
 }
 
@@ -69,7 +71,7 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
               </td>
               <td className="ui-num" data-label={tr("inventory.col.owned")}>
                 {row.item.inventoryGroup === "incomplete_sets" ? <OwnedBadge item={row.item} tr={tr} /> : `x${formatNumber(row.item.amount ?? 0)}`}
-                {sellableOf?.(row) !== undefined && <span className="inv-sellable" data-inventory-sellable>{tr("inventory.mods.sellable", { count: sellableOf(row)! })}</span>}
+                {sellableOf?.(row) && <SellableTag sellable={sellableOf(row)!} tr={tr} />}
               </td>
               <td className="ui-num" data-label={tr("inventory.col.platinum")}>
                 <span className="inv-price-fig">

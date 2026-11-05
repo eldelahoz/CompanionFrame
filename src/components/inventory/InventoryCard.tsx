@@ -8,6 +8,8 @@ import type { PriceInfo } from "../../lib/inventory/itemPrices";
 import type { InvRow } from "../../lib/inventory/inventoryRows";
 import type { MasteryMark as Mark } from "../../lib/inventory/masteryMark";
 import MasteryMark from "./MasteryMark";
+import SellableTag from "./SellableTag";
+import type { Sellable } from "../../lib/inventory/sellable";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
 
 interface Props {
@@ -23,8 +25,8 @@ interface Props {
   /** Extra block under the values (an incomplete set's missing parts). */
   extra?: ReactNode;
   mastery?: Mark | null;
-  /** Copies safe to sell; set only while a mod chip is on. */
-  sellable?: number;
+  /** Copies safe to sell; set only while the Surplus or a mod chip is on. */
+  sellable?: Sellable;
   tr: Translator;
 }
 
@@ -56,7 +58,7 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
           </Badge>
         )}
         <MasteryMark mark={mastery} tr={tr} />
-        {sellable !== undefined && <span className="inv-sellable" data-inventory-sellable>{tr("inventory.mods.sellable", { count: sellable })}</span>}
+        {sellable && <SellableTag sellable={sellable} tr={tr} />}
       </div>
       {row.slug && (
         <IconButton label={tr("inventory.openMarket")} className="inv-card-book" onClick={onBook}>

@@ -21,7 +21,7 @@ import { SORT_KEYS, buildRows, hasDucats, sortRows, valueEntries, type InvRow, t
 import { GOALS, GOAL_FILTERS, PLAT_PRESETS, parseBound, passesPlatRange, presetKey, usePersistedRange, type Goal } from "../lib/inventory/invFilters";
 import { computeInventoryValueTotals } from "../lib/inventory/valueTotals";
 import { NO_MOD_FILTERS, modCopies, modFiltersOn, passesModFilters, type ModFilters } from "../lib/inventory/modFilters";
-import { modSellable } from "../lib/inventory/modSellable";
+import { isUpgrade, toSellable, verdictResolver } from "../lib/inventory/sellable";
 import { useInventorySafety } from "../stores/inventorySafety";
 import { usePersisted } from "../lib/usePersisted";
 import { useInventory, useParsedInventory, useResources } from "../stores/inventory";
@@ -161,14 +161,19 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   }, [rows, tab]);
   const primeFilter = canFilterPrime ? primeWant : "all";
   const ducatsFilter = ducatsOnly && canFilterDucats;
-  // The mod chips show only where mods are listed; a copy count spans every rank row of a mod, whatever the search hides.
-  const canFilterMods = useMemo(() => (tab === "everything" || tab === "mods") && rows.some((r) => r.item.inventoryGroup === "mods"), [rows, tab]);
+  // The mod chips show only where mods or arcanes are listed; a copy count spans every rank row, whatever the search hides.
+  const canFilterMods = useMemo(() => (tab === "everything" || tab === "mods" || tab === "arcanes") && rows.some((r) => isUpgrade(r.item) && (tab === "everything" || r.item.inventoryGroup === tab)), [rows, tab]);
   const modFilter = canFilterMods ? modWant : NO_MOD_FILTERS;
   const copies = useMemo(() => modCopies(rows), [rows]);
-  // The safety context (mastery, foundry walk) is only worth building while a mod chip asks for the sellable count.
+  // The safety context (mastery, foundry walk) is only worth building while a chip asks for the sellable count.
   const showSellable = modFiltersOn(modFilter);
   const safety = useInventorySafety(showSellable ? data : null, items as unknown as Record<string, ItemDbEntry>);
-  const sellable = useMemo(() => (showSellable ? modSellable(rows, safety.context) : null), [showSellable, rows, safety.context]);
+  const sellable = useMemo(() => {
+    if (!showSellable) return null;
+    // Mods and arcanes are judged over every rank row, so the resolver reads the whole inventory, not the tab.
+    const verdictOf = verdictResolver(parsed, safety.context);
+    return new Map(inTab.filter((r) => r.item.inventoryGroup !== "incomplete_sets").map((r) => [r.key, toSellable(verdictOf(r.item))] as const));
+  }, [showSellable, parsed, inTab, safety.context]);
   const sellableOf = (row: InvRow) => sellable?.get(row.key);
   const filtered = useMemo(
     () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),

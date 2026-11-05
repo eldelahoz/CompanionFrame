@@ -2090,7 +2090,7 @@
   "inventory.mods.duplicates": "Duplikate",
   "inventory.mods.notMax": "Nicht max. Rang",
   "inventory.mods.notEquipped": "Nicht ausgerüstet",
-  "inventory.mods.sellable": "Verkaufbar {count}",
+  "inventory.sellable": "Verkaufbar {count}",
   "inventory.averageHint": "Median der Tagesmediane der letzten 7 Tage auf warframe.market",
   "inventory.loadAverage": "Laden",
   "inventory.priceHint": "Durchschnittlicher Verkaufspreis der letzten 48 Stunden auf warframe.market",
