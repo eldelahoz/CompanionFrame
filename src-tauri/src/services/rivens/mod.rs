@@ -181,7 +181,7 @@ pub fn tracker(app: &AppHandle) -> Box<dyn crate::services::trackers::LineTracke
     Box::new(crate::services::trackers::RivenTracker::new(
         Box::new(move |session| {
             let db = app.state::<Db>();
-            let saved = sessions::save(&db.0.lock().unwrap(), &session);
+            let saved = sessions::save(&db.lock(), &session);
             match saved {
                 Ok(()) => {
                     let _ = app.emit("riven-session-saved", session);
@@ -197,14 +197,14 @@ pub fn tracker(app: &AppHandle) -> Box<dyn crate::services::trackers::LineTracke
 #[tauri::command]
 #[specta::specta]
 pub fn rivens_get(db: State<Db>) -> Result<Vec<RivenRollSession>, String> {
-    sessions::list(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    sessions::list(&db.lock()).map_err(|e| e.to_string())
 }
 
 /// The note as stored ("" when cleared); None for an unknown id.
 #[tauri::command]
 #[specta::specta]
 pub fn rivens_set_note(db: State<Db>, id: String, note: String) -> Option<String> {
-    sessions::set_note(&db.0.lock().unwrap(), &id, &note)
+    sessions::set_note(&db.lock(), &id, &note)
         .ok()
         .flatten()
         .map(Option::unwrap_or_default)
@@ -213,13 +213,13 @@ pub fn rivens_set_note(db: State<Db>, id: String, note: String) -> Option<String
 #[tauri::command]
 #[specta::specta]
 pub fn rivens_pin(db: State<Db>, id: String, pinned: bool) -> bool {
-    sessions::set_pinned(&db.0.lock().unwrap(), &id, pinned).unwrap_or(false)
+    sessions::set_pinned(&db.lock(), &id, pinned).unwrap_or(false)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn rivens_delete(db: State<Db>, id: String) -> bool {
-    sessions::delete(&db.0.lock().unwrap(), &id).unwrap_or(false)
+    sessions::delete(&db.lock(), &id).unwrap_or(false)
 }
 
 /// The user's inventory rivens decoded from their fingerprints (stats, rolls, grades); empty when no inventory is loaded.

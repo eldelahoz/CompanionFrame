@@ -127,7 +127,7 @@ type Cached = (i64, Vec<CodexScanEntry>);
 
 fn read_cache(db: &Db, account: &str) -> Option<Cached> {
     let at: i64 = kv_get(db, &at_key(account)).ok()??.parse().ok()?;
-    let conn = db.0.lock().unwrap();
+    let conn = db.lock();
     let mut stmt = conn
         .prepare("SELECT entry, scans FROM codex_scans WHERE account = ?1 ORDER BY entry")
         .ok()?;
@@ -146,7 +146,7 @@ fn read_cache(db: &Db, account: &str) -> Option<Cached> {
 
 fn write_cache(db: &Db, account: &str, at: i64, scans: &[CodexScanEntry]) -> rusqlite::Result<()> {
     {
-        let mut conn = db.0.lock().unwrap();
+        let mut conn = db.lock();
         let tx = conn.transaction()?;
         tx.execute("DELETE FROM codex_scans WHERE account = ?1", [account])?;
         {

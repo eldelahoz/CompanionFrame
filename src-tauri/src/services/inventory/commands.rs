@@ -23,7 +23,14 @@ impl Sink for EventSink {
     /// teaching the bindings about arbitrary JSON.
     fn updated(&self, data: Option<&Value>) {
         crate::services::stats::on_inventory(&self.0, data);
-        let _ = self.0.emit("inventory-updated", data.map(Value::to_string));
+        let t = std::time::Instant::now();
+        let text = data.map(Value::to_string);
+        let bytes = text.as_ref().map_or(0, String::len);
+        let _ = self.0.emit("inventory-updated", text);
+        tracing::info!(
+            "timing: inventory_updated bytes={bytes} ms={}",
+            t.elapsed().as_millis()
+        );
     }
 
     fn status(&self, status: &InventoryStatus) {
@@ -53,7 +60,14 @@ fn text(d: Option<Arc<Value>>) -> Option<String> {
 #[tauri::command(async)]
 #[specta::specta]
 pub fn get_inventory(inv: State<Arc<Inventory>>) -> Option<String> {
-    text(inv.get())
+    let t = std::time::Instant::now();
+    let out = text(inv.get());
+    tracing::info!(
+        "timing: get_inventory bytes={} ms={}",
+        out.as_ref().map_or(0, String::len),
+        t.elapsed().as_millis()
+    );
+    out
 }
 
 #[tauri::command(async)]

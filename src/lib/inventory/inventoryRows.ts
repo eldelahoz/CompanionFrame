@@ -83,7 +83,12 @@ function compareValues(x: number | string | null, y: number | string | null, dir
 }
 
 /** The rank copies of one mod stay adjacent, lowest rank first: a group sorts by its best row, then by name. */
+let sortCalls = 0;
+/** How many times `sortRows` has run; the timing logs diff two readings. */
+export const sortRowsCalls = (): number => sortCalls;
+
 export function sortRows(rows: readonly InvRow[], prices: ReadonlyMap<string, PriceInfo>, key: SortKey, desc: boolean): InvRow[] {
+  sortCalls++;
   const dir = desc ? -1 : 1;
   const own = new Map(rows.map((r) => [r, sortValue(r, prices, key)] as const));
   const lead = new Map<string, number | string | null>();

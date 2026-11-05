@@ -1,6 +1,7 @@
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, LayoutGrid, List, PackageSearch } from "lucide-react";
 import ImportNote from "../components/inventory/ImportNote";
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { logTiming, msSince } from "../lib/timing";
 import InventorySourceBar from "../components/inventory/InventorySourceBar";
 import InventoryCard from "../components/inventory/InventoryCard";
 import InventoryList from "../components/inventory/InventoryList";
@@ -17,7 +18,7 @@ import { useItemPriceProgress, useItemPrices, type PriceInfo } from "../lib/inve
 import { buildIncompleteSets, buildRelicRewardIndex, partSlug } from "../lib/inventory/incompleteSets";
 import { buildMasteryIndex, isNotMastered, masteryOfItem } from "../lib/inventory/masteryMark";
 import { parseOwnedRelics } from "../lib/relic/relicInventory";
-import { SORT_KEYS, buildRows, hasDucats, sortRows, valueEntries, type InvRow, type SortKey } from "../lib/inventory/inventoryRows";
+import { SORT_KEYS, buildRows, hasDucats, sortRows, sortRowsCalls, valueEntries, type InvRow, type SortKey } from "../lib/inventory/inventoryRows";
 import { GOALS, GOAL_FILTERS, PLAT_PRESETS, parseBound, passesPlatRange, presetKey, usePersistedRange, type Goal } from "../lib/inventory/invFilters";
 import { computeInventoryValueTotals } from "../lib/inventory/valueTotals";
 import { NO_MOD_FILTERS, modCopies, modFiltersOn, passesModFilters, type ModFilters } from "../lib/inventory/modFilters";
@@ -232,6 +233,22 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
     [filtered, livePrices, sortKey, desc, range],
   );
   const shown = useMemo(() => visible.slice(0, limit), [visible, limit]);
+  // Diagnostics: per tab, ms from mount (or the tab switch) to the first rows and to every price answered.
+  const lap = useRef({ t0: performance.now(), sorts: sortRowsCalls(), rows: false, prices: false });
+  useEffect(() => {
+    lap.current = { t0: performance.now(), sorts: sortRowsCalls(), rows: false, prices: false };
+  }, [tab]);
+  useEffect(() => {
+    const l = lap.current;
+    if (!l.rows && shown.length > 0) {
+      l.rows = true;
+      logTiming("inventory_first_rows", { tab, rows: shown.length, ms: msSince(l.t0) });
+    }
+    if (!l.prices && progress.total > 0 && progress.done + progress.failed >= progress.total) {
+      l.prices = true;
+      logTiming("inventory_prices_done", { tab, slugs: progress.total, failed: progress.failed, sorts: sortRowsCalls() - l.sorts, ms: msSince(l.t0) });
+    }
+  }, [tab, shown, progress]);
   const pickRange = useRangeSelect(shown.map((r) => r.key));
   // Shift+click takes every shown row between the last click and this one.
   const pickRow = (key: string, shift: boolean) => selectKeys(applyIds(selection, pickRange(key, shift), !selection.has(key)));

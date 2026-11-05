@@ -7,7 +7,9 @@
 
 use crate::services::clock::now_ms;
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -22,7 +24,7 @@ use super::session::Session;
 use super::stats_history::{self, MarketStatPoint, MergeMode};
 use super::stats_v1;
 use crate::db::Db;
-use crate::services::cache::{kv_get, kv_put};
+use crate::services::cache::{kv_get, kv_get_many, kv_put, kv_read_totals};
 
 /// Fresh for interactive lookups (Market, history): a trader wants the live number.
 const TTL_MS: i64 = 5 * 60 * 1000;
@@ -94,9 +96,13 @@ fn key(slug: &str) -> String {
     format!("wfm:price:{slug}")
 }
 
-fn read(db: &Db, slug: &str) -> Option<Cached> {
-    let c: Cached = serde_json::from_str(&kv_get(db, &key(slug)).ok()??).ok()?;
+fn parse(raw: &str) -> Option<Cached> {
+    let c: Cached = serde_json::from_str(raw).ok()?;
     matches!(c.status, PriceStatus::Ok | PriceStatus::NoData).then_some(c)
+}
+
+fn read(db: &Db, slug: &str) -> Option<Cached> {
+    parse(&kv_get(db, &key(slug)).ok()??)
 }
 
 fn write(db: &Db, slug: &str, c: &Cached) {
@@ -275,11 +281,24 @@ impl Prices {
             .into_iter()
             .filter(|s| seen.insert(s.clone()))
             .collect();
+        let (t, kv0) = (Instant::now(), kv_read_totals());
+        let requested = slugs.len();
+        let fetched = AtomicUsize::new(0);
         let mut stale = Vec::new();
+        // One batched read for every slug; a failed read just means each one is fetched as if uncached.
+        let keys: Vec<_> = slugs
+            .iter()
+            .filter_map(|s| normalize_slug(s).ok().map(|n| key(&n)))
+            .collect();
+        let stored = kv_get_many(db, &keys).unwrap_or_default();
         let out = futures_util::stream::iter(slugs)
             .map(|s| async {
                 let norm = normalize_slug(&s).ok();
-                if let Some((n, c)) = norm.and_then(|n| read(db, &n).map(|c| (n, c))) {
+                let hit = norm.and_then(|n| {
+                    let c = parse(stored.get(&key(&n))?)?;
+                    Some((n, c))
+                });
+                if let Some((n, c)) = hit {
                     // 2: pre-rank-pricing entry (no max price), revalidated first; 1: merely old.
                     let old = if c.v < CACHE_V {
                         2
@@ -288,6 +307,7 @@ impl Prices {
                     };
                     return (entry(&n, &c, old > 0), old);
                 }
+                fetched.fetch_add(1, Ordering::Relaxed);
                 let e = self
                     .price(client, db, &s, Priority::Background)
                     .await
@@ -313,6 +333,17 @@ impl Prices {
                 }
             }
         }
+        let kv = kv_read_totals();
+        let fetched = fetched.into_inner();
+        tracing::info!(
+            "timing: wfm_prices_bulk slugs={requested} cached={} fetched={fetched} stale={} queued={} kv_reads={} kv_read_ms={} ms={}",
+            out.len() - fetched,
+            out.iter().filter(|(_, old)| *old > 0).count(),
+            stale.len(),
+            kv.0 - kv0.0,
+            (kv.1 - kv0.1) / 1000,
+            t.elapsed().as_millis()
+        );
         Ok((out.into_iter().map(|(e, _)| e).collect(), stale))
     }
 
@@ -326,7 +357,9 @@ impl Prices {
         on_batch: impl Fn(Vec<PriceEntry>),
     ) {
         let (mut landed, mut fails) = (Vec::new(), 0);
+        let (t, mut done) = (Instant::now(), 0);
         for slug in &slugs {
+            done += 1;
             match self
                 .price_within(client, db, slug, Priority::Background, 0)
                 .await
@@ -347,6 +380,11 @@ impl Prices {
         if !landed.is_empty() {
             on_batch(landed);
         }
+        tracing::info!(
+            "timing: wfm_prices_refresh queued={} done={done} ms={}",
+            slugs.len(),
+            t.elapsed().as_millis()
+        );
         let mut refreshing = self.refreshing.lock().unwrap();
         slugs.iter().for_each(|s| {
             refreshing.remove(s);

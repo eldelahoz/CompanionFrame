@@ -82,7 +82,7 @@ impl WorkbenchHost for WfmHost {
     }
 
     fn with_db<R>(&self, f: impl FnOnce(&Connection) -> R) -> R {
-        f(&self.db().0.lock().unwrap())
+        f(&self.db().lock())
     }
 
     fn emit(&self, state: &WorkbenchState) {
@@ -291,7 +291,7 @@ pub async fn workbench_close_match(
         announce_order_closed(&app, &trade_match);
     }
     if let (true, Some(id)) = (closed, event_id)
-        && let Err(e) = crate::services::ledger::mark_wfm_closed(&db.0.lock().unwrap(), &id)
+        && let Err(e) = crate::services::ledger::mark_wfm_closed(&db.lock(), &id)
     {
         tracing::warn!("[Workbench] could not flag ledger row {id} as closed: {e:?}");
     }

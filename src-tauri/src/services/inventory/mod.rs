@@ -306,7 +306,7 @@ impl Inventory {
     /// Restores the persisted snapshot and deltas, and re-attaches the AlecaFrame watcher.
     pub fn load(&self, db: &Db) -> Option<Arc<Value>> {
         let (row, deltas) = {
-            let conn = db.0.lock().unwrap();
+            let conn = db.lock();
             (
                 store::load_snapshot(&conn).ok().flatten()?,
                 store::load_deltas(&conn).unwrap_or_default(),
@@ -382,7 +382,7 @@ impl Inventory {
             hash,
             json: data.to_string(),
         };
-        if let Err(e) = store::save_snapshot(&mut db.0.lock().unwrap(), &row) {
+        if let Err(e) = store::save_snapshot(&mut db.lock(), &row) {
             tracing::warn!("inventory snapshot not persisted: {e}");
         }
         i.set_snapshot(&row, data, Vec::new());
@@ -395,7 +395,7 @@ impl Inventory {
 
     /// Forgets the snapshot and its deltas.
     pub fn clear(&self, db: &Db) {
-        if let Err(e) = store::clear(&mut db.0.lock().unwrap()) {
+        if let Err(e) = store::clear(&mut db.lock()) {
             tracing::warn!("inventory snapshot not cleared: {e}");
         }
         let mut i = self.inner.lock().unwrap();
@@ -413,7 +413,7 @@ impl Inventory {
         if i.snapshot.is_none() || deltas.is_empty() {
             return false;
         }
-        if let Err(e) = store::insert_deltas(&mut db.0.lock().unwrap(), &deltas) {
+        if let Err(e) = store::insert_deltas(&mut db.lock(), &deltas) {
             tracing::warn!("inventory deltas not persisted: {e}");
         }
         i.deltas.extend(deltas);

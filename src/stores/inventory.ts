@@ -7,6 +7,7 @@ import {
   type ItemDatabase,
 } from "../lib/ipc";
 import { parseInventory } from "../lib/inventory";
+import { logTiming, msSince } from "../lib/timing";
 import { parseResources } from "../lib/inventory/foundryResources";
 import type { ItemDbEntry, ParsedItem, RawInventoryData, Resource } from "../types/inventory";
 import { aggregateComponentOwnership } from "../../config/shared/componentOwnership";
@@ -56,7 +57,14 @@ const EMPTY: ParsedItem[] = [];
 
 // Derived views are cached per (data, itemDb) identity, so every view that asks shares one parse until the data changes.
 export const parsedFor = (data: RawInventoryData | null, items: ItemDatabase): ParsedItem[] =>
-  data ? memoByIdentity("parsed", data, items, () => parseInventory(data, asDb(items))) : EMPTY;
+  data
+    ? memoByIdentity("parsed", data, items, () => {
+        const t0 = performance.now();
+        const parsed = parseInventory(data, asDb(items));
+        logTiming("parse_inventory", { items: parsed.length, ms: msSince(t0) });
+        return parsed;
+      })
+    : EMPTY;
 
 const resourcesFor = (data: RawInventoryData | null, items: ItemDatabase): Resource[] =>
   data ? memoByIdentity("resources", data, items, () => parseResources(data, asDb(items))) : [];

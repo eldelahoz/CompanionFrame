@@ -1,7 +1,9 @@
 //! SQLite behind one Mutex'd connection; migrations tracked by name in schema_migrations.
 
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, MutexGuard, PoisonError, TryLockError};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 
@@ -76,12 +78,210 @@ const MIGRATIONS: &[(&str, &str)] = &[
      CREATE INDEX IF NOT EXISTS mission_reward_items_name ON mission_reward_items (unique_name)"),
 ];
 
-pub struct Db(pub Mutex<Connection>);
+/// Readers beside the writer: WAL lets them run while a write is in flight.
+const READERS: usize = 3;
+const BACKUPS_KEPT: usize = 3;
+/// `kv_cache` price entries and `http_cache` rows older than this go at startup.
+const PRUNE_AFTER_SECS: i64 = 30 * 86_400;
+const PRUNE_EVERY_SECS: i64 = 86_400;
+
+/// One writer connection plus a few read-only ones. Without readers (in-memory test DBs, whose
+/// connections cannot share data) `read` hands out the writer.
+pub struct Db {
+    writer: Mutex<Connection>,
+    readers: Vec<Mutex<Connection>>,
+    next: AtomicUsize,
+}
+
+impl Db {
+    pub fn new(writer: Connection) -> Self {
+        Self::with_readers(writer, Vec::new())
+    }
+
+    fn with_readers(writer: Connection, readers: Vec<Connection>) -> Self {
+        Db {
+            writer: Mutex::new(writer),
+            readers: readers.into_iter().map(Mutex::new).collect(),
+            next: AtomicUsize::new(0),
+        }
+    }
+
+    /// The writer (it reads too). Panics on a poisoned lock, as every call site did before.
+    pub fn lock(&self) -> MutexGuard<'_, Connection> {
+        self.writer.lock().unwrap()
+    }
+
+    pub fn writer(&self) -> &Mutex<Connection> {
+        &self.writer
+    }
+
+    /// A free reader, trying each once from a rotating start, else waiting on one. Read-only paths only:
+    /// a reader never sees an uncommitted write, so nothing that reads then writes belongs here.
+    pub fn read(&self) -> MutexGuard<'_, Connection> {
+        self.read_via().0
+    }
+
+    /// `read` plus which connection answered: a reader's index, or `None` for the writer.
+    fn read_via(&self) -> (MutexGuard<'_, Connection>, Option<usize>) {
+        let n = self.readers.len();
+        if n == 0 {
+            return (self.lock(), None);
+        }
+        let start = self.next.fetch_add(1, Ordering::Relaxed) % n;
+        for i in 0..n {
+            let at = (start + i) % n;
+            match self.readers[at].try_lock() {
+                Ok(g) => return (g, Some(at)),
+                // A reader holds no state worth losing: take it over.
+                Err(TryLockError::Poisoned(p)) => return (p.into_inner(), Some(at)),
+                Err(TryLockError::WouldBlock) => {}
+            }
+        }
+        let g = self.readers[start]
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        (g, Some(start))
+    }
+
+    /// `read` around `f`, logging the connection used, the wait for it and the total time.
+    pub fn timed_read<T>(&self, name: &str, f: impl FnOnce(&Connection) -> T) -> T {
+        let t = Instant::now();
+        let (conn, via) = self.read_via();
+        let wait = t.elapsed();
+        let out = f(&conn);
+        let conn_name = via.map_or_else(|| "writer".to_owned(), |i| format!("reader{i}"));
+        tracing::info!(
+            "timing: db_read {name} conn={conn_name} wait_ms={} ms={}",
+            wait.as_millis(),
+            t.elapsed().as_millis()
+        );
+        out
+    }
+}
 
 pub fn open(path: &Path) -> rusqlite::Result<Db> {
     let mut conn = Connection::open(path)?;
+    conn.execute_batch(
+        "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; PRAGMA temp_store=MEMORY; PRAGMA mmap_size=268435456; PRAGMA cache_size=-16000;",
+    )?;
+    backup_before_migrating(&conn, path)?;
     migrate(&mut conn)?;
-    Ok(Db(Mutex::new(conn)))
+    if let Err(e) = prune(&conn, now_secs()) {
+        tracing::warn!(error = %e, "db prune failed");
+    }
+    // Opened after the migrations so they see the final schema.
+    let readers = (0..READERS)
+        .map(|_| {
+            let r = Connection::open(path)?;
+            r.execute_batch("PRAGMA busy_timeout=5000; PRAGMA query_only=ON; PRAGMA mmap_size=268435456; PRAGMA cache_size=-16000;")?;
+            Ok(r)
+        })
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(Db::with_readers(conn, readers))
+}
+
+fn now_secs() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64)
+}
+
+/// Whether a migration is waiting on a file that already holds tables.
+fn migration_pending_on_data(conn: &Connection) -> rusqlite::Result<bool> {
+    let has_data: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%')",
+        [],
+        |r| r.get(0),
+    )?;
+    if !has_data {
+        return Ok(false);
+    }
+    let tracked: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE name = 'schema_migrations')",
+        [],
+        |r| r.get(0),
+    )?;
+    if !tracked {
+        return Ok(true);
+    }
+    // Names, not a count: an entry missing from the middle still runs.
+    let mut stmt = conn.prepare("SELECT 1 FROM schema_migrations WHERE name = ?1")?;
+    for (name, _) in MIGRATIONS {
+        if !stmt.exists([name])? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// `VACUUM INTO` a fresh file under `<data dir>/backups` before any pending migration touches existing data;
+/// the 3 newest stay. A failure aborts the start: never migrate without a backup.
+fn backup_before_migrating(conn: &Connection, db_path: &Path) -> rusqlite::Result<()> {
+    if !migration_pending_on_data(conn)? {
+        return Ok(());
+    }
+    let fail = |m: String| {
+        rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CANTOPEN),
+            Some(m),
+        )
+    };
+    let dir = db_path.parent().unwrap_or(Path::new(".")).join("backups");
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        fail(format!(
+            "cannot create the backup folder before migrating: {e}"
+        ))
+    })?;
+    let target = dir.join(format!("companionframe-{}.db", now_secs()));
+    conn.execute("VACUUM INTO ?1", [target.to_string_lossy()])
+        .map_err(|e| fail(format!("backup before migrating failed: {e}")))?;
+    // Oldest first by the timestamp in the name (numerically: the digit count may differ).
+    let mut old: Vec<(i64, std::path::PathBuf)> = std::fs::read_dir(&dir)
+        .map_err(|e| fail(e.to_string()))?
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().into_string().ok()?;
+            let ts = name
+                .strip_prefix("companionframe-")?
+                .strip_suffix(".db")?
+                .parse()
+                .ok()?;
+            Some((ts, e.path()))
+        })
+        .collect();
+    old.sort();
+    for (_, p) in old.iter().take(old.len().saturating_sub(BACKUPS_KEPT)) {
+        let _ = std::fs::remove_file(p);
+    }
+    tracing::info!(backup = %target.display(), "db backed up before migrating");
+    Ok(())
+}
+
+/// Once a day: old price cache entries and HTTP cache rows. User data is never touched.
+pub(crate) fn prune(conn: &Connection, now: i64) -> rusqlite::Result<()> {
+    let last: i64 = conn
+        .query_row("SELECT value FROM meta WHERE key = 'last_prune'", [], |r| {
+            r.get::<_, String>(0)
+        })
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    if now - last < PRUNE_EVERY_SECS {
+        return Ok(());
+    }
+    let cutoff = now - PRUNE_AFTER_SECS;
+    let prices = conn.execute(
+        "DELETE FROM kv_cache WHERE key LIKE 'wfm:price:%' AND updated_at < ?1",
+        [cutoff],
+    )?;
+    let http = conn.execute("DELETE FROM http_cache WHERE fetched_at < ?1", [cutoff])?;
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('last_prune', ?1)",
+        [now.to_string()],
+    )?;
+    conn.execute_batch("PRAGMA optimize")?;
+    tracing::info!(prices, http, "db pruned");
+    Ok(())
 }
 
 pub(crate) fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
@@ -118,7 +318,7 @@ pub fn mem_conn() -> Connection {
 
 #[cfg(test)]
 pub fn mem_db() -> Db {
-    Db(Mutex::new(mem_conn()))
+    Db::new(mem_conn())
 }
 
 #[cfg(test)]
@@ -189,5 +389,180 @@ mod tests {
         conn.execute_batch("DROP TABLE runs").unwrap();
         migrate(&mut conn).unwrap();
         assert_eq!(count(&conn, "runs"), 0);
+    }
+
+    fn temp_dir(tag: &str) -> std::path::PathBuf {
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let d = std::env::temp_dir().join(format!(
+            "cf-db-{tag}-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn backups(dir: &Path) -> Vec<String> {
+        let mut v: Vec<_> = std::fs::read_dir(dir.join("backups"))
+            .map(|r| {
+                r.flatten()
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn file_db_uses_wal_and_readers_see_commits() {
+        let dir = temp_dir("wal");
+        let db = open(&dir.join("t.db")).unwrap();
+        let mode: String = db
+            .lock()
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+        let ro: i64 = db
+            .read()
+            .query_row("PRAGMA query_only", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(ro, 1);
+        assert!(
+            db.read()
+                .execute("INSERT INTO meta VALUES ('x','y')", [])
+                .is_err()
+        );
+        db.lock()
+            .execute("INSERT INTO meta VALUES ('k','v')", [])
+            .unwrap();
+        let got: String = db
+            .read()
+            .query_row("SELECT value FROM meta WHERE key='k'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(got, "v");
+        drop(db);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn readers_are_distinct_connections_and_memory_falls_back_to_the_writer() {
+        let dir = temp_dir("pool");
+        let db = open(&dir.join("t.db")).unwrap();
+        let a = db.read();
+        let b = db.read();
+        let c = db.read();
+        let id = |g: &MutexGuard<Connection>| g.path().map(str::to_owned);
+        assert_eq!(id(&a), id(&b));
+        // Three held at once: the pool really has three separate guards, and a fourth waits for one to drop.
+        assert!(db.readers.iter().all(|r| r.try_lock().is_err()));
+        drop((a, b, c));
+        assert!(db.readers.iter().all(|r| r.try_lock().is_ok()));
+        drop(db);
+        let _ = std::fs::remove_dir_all(dir);
+
+        let mem = mem_db();
+        mem.lock()
+            .execute("INSERT INTO meta VALUES ('k','v')", [])
+            .unwrap();
+        let n: i64 = mem
+            .read()
+            .query_row("SELECT count(*) FROM meta", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn backup_only_when_a_migration_is_pending_on_existing_data() {
+        let dir = temp_dir("backup");
+        let path = dir.join("t.db");
+        drop(open(&path).unwrap());
+        assert!(
+            backups(&dir).is_empty(),
+            "a fresh file has nothing to back up"
+        );
+        drop(open(&path).unwrap());
+        assert!(backups(&dir).is_empty(), "nothing pending");
+
+        let c = Connection::open(&path).unwrap();
+        c.execute(
+            "DELETE FROM schema_migrations WHERE name = 'stats_daily'",
+            [],
+        )
+        .unwrap();
+        c.execute_batch("DROP TABLE stats_daily").unwrap();
+        drop(c);
+        drop(open(&path).unwrap());
+        assert_eq!(backups(&dir).len(), 1);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn backups_keep_the_three_newest() {
+        let dir = temp_dir("trim");
+        let path = dir.join("t.db");
+        std::fs::create_dir_all(dir.join("backups")).unwrap();
+        for ts in [100, 200, 300, 400] {
+            std::fs::write(
+                dir.join("backups").join(format!("companionframe-{ts}.db")),
+                b"x",
+            )
+            .unwrap();
+        }
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            .unwrap();
+        backup_before_migrating(&conn, &path).unwrap();
+        let left = backups(&dir);
+        assert_eq!(left.len(), 3);
+        assert!(!left.contains(&"companionframe-100.db".to_owned()));
+        assert!(!left.contains(&"companionframe-200.db".to_owned()));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn prune_drops_old_price_cache_only_and_runs_once_a_day() {
+        let conn = mem_conn();
+        let now = 100 * 86_400;
+        let old = now - PRUNE_AFTER_SECS - 1;
+        for (k, at) in [
+            ("wfm:price:old", old),
+            ("wfm:price:new", now - 10),
+            ("other:old", old),
+        ] {
+            conn.execute(
+                "INSERT INTO kv_cache VALUES (?1, '{}', ?2)",
+                rusqlite::params![k, at],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO http_cache VALUES ('u1', NULL, ?1, x'00'), ('u2', NULL, ?2, x'00')",
+            [old, now],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO trade_events VALUES ('e', '2020-01-01', '2020-01-01', 'k', 'sell', NULL, 1, NULL, NULL, '{}')", []).unwrap();
+        prune(&conn, now).unwrap();
+        let keys: Vec<String> = conn
+            .prepare("SELECT key FROM kv_cache ORDER BY key")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .flatten()
+            .collect();
+        assert_eq!(keys, ["other:old", "wfm:price:new"]);
+        assert_eq!(count(&conn, "http_cache"), 1);
+        assert_eq!(count(&conn, "trade_events"), 1);
+        // Within a day nothing runs again.
+        conn.execute(
+            "INSERT INTO kv_cache VALUES ('wfm:price:older', '{}', ?1)",
+            [old],
+        )
+        .unwrap();
+        prune(&conn, now + 60).unwrap();
+        assert_eq!(count(&conn, "kv_cache"), 3);
+        prune(&conn, now + PRUNE_EVERY_SECS).unwrap();
+        assert_eq!(count(&conn, "kv_cache"), 2);
     }
 }

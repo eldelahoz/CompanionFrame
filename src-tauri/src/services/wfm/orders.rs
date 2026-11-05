@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
@@ -171,18 +172,22 @@ fn mutation_order(v: Value) -> Result<MyOrder, WfmError> {
 
 pub async fn my_orders(client: &WfmClient, db: &Db) -> Result<MyOrders, WfmError> {
     authed(client)?;
+    let t = Instant::now();
     let v = client
         .request(Api::V2, Method::GET, "/orders/my", None)
         .await?;
+    let http_ms = t.elapsed().as_millis();
     let raw = data(v)
         .and_then(|d| d.as_array().cloned())
         .unwrap_or_default();
     // Without the catalog the list still renders, just with "(unknown)" names.
+    let t = Instant::now();
     let items = if raw.is_empty() {
         vec![]
     } else {
         catalog::items(client, db).await.unwrap_or_default()
     };
+    let catalog_ms = t.elapsed().as_millis();
     let by_id: HashMap<&str, &CatalogItem> = items.iter().map(|i| (i.id.as_str(), i)).collect();
     let mut out = MyOrders::default();
     for o in raw.iter().filter_map(|r| normalise(r, &by_id)) {
@@ -191,6 +196,11 @@ pub async fn my_orders(client: &WfmClient, db: &Db) -> Result<MyOrders, WfmError
             _ => out.sell.push(o),
         }
     }
+    tracing::info!(
+        "timing: my_orders orders={} http_ms={http_ms} catalog_ms={catalog_ms} catalog_items={}",
+        out.buy.len() + out.sell.len(),
+        items.len()
+    );
     Ok(out)
 }
 

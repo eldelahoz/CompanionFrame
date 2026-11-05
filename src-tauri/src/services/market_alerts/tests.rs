@@ -485,12 +485,7 @@ fn item_hit_reads_like_warframe_market() {
 // --- store ------------------------------------------------------------------------------------
 
 fn save(db: &Db, v: Value) -> MarketAlertRule {
-    store::save(
-        &db.0.lock().unwrap(),
-        rule(v).unwrap(),
-        MarketAlertBinding::default(),
-    )
-    .unwrap()
+    store::save(&db.lock(), rule(v).unwrap(), MarketAlertBinding::default()).unwrap()
 }
 
 #[test]
@@ -500,23 +495,23 @@ fn store_saves_loads_and_replaces_by_id() {
     let mut edited = riven(json!({}));
     edited["name"] = json!("Renamed");
     save(&db, edited);
-    let rows = store::load(&db.0.lock().unwrap()).unwrap();
+    let rows = store::load(&db.lock()).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].0.name, "Renamed");
     let fresh = store::save(
-        &db.0.lock().unwrap(),
+        &db.lock(),
         rule(json!({"name": "n", "kind": "item", "item": item(json!({}))["item"]})).unwrap(),
         MarketAlertBinding { native: false },
     )
     .unwrap();
     assert!(!fresh.id.is_empty());
-    assert!(!store::load(&db.0.lock().unwrap()).unwrap()[1].1.native);
+    assert!(!store::load(&db.lock()).unwrap()[1].1.native);
 }
 
 #[test]
 fn store_enforces_the_rule_limit() {
     let db = mem_db();
-    let conn = db.0.lock().unwrap();
+    let conn = db.lock();
     for _ in 0..MAX_RULES {
         let r =
             rule(json!({"name": "n", "kind": "item", "item": item(json!({}))["item"]})).unwrap();
@@ -532,7 +527,7 @@ fn store_enforces_the_rule_limit() {
 #[test]
 fn delete_takes_dedup_state_and_an_unused_owned_snapshot() {
     let db = mem_db();
-    let conn = db.0.lock().unwrap();
+    let conn = db.lock();
     let a = store::save(
         &conn,
         rule(item(json!({}))).unwrap(),
@@ -555,7 +550,7 @@ fn delete_takes_dedup_state_and_an_unused_owned_snapshot() {
 #[test]
 fn seen_keys_expire_and_stay_bounded() {
     let db = mem_db();
-    let conn = db.0.lock().unwrap();
+    let conn = db.lock();
     store::mark_seen(&conn, "r", &["old".into()], 0).unwrap();
     store::mark_seen(&conn, "r", &["new".into()], 8 * 24 * 60 * MIN).unwrap();
     assert_eq!(store::seen(&conn, "r").unwrap().len(), 1);
@@ -567,7 +562,7 @@ fn seen_keys_expire_and_stay_bounded() {
 #[test]
 fn hit_history_is_capped_and_newest_first() {
     let db = mem_db();
-    let conn = db.0.lock().unwrap();
+    let conn = db.lock();
     let r = rule(riven(json!({}))).unwrap();
     for i in 0..(HISTORY_MAX + 5) {
         let mut h = riven_hit(&r, &first(auction(&format!("a{i}"), json!({}))));
@@ -636,7 +631,7 @@ impl Rig {
     }
 
     fn hits(&self) -> Vec<MarketAlertHit> {
-        store::hits(&self.db.0.lock().unwrap()).unwrap()
+        store::hits(&self.db.lock()).unwrap()
     }
 }
 
@@ -725,7 +720,7 @@ async fn own_listings_never_alert() {
 async fn binding_can_mute_the_toast() {
     let r = rig(vec![auctions(vec![auction("a1", json!({}))])]);
     store::save(
-        &r.db.0.lock().unwrap(),
+        &r.db.lock(),
         rule(riven(json!({}))).unwrap(),
         MarketAlertBinding { native: false },
     )
@@ -773,7 +768,7 @@ async fn owned_snapshot_gates_item_rules() {
     let body = json!({"data": [{"id": "o1", "type": "sell", "platinum": 40, "quantity": 1, "user": {"ingameName": "A", "status": "ingame"}}]});
     let r = rig(vec![reply(200, &body.to_string())]);
     save(&r.db, item(json!({"ownedBelow": 2})));
-    store::set_owned(&r.db.0.lock().unwrap(), "nekros_prime_set", 5).unwrap();
+    store::set_owned(&r.db.lock(), "nekros_prime_set", 5).unwrap();
     r.tick(0).await;
     assert_eq!(r.fired(), 0);
 }

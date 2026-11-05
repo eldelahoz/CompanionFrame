@@ -197,9 +197,7 @@ pub async fn close_trade_matches(
     if closed.is_empty() {
         return (closed, false);
     }
-    if let Err(e) =
-        crate::services::ledger::mark_wfm_closed(&app.state::<Db>().0.lock().unwrap(), event_id)
-    {
+    if let Err(e) = crate::services::ledger::mark_wfm_closed(&app.state::<Db>().lock(), event_id) {
         tracing::warn!("[Trade] could not flag ledger row {event_id} as closed: {e:?}");
     }
     let kinds = matches
