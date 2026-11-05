@@ -24,6 +24,11 @@ describe("sortOrders", () => {
     expect(names("date", "desc")).toEqual(["Alpha", "Beta", "Delta", "Gamma"]);
     expect(names("date", "asc")).toEqual(["Delta", "Beta", "Alpha", "Gamma"]);
   });
+  it("sorts by visibility, visible first when descending, ties by name", () => {
+    const v = [{ ...list[0], visible: false }, { ...list[1], visible: true }, { ...list[3], visible: true }];
+    expect(sortOrders(v, "visible", "desc").map((x) => x.itemName)).toEqual(["Alpha", "Delta", "Beta"]);
+    expect(sortOrders(v, "visible", "asc").map((x) => x.itemName)).toEqual(["Beta", "Alpha", "Delta"]);
+  });
   it("does not mutate the input", () => {
     sortOrders(list, "name", "asc");
     expect(list[0].itemName).toBe("Beta");

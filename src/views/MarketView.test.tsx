@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../lib/i18n";
 import { resetMock, wfmOrderCreate, wfmOrdersMy } from "../lib/ipc";
@@ -13,9 +13,15 @@ import MarketView from "./MarketView";
 // Captures the closed-order listener so a test can fire the backend event by hand.
 let closedCb: ((e: { order_id: string; quantity: number }) => void) | undefined;
 let reputation: number | null = null;
+// While set, order updates wait for it: lets a test observe a bulk action mid-run.
+let updateGate: Promise<void> | null = null;
 vi.mock("../lib/ipc", async (orig) => ({
   ...(await orig<typeof import("../lib/ipc")>()),
   wfmMyReputation: async () => reputation,
+  wfmOrderUpdate: async (...a: Parameters<typeof import("../lib/ipc").wfmOrderUpdate>) => {
+    await updateGate;
+    return (await orig<typeof import("../lib/ipc")>()).wfmOrderUpdate(...a);
+  },
   onWfmOrderClosed: async (cb: typeof closedCb) => {
     closedCb = cb;
     return () => {};
@@ -37,6 +43,7 @@ function Harness() {
 
 beforeEach(() => {
   reputation = null;
+  updateGate = null;
   resetMock();
   localStorage.clear();
 });
@@ -201,4 +208,21 @@ test("the header dot follows the wfm status and the reputation shows only when k
   const again = render(<Harness />);
   await waitFor(() => expect(again.container.querySelector("[data-market-user]")).toBeTruthy());
   expect(again.container.querySelector("[data-market-reputation]")).toBeNull();
+});
+
+test("a bulk hide shows its progress and a busy button while it runs", async () => {
+  for (const platinum of [5, 6]) await wfmOrderCreate({ itemId: "mock_serration", orderType: "SELL", platinum, quantity: 1 } as never);
+  let release!: () => void;
+  updateGate = new Promise<void>((r) => (release = r));
+  render(<Harness />);
+  await signIn();
+  await waitFor(() => expect(document.querySelectorAll("[data-market-order]")).toHaveLength(2));
+  fireEvent.click(screen.getByLabelText(tr("market.selectAllOrders")));
+  fireEvent.click(await screen.findByRole("button", { name: "Hide" }));
+  expect(await screen.findByText("Hiding 0 of 2...")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Hide" }).getAttribute("aria-busy")).toBe("true");
+  expect((within(document.querySelector<HTMLElement>("[data-market-bulk-bar]")!).getByRole("button", { name: "Delete" }) as HTMLButtonElement).disabled).toBe(true);
+  release();
+  await waitFor(() => expect(screen.queryByText(/Hiding/)).toBeNull());
+  expect(screen.getByText("2 of 2 selected")).toBeTruthy();
 });

@@ -7,7 +7,7 @@ import MarketContracts from "../components/market/MarketContracts";
 import RepriceOrdersModal from "../components/market/RepriceOrdersModal";
 import MarketBrowseView, { type OrderDraft } from "../components/market/MarketBrowseView";
 import MarketOrderRow from "../components/market/MarketOrderRow";
-import MarketBulkBar from "../components/market/MarketBulkBar";
+import MarketBulkBar, { type BulkRun } from "../components/market/MarketBulkBar";
 import { sortOrders, type OrderSortDir, type OrderSortKey } from "../lib/market/sortOrders";
 import { wfmLookup } from "../lib/market/wfmLookup";
 import { usePersisted } from "../lib/usePersisted";
@@ -28,7 +28,7 @@ import type { ItemDbEntry } from "../types/inventory";
 
 type Tab = "sell" | "buy" | "rivens" | "browse" | "alerts";
 const POLL_MS = 30_000;
-const SORTS = (["name", "platinum", "quantity", "date"] as const).flatMap((k) => (["asc", "desc"] as const).map((d) => `${k}:${d}` as const));
+const SORTS = (["name", "platinum", "quantity", "date", "visible"] as const).flatMap((k) => (["asc", "desc"] as const).map((d) => `${k}:${d}` as const));
 
 interface Props {
   tr: Translator;
@@ -53,6 +53,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const [repricing, setRepricing] = useState<MyOrder[] | null>(null);
   const [sort, setSort] = usePersisted("wf_market_orders_sort", SORTS, "date:desc");
   const [sortKey, sortDir] = sort.split(":") as [OrderSortKey, OrderSortDir];
+  const [bulkRun, setBulkRun] = useState<BulkRun | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const { catalog } = useWfmCatalog();
   const art = useMarketArt();
@@ -157,20 +158,29 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
       await fetchOrders(true);
     });
 
-  const bulk = async (targets: MyOrder[], run: (o: MyOrder) => Promise<void>) => {
-    // one at a time: warframe.market rate limits
-    for (const o of targets) await guarded(o.id, () => run(o));
-    await fetchOrders(true);
+  const bulk = async (action: BulkRun["action"], targets: MyOrder[], run: (o: MyOrder) => Promise<void>) => {
+    setBulkRun({ action, done: 0, total: targets.length });
+    try {
+      // one at a time: warframe.market rate limits
+      for (const [i, o] of targets.entries()) {
+        await guarded(o.id, () => run(o));
+        setBulkRun({ action, done: i + 1, total: targets.length });
+      }
+      await fetchOrders(true);
+    } finally {
+      setBulkRun(null);
+    }
   };
   const setAllVisible = (visible: boolean) =>
     bulk(
+      visible ? "show" : "hide",
       list.filter((o) => selected.has(o.id) && o.visible !== visible),
       async (o) => void (await wfmOrderUpdate(o.id, { visible } as never)),
     );
   const delSelected = async () => {
     const targets = list.filter((o) => selected.has(o.id));
     if (!(await askConfirm(tr("market.confirmDeleteOrders", { count: targets.length })))) return;
-    await bulk(targets, async (o) => void (await wfmOrderDelete(o.id)));
+    await bulk("delete", targets, async (o) => void (await wfmOrderDelete(o.id)));
     setSelected(new Set());
   };
   const toggleSelected = (id: string) =>
@@ -305,7 +315,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
                     {sortHead("platinum", tr("common.platinum"))}
                     {sortHead("quantity", tr("market.col.quantity"))}
                     {sortHead("date", tr("market.col.listed"))}
-                    <th>{tr("market.visibleColumn")}</th>
+                    {sortHead("visible", tr("market.visibleColumn"))}
                     <th>
                       <span className="sr-only">{tr("common.actions")}</span>
                     </th>
@@ -344,6 +354,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
           total={list.length}
           canReprice={tab === "sell"}
           busy={busy.size > 0}
+          run={bulkRun}
           onAll={() => setSelected(new Set(list.map((o) => o.id)))}
           onHide={() => void setAllVisible(false)}
           onShow={() => void setAllVisible(true)}

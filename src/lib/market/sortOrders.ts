@@ -1,6 +1,6 @@
 import type { MyOrder } from "../ipc";
 
-export type OrderSortKey = "name" | "platinum" | "quantity" | "date";
+export type OrderSortKey = "name" | "platinum" | "quantity" | "date" | "visible";
 export type OrderSortDir = "asc" | "desc";
 
 const time = (o: MyOrder): number => {
@@ -19,6 +19,7 @@ export function sortOrders(orders: readonly MyOrder[], key: OrderSortKey, dir: O
       if (Number.isNaN(x) || Number.isNaN(y)) return Number.isNaN(x) === Number.isNaN(y) ? byName(a, b) : Number.isNaN(x) ? 1 : -1;
       return sign * (x - y) || byName(a, b);
     }
+    if (key === "visible") return sign * (Number(a.visible) - Number(b.visible)) || byName(a, b);
     return sign * (a[key] - b[key]) || byName(a, b);
   });
 }
