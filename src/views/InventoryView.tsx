@@ -20,6 +20,9 @@ import { parseOwnedRelics } from "../lib/relic/relicInventory";
 import { SORT_KEYS, buildRows, hasDucats, sortRows, valueEntries, type InvRow, type SortKey } from "../lib/inventory/inventoryRows";
 import { GOALS, GOAL_FILTERS, PLAT_PRESETS, parseBound, passesPlatRange, presetKey, usePersistedRange, type Goal } from "../lib/inventory/invFilters";
 import { computeInventoryValueTotals } from "../lib/inventory/valueTotals";
+import { NO_MOD_FILTERS, modCopies, modFiltersOn, passesModFilters, type ModFilters } from "../lib/inventory/modFilters";
+import { isUpgrade, toSellable, verdictResolver } from "../lib/inventory/sellable";
+import { useInventorySafety } from "../stores/inventorySafety";
 import { usePersisted } from "../lib/usePersisted";
 import { useInventory, useParsedInventory, useResources } from "../stores/inventory";
 import NoInventoryState from "../components/inventory/NoInventoryState";
@@ -86,6 +89,10 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   const [ducatsOnly, setDucatsOnly] = useState(false);
   const [primeWant, setPrimeWant] = useState<"all" | "prime" | "non">("all");
   const [masteryWant, setMasteryWant] = useState<"all" | "mastered" | "missing">("all");
+  const [modWant, setModWant] = useState<ModFilters>(NO_MOD_FILTERS);
+  const [surplusOnly, setSurplusOnly] = useState(false);
+  const [equippedView, setEquippedView] = useState(false);
+  const toggleMod = (key: keyof ModFilters) => setModWant((cur) => ({ ...cur, [key]: !cur[key] }));
   // A goal is a shortcut: it sets exactly its filters, and touching any filter by hand releases it.
   const pickGoal = (g: Goal) => {
     const f = GOAL_FILTERS[g];
@@ -94,6 +101,8 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
     setDucatsOnly(f.ducatsOnly);
     setMasteryWant(f.masteryWant);
     setPrimeWant("all");
+    setModWant(NO_MOD_FILTERS);
+    setSurplusOnly(false);
     setRange(f.range);
     setCustomRange(false);
   };
@@ -155,13 +164,30 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   }, [rows, tab]);
   const primeFilter = canFilterPrime ? primeWant : "all";
   const ducatsFilter = ducatsOnly && canFilterDucats;
+  // The mod chips show only where mods or arcanes are listed; a copy count spans every rank row, whatever the search hides.
+  const canFilterMods = useMemo(() => (tab === "everything" || tab === "mods" || tab === "arcanes") && rows.some((r) => isUpgrade(r.item) && (tab === "everything" || r.item.inventoryGroup === tab)), [rows, tab]);
+  const modFilter = canFilterMods ? modWant : NO_MOD_FILTERS;
+  // The Equipped toggle shows only where some listed mod or arcane has equipped data; it adds to the rows, never filters them.
+  const hasEquipped = useMemo(() => (tab === "everything" || tab === "mods" || tab === "arcanes") && rows.some((r) => !!r.item.equippedOn?.length && (tab === "everything" || r.item.inventoryGroup === tab)), [rows, tab]);
+  const showEquipped = equippedView && hasEquipped;
+  const copies = useMemo(() => modCopies(rows), [rows]);
+  // The safety context (mastery, foundry walk) is only worth building while a chip asks for the sellable count.
+  const showSellable = surplusOnly || modFiltersOn(modFilter);
+  const safety = useInventorySafety(showSellable ? data : null, items as unknown as Record<string, ItemDbEntry>);
+  const sellable = useMemo(() => {
+    if (!showSellable) return null;
+    // Mods and arcanes are judged over every rank row, so the resolver reads the whole inventory, not the tab.
+    const verdictOf = verdictResolver(parsed, safety.context);
+    return new Map(inTab.filter((r) => r.item.inventoryGroup !== "incomplete_sets").map((r) => [r.key, toSellable(verdictOf(r.item), isUpgrade(r.item) ? copies.get(r.item.internalName) : undefined)] as const));
+  }, [showSellable, parsed, inTab, safety.context, copies]);
+  const sellableOf = (row: InvRow) => sellable?.get(row.key);
   const filtered = useMemo(
-    () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
+    () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (!surplusOnly || (sellable?.get(r.key)?.count ?? 0) > 0) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
     // masteryOf only reads masteryIndex and items.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [inTab, tradableOnly, ducatsFilter, primeFilter, masteryFilter, masteryIndex, items],
+    [inTab, tradableOnly, ducatsFilter, copies, modFilter, surplusOnly, sellable, primeFilter, masteryFilter, masteryIndex, items],
   );
-  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${primeFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
+  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${modFilter.duplicates}|${modFilter.notMax}|${modFilter.notEquipped}|${surplusOnly}|${primeFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
 
   // Prices: the rows on screen first, then the rest of the tab and every row the value strip counts, in the background.
   // Missing parts of incomplete sets are priced like any row: through the same queue.
@@ -300,10 +326,31 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                 <Chip pressed={tradableOnly} onClick={manual(() => setTradableOnly(!tradableOnly))}>
                   {tr("inventory.tradableOnly")}
                 </Chip>
+                <Chip pressed={surplusOnly} title={tr("inventory.surplus.hint")} data-inventory-surplus onClick={manual(() => setSurplusOnly(!surplusOnly))}>
+                  {tr("inventory.surplus")}
+                </Chip>
+                {hasEquipped && (
+                  <Chip pressed={equippedView} title={tr("inventory.equipped.hint")} data-inventory-equipped-toggle onClick={() => setEquippedView(!equippedView)}>
+                    {tr("inventory.equipped")}
+                  </Chip>
+                )}
                 {canFilterDucats && (
                   <Chip pressed={ducatsOnly} data-inventory-ducats onClick={manual(() => setDucatsOnly(!ducatsOnly))}>
                     {tr("common.ducats")}
                   </Chip>
+                )}
+                {canFilterMods && (
+                  <>
+                    <Chip pressed={modWant.duplicates} title={tr("inventory.mods.duplicates.hint")} data-inventory-mod-duplicates onClick={manual(() => toggleMod("duplicates"))}>
+                      {tr("inventory.mods.duplicates")}
+                    </Chip>
+                    <Chip pressed={modWant.notMax} title={tr("inventory.mods.notMax.hint")} data-inventory-mod-not-max onClick={manual(() => toggleMod("notMax"))}>
+                      {tr("inventory.mods.notMax")}
+                    </Chip>
+                    <Chip pressed={modWant.notEquipped} title={tr("inventory.mods.notEquipped.hint")} data-inventory-mod-not-equipped onClick={manual(() => toggleMod("notEquipped"))}>
+                      {tr("inventory.mods.notEquipped")}
+                    </Chip>
+                  </>
                 )}
                 {canFilterPrime && (
                   <>
@@ -442,12 +489,14 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                     onBook={() => setBook(row)}
                     extra={extraOf(row)}
                     mastery={masteryOf(row)}
+                    sellable={sellableOf(row)}
+                    showEquipped={showEquipped}
                     tr={tr}
                   />
                 ))}
               </div>
             ) : (
-              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} tr={tr} />
+              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} tr={tr} />
             )}
             <ShowMore shown={shown.length} total={visible.length} onMore={more} tr={tr} />
           </div>

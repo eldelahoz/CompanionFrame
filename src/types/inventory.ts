@@ -188,9 +188,16 @@ export interface ParsedItem extends MarketAcquisition {
   favorite?: boolean;
   equipped?: boolean;
   equippedIn?: string[];
+  /** Gear holding this mod or arcane, with the loadout configs (A, B, C...) that fit it. */
+  equippedOn?: EquippedOn[];
   leveledUp?: boolean;
   debugReason?: string;
   [key: string]: unknown;
+}
+
+export interface EquippedOn {
+  name: string;
+  configs: string[];
 }
 
 export interface FoundryBuildingItem {

@@ -33,7 +33,7 @@ import {
   preferGroup,
   mergeOptionalBoolean,
   mergeEquipContexts,
-  collectEquippedUpgradeIds,
+  collectEquippedOn,
   entryInstanceId,
 } from "./inventory/entryNormalization.js";
 
@@ -52,7 +52,10 @@ export function parseInventory(
 ): ParsedItem[] {
   const itemMap = new Map<string, ParsedItem>();
   const sellableEquipmentCounts = new Map<string, number>();
-  const equippedUpgradeIds = collectEquippedUpgradeIds(data);
+  const equippedOnById = collectEquippedOn(data, (type) => {
+    const r = resolveItem(type, itemDb);
+    return r.displayName ?? r.name ?? type;
+  });
 
   const toRankedInstanceKey = (
     baseInternalName: string,
@@ -141,7 +144,7 @@ export function parseInventory(
     // Mods/arcanes have no boolean flag - equipment configs reference the
     // equipped instance's ItemId instead.
     const instanceId = entryInstanceId(entry);
-    const configEquipped = instanceId && equippedUpgradeIds.has(instanceId) ? true : undefined;
+    const configEquipped = instanceId && equippedOnById.has(instanceId) ? true : undefined;
     const inferredEquipped =
       equipped !== undefined
         ? equipped
@@ -217,6 +220,8 @@ export function parseInventory(
     if (favorite !== undefined) nextItem.favorite = favorite;
     if (inferredEquipped !== undefined) nextItem.equipped = inferredEquipped;
     if (equippedIn.length > 0) nextItem.equippedIn = equippedIn;
+    const equippedOn = instanceId && (group === "mods" || group === "arcanes") ? equippedOnById.get(instanceId) : undefined;
+    if (equippedOn) nextItem.equippedOn = equippedOn;
 
     const existing = itemMap.get(instanceKey);
     if (!existing) {
@@ -240,6 +245,7 @@ export function parseInventory(
     if (mergedEquippedIn) {
       existing.equippedIn = mergedEquippedIn;
     }
+    if (nextItem.equippedOn) existing.equippedOn = [...(existing.equippedOn ?? []), ...nextItem.equippedOn];
     existing.inventoryGroup = preferGroup(
       existing.inventoryGroup,
       nextItem.inventoryGroup || "misc",

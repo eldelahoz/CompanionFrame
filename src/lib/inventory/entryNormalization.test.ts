@@ -8,6 +8,8 @@ import {
   preferGroup,
   mergeOptionalBoolean,
   mergeEquipContexts,
+  collectEquippedOn,
+  collectEquippedUpgradeIds,
 } from "./entryNormalization.js";
 import type { RawInventoryEntry, InventoryGroup } from "../../types/inventory.js";
 
@@ -236,5 +238,32 @@ describe("mergeEquipContexts", () => {
     const long = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf"];
     const result = mergeEquipContexts(long, []);
     expect(result!.length).toBeLessThanOrEqual(6);
+  });
+});
+
+describe("collectEquippedOn", () => {
+  const data = {
+    Suits: [{ ItemType: "/Suit/Rhino", Configs: [{ Upgrades: ["m1", "m2"] }] }],
+    LongGuns: [{ ItemType: "/Gun/Soma", Configs: [{ Upgrades: ["x"] }, { Upgrades: ["m1"], PvpUpgrades: ["m2"] }, { Upgrades: ["m1"] }] }],
+    Misc: [{ ItemType: "/Nothing" }],
+  };
+  const names: Record<string, string> = { "/Suit/Rhino": "Rhino", "/Gun/Soma": "Soma" };
+
+  it("lists each gear item with the configs that fit the upgrade", () => {
+    const map = collectEquippedOn(data, (t) => names[t] ?? t);
+    expect(map.get("m1")).toEqual([
+      { name: "Rhino", configs: ["A"] },
+      { name: "Soma", configs: ["B", "C"] },
+    ]);
+    expect(map.get("m2")).toEqual([
+      { name: "Rhino", configs: ["A"] },
+      { name: "Soma", configs: ["B"] },
+    ]);
+    expect(map.get("x")).toEqual([{ name: "Soma", configs: ["A"] }]);
+  });
+
+  it("keeps the id set for existing callers and ignores junk", () => {
+    expect([...collectEquippedUpgradeIds(data)].sort()).toEqual(["m1", "m2", "x"]);
+    expect(collectEquippedOn(null).size).toBe(0);
   });
 });

@@ -1,4 +1,4 @@
-import type { InventoryGroup, RawInventoryEntry } from "../../types/inventory.js";
+import type { EquippedOn, InventoryGroup, RawInventoryEntry } from "../../types/inventory.js";
 import { pickNumeric, deepFindNumericByKeys } from "./rankExtraction.js";
 
 const EQUIP_CONTEXT_KEYS = new Set([
@@ -97,30 +97,45 @@ export function extractEquipContexts(entry: RawInventoryEntry): string[] {
   return [...contexts].slice(0, 4);
 }
 
-/** Upgrade ItemIds referenced by any gear Config (all loadouts, PvP included). */
-export function collectEquippedUpgradeIds(data: unknown): Set<string> {
-  const ids = new Set<string>();
-  if (!data || typeof data !== "object") return ids;
+/**
+ * Where each upgrade instance is fitted: its ItemId to the gear holding it and the configs (A, B, C...) that
+ * reference it, across every collection (PvP loadouts included). `nameOf` turns a gear ItemType into a display name.
+ */
+export function collectEquippedOn(data: unknown, nameOf: (itemType: string) => string = (t) => t): Map<string, EquippedOn[]> {
+  const out = new Map<string, EquippedOn[]>();
+  if (!data || typeof data !== "object") return out;
   for (const collection of Object.values(data as Record<string, unknown>)) {
     if (!Array.isArray(collection)) continue;
     for (const gear of collection) {
       if (!gear || typeof gear !== "object") continue;
-      const configs = (gear as Record<string, unknown>).Configs;
+      const { Configs: configs, ItemType: itemType } = gear as Record<string, unknown>;
       if (!Array.isArray(configs)) continue;
-      for (const config of configs) {
-        if (!config || typeof config !== "object") continue;
+      const letters = new Map<string, Set<string>>();
+      configs.forEach((config, index) => {
+        if (!config || typeof config !== "object") return;
         for (const key of ["Upgrades", "PvpUpgrades"]) {
           const refs = (config as Record<string, unknown>)[key];
           if (!Array.isArray(refs)) continue;
           for (const ref of refs) {
-            if (typeof ref === "string" && ref) ids.add(ref);
+            if (typeof ref !== "string" || !ref) continue;
+            if (!letters.has(ref)) letters.set(ref, new Set());
+            letters.get(ref)!.add(String.fromCharCode(65 + index));
           }
         }
+      });
+      const name = nameOf(typeof itemType === "string" ? itemType : "");
+      for (const [id, set] of letters) {
+        const list = out.get(id) ?? [];
+        list.push({ name, configs: [...set].sort() });
+        out.set(id, list);
       }
     }
   }
-  return ids;
+  return out;
 }
+
+/** Upgrade ItemIds referenced by any gear Config (all loadouts, PvP included). */
+export const collectEquippedUpgradeIds = (data: unknown): Set<string> => new Set(collectEquippedOn(data).keys());
 
 export function entryInstanceId(entry: RawInventoryEntry): string | null {
   const raw = (entry as Record<string, unknown>).ItemId;

@@ -240,6 +240,79 @@
     right: var(--space-3);
     opacity: 0;
   }
+  .inv-card-equip {
+    position: absolute;
+    top: var(--space-3);
+    /* left of the market button */
+    right: calc(var(--space-3) + 2.25rem);
+  }
+  .inv-equip {
+    position: relative;
+    display: inline-flex;
+  }
+  .inv-equip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    cursor: pointer;
+  }
+  .inv-equip--pill .inv-equip-btn {
+    height: 1.5rem;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--info-dim);
+    border-radius: var(--radius-full);
+    background: var(--info-bg);
+    color: var(--info);
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .inv-equip--pill svg {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+  .inv-equip--link .inv-equip-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--info);
+    font-size: var(--text-sm);
+  }
+  .inv-equip--link .inv-equip-btn:hover {
+    text-decoration: underline;
+  }
+  .inv-equip-pop {
+    position: absolute;
+    inset-inline-end: 0;
+    top: 100%;
+    z-index: 5;
+    min-width: 12rem;
+    margin-top: var(--space-1);
+    padding: var(--space-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--bg-raised);
+    box-shadow: var(--shadow-lg, 0 8px 24px rgb(0 0 0 / 0.35));
+    font-size: var(--text-sm);
+    font-weight: 400;
+    text-align: start;
+  }
+  .inv-equip-pop ul {
+    display: grid;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .inv-equip-pop li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .inv-equip-cfg {
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
   .inv-card:hover .inv-card-book,
   .inv-card:focus-within .inv-card-book {
     opacity: 1;
@@ -580,6 +653,18 @@
   }
   .inv-pricing {
     margin-bottom: var(--space-3);
+  }
+  .inv-sellable {
+    margin-inline-start: var(--space-2);
+    color: var(--success);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+  .inv-sellable-fig {
+    color: var(--success);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .inv-more {
     justify-content: center;

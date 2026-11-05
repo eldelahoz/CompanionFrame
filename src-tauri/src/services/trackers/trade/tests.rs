@@ -265,6 +265,23 @@ fn dialog_names_are_translated_to_english_and_unknown_ones_kept() {
 }
 
 #[test]
+fn rank_suffixed_names_translate_the_base_and_keep_the_suffix() {
+    let english = HashMap::from([(
+        "mutation de pistolet".to_string(),
+        "Pistol Mutation".to_string(),
+    )]);
+    let mut t = parsed_with("Mutation de Pistolet (RARE RANG 0)");
+    to_english(&mut t, &english);
+    assert_eq!(t.items[0].display_name, "Pistol Mutation (RARE RANG 0)");
+    let mut t = parsed_with("Mutation de Pistolet");
+    to_english(&mut t, &english);
+    assert_eq!(t.items[0].display_name, "Pistol Mutation");
+    let mut t = parsed_with("Forma inconnue (RANG 3)");
+    to_english(&mut t, &english);
+    assert_eq!(t.items[0].display_name, "Forma inconnue (RANG 3)");
+}
+
+#[test]
 fn interleaved_file_and_dbwin_halves_record_one_trade() {
     let start = "Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Souhaitez-vous vraiment accepter cet échange? Vous proposez: ";
     let whole = format!(
