@@ -10,7 +10,7 @@ import MarketOrderRow from "../components/market/MarketOrderRow";
 import { useMarketArt } from "../lib/useMarketArt";
 import OrderModal from "../components/market/OrderModal";
 import SignInForm from "../components/market/SignInForm";
-import WfmPresenceBar from "../components/market/WfmPresenceBar";
+import WfmPresenceBar, { DOT } from "../components/market/WfmPresenceBar";
 import { Button, Card, EmptyState, IconButton, PageHeader, Skeleton, Table } from "../components/ui";
 import { askConfirm } from "../stores/confirm";
 import { addToast } from "../stores/toasts";
@@ -153,7 +153,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
         sub={
           loggedIn && session?.user_name ? (
             <span className="titlebar-pill">
-              <span className="status-dot bg-success" />@{session.user_name}
+              <span className={`status-dot ${DOT[presence.state.status ?? "invisible"]}`} />@{session.user_name}
             </span>
           ) : undefined
         }

@@ -17,7 +17,7 @@ const STATUSES: Array<[WfmStatus, "common.online" | "common.inGame" | "common.in
   ["invisible", "common.invisible"],
 ];
 // The dot carries the status colour; the active segment is the raised one.
-const DOT: Record<WfmStatus, string> = { online: "bg-success", ingame: "bg-info", invisible: "bg-text-muted" };
+export const DOT: Record<WfmStatus, string> = { online: "bg-success", ingame: "bg-info", invisible: "bg-text-muted" };
 const ACTIVE: Record<WfmStatus, string> = { online: "text-success", ingame: "text-info", invisible: "text-text-primary" };
 const CHIP = "ui-chip disabled:cursor-default disabled:opacity-50";
 
