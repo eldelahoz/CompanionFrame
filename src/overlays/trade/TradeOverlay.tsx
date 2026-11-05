@@ -138,9 +138,15 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
             </div>
           </div>
           <OvReadout currency="platinum" value={m.platinum} size="lg" />
-          <button type="button" className="ov-btn ov-btn-primary tr-close" disabled={busy === m.orderId} onClick={() => void close(m.orderId)}>
-            {tr("overlay.trade.closeListing")}
-          </button>
+          {t.closed.includes(m.orderId) ? (
+            <span role="status" className="tr-closed">
+              {tr("overlay.trade.listingClosed")}
+            </span>
+          ) : (
+            <button type="button" className="ov-btn ov-btn-primary tr-close" disabled={busy === m.orderId} onClick={() => void close(m.orderId)}>
+              {tr("overlay.trade.closeListing")}
+            </button>
+          )}
         </div>
       ))}
       {failed && <p role="alert">{tr("overlay.trade.closingFailed")}</p>}

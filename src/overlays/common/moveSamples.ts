@@ -89,6 +89,7 @@ export const SAMPLE_TRADE: TradeOverlayView = {
       source: null,
     },
     matches: [{ kind: "order", orderId: "sample", itemName: "Ash Prime Set", itemUrlName: "ash_prime_set", itemThumb: null, quantity: 1, platinum: 92, partner: "Tenno_Kaz", type: "sale", perTrade: null }],
+    closed: [],
   },
   queued: 1,
   token: null,

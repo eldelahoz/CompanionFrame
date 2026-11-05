@@ -3545,6 +3545,11 @@ export type Settings_Deserialize = {
 	save_scan_captures?: boolean,
 	/**  Look for a newer release on start and every 6 h (`src/stores/updater.ts`); the check asks github.com for `latest.json` only. */
 	auto_update_check?: boolean,
+	/**  Closes the matched warframe.market listings by itself when a trade is detected. */
+	auto_close_trade_listings?: boolean,
+	/**  Copies `trade_thanks_message` to the clipboard after a sale listing closes. */
+	trade_thanks_enabled?: boolean,
+	trade_thanks_message?: string,
 } & ({
 	/**  Scans the reward screen (or closes the shown card). Was `overlay_hotkey`. */
 	reward_scan_hotkey?: string,
@@ -3609,6 +3614,11 @@ export type Settings_Serialize = {
 	save_scan_captures: boolean,
 	/**  Look for a newer release on start and every 6 h (`src/stores/updater.ts`); the check asks github.com for `latest.json` only. */
 	auto_update_check: boolean,
+	/**  Closes the matched warframe.market listings by itself when a trade is detected. */
+	auto_close_trade_listings: boolean,
+	/**  Copies `trade_thanks_message` to the clipboard after a sale listing closes. */
+	trade_thanks_enabled: boolean,
+	trade_thanks_message: string,
 };
 
 /**  How far the similar search had to be loosened before listings turned up. */
@@ -3850,12 +3860,16 @@ export type TradeDetected = TradeDetected_Serialize | TradeDetected_Deserialize;
 export type TradeDetected_Deserialize = {
 	trade: TradeEvent_Deserialize,
 	matches: WorkbenchTradeMatch_Deserialize[],
+	/**  Order ids of `matches` already closed (automatically); the popup shows them without a button. */
+	closed: string[],
 };
 
 /**  A recorded trade and the listings it would close (empty when signed out or nothing matches). */
 export type TradeDetected_Serialize = {
 	trade: TradeEvent_Serialize,
 	matches: WorkbenchTradeMatch_Serialize[],
+	/**  Order ids of `matches` already closed (automatically); the popup shows them without a button. */
+	closed: string[],
 };
 
 export type TradeEvent = TradeEvent_Serialize | TradeEvent_Deserialize;

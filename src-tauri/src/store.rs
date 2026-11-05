@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::services::atomic::write_atomic;
 
+const DEFAULT_THANKS: &str = "Thank you for your purchase. I appreciate the +rep <3";
+const MAX_THANKS_CHARS: usize = 200;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
 pub struct Settings {
@@ -55,6 +58,11 @@ pub struct Settings {
     pub save_scan_captures: bool,
     /// Look for a newer release on start and every 6 h (`src/stores/updater.ts`); the check asks github.com for `latest.json` only.
     pub auto_update_check: bool,
+    /// Closes the matched warframe.market listings by itself when a trade is detected.
+    pub auto_close_trade_listings: bool,
+    /// Copies `trade_thanks_message` to the clipboard after a sale listing closes.
+    pub trade_thanks_enabled: bool,
+    pub trade_thanks_message: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -90,7 +98,22 @@ impl Default for Settings {
             auto_inventory_sync: true,
             save_scan_captures: false,
             auto_update_check: true,
+            auto_close_trade_listings: false,
+            trade_thanks_enabled: false,
+            trade_thanks_message: DEFAULT_THANKS.into(),
         }
+    }
+}
+
+impl Settings {
+    /// Trims the thank-you message; it must fit one chat line.
+    pub fn sanitize_thanks(&mut self) -> Result<(), String> {
+        let m = self.trade_thanks_message.trim();
+        if m.chars().count() > MAX_THANKS_CHARS || m.contains(['\r', '\n']) {
+            return Err("the thank-you message must be one line of at most 200 characters".into());
+        }
+        self.trade_thanks_message = m.to_owned();
+        Ok(())
     }
 }
 
@@ -153,6 +176,27 @@ mod tests {
         store.set(s.clone()).unwrap();
         assert_eq!(Store::load(path).get(), s);
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn thanks_message_is_trimmed_one_line_and_bounded() {
+        let with = |m: &str| Settings {
+            trade_thanks_message: m.into(),
+            ..Settings::default()
+        };
+        let mut s = with("  thanks  ");
+        s.sanitize_thanks().unwrap();
+        assert_eq!(s.trade_thanks_message, "thanks");
+        assert!(with("a\nb").sanitize_thanks().is_err());
+        assert!(with(&"x".repeat(201)).sanitize_thanks().is_err());
+        assert!(with(&"x".repeat(200)).sanitize_thanks().is_ok());
+        assert!(
+            with("   ").sanitize_thanks().is_ok(),
+            "empty means nothing to copy"
+        );
+        let d = Settings::default();
+        assert!(!d.auto_close_trade_listings && !d.trade_thanks_enabled);
+        assert_eq!(d.trade_thanks_message, DEFAULT_THANKS);
     }
 
     #[test]

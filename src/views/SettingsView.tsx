@@ -8,6 +8,7 @@ import DiagnosticsCard from "../components/settings/DiagnosticsCard";
 import AboutCard from "../components/settings/AboutCard";
 import UpdatesCard from "../components/settings/UpdatesCard";
 import HelpCard from "../components/settings/HelpCard";
+import TradeCloseSettings from "../components/settings/TradeCloseSettings";
 import NotificationChannelsSettings from "../components/settings/NotificationChannelsSettings";
 import AppearanceCard from "../components/settings/AppearanceCard";
 import DataSourceMode from "../components/settings/DataSourceMode";
@@ -79,18 +80,23 @@ export default function SettingsView({ settings, onChange, tr, market }: Props) 
       id: "market",
       title: "settings.group.market",
       icon: <Store />,
-      body: market?.loggedIn ? (
-        <WfmPresenceBar {...market.presence} tr={tr} />
-      ) : (
-        <SettingRow
-          label={tr("market.pill.signedOut")}
-          description={tr("settings.marketSignInHint")}
-          control={
-            <Button size="sm" onClick={() => openView("market")}>
-              {tr("settings.openMarket")}
-            </Button>
-          }
-        />
+      body: (
+        <>
+          {market?.loggedIn ? (
+            <WfmPresenceBar {...market.presence} tr={tr} />
+          ) : (
+            <SettingRow
+              label={tr("market.pill.signedOut")}
+              description={tr("settings.marketSignInHint")}
+              control={
+                <Button size="sm" onClick={() => openView("market")}>
+                  {tr("settings.openMarket")}
+                </Button>
+              }
+            />
+          )}
+          <TradeCloseSettings settings={settings} onChange={onChange} tr={tr} />
+        </>
       ),
     },
     {

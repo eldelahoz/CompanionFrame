@@ -541,6 +541,23 @@ impl<H: MatchHost> Matcher<H> {
         res
     }
 
+    /// Closes every match, calling `on_closed` for each one WFM accepted; returns their order ids.
+    /// A refused one is skipped so the others still close.
+    pub async fn close_all(
+        &self,
+        matches: &[WorkbenchTradeMatch],
+        mut on_closed: impl FnMut(&WorkbenchTradeMatch),
+    ) -> Vec<String> {
+        let mut closed = Vec::new();
+        for m in matches {
+            if self.close_match(m).await {
+                on_closed(m);
+                closed.push(m.order_id.clone());
+            }
+        }
+        closed
+    }
+
     /// Closes a match once despite duplicate EE.log delivery. `true` when WFM accepted it.
     pub async fn close_match(&self, m: &WorkbenchTradeMatch) -> bool {
         tracing::info!(

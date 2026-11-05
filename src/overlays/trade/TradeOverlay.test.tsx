@@ -8,7 +8,7 @@ import { TRADE_OVERLAY_EVENT, TradeOverlay, type TradeApi } from "./TradeOverlay
 
 afterEach(cleanup);
 
-const view = (over: Partial<View> = {}, matches: View["current"] extends infer C ? (C extends { matches: infer M } ? M : never) : never = []): View => ({
+const view = (over: Partial<View> = {}, matches: View["current"] extends infer C ? (C extends { matches: infer M } ? M : never) : never = [], closed: string[] = []): View => ({
   current: {
     trade: {
       id: "t1", date: "", type: "sale", platChange: 45, partner: "Kestrel", schemaVersion: 2, source: "live",
@@ -18,6 +18,7 @@ const view = (over: Partial<View> = {}, matches: View["current"] extends infer C
       ],
     },
     matches,
+    closed,
   },
   queued: 0, token: 7, autoCloseMs: 20000, ...over,
 });
@@ -112,4 +113,11 @@ it("hides +rep when signed out or the partner is unknown", async () => {
   v.current!.trade.partner = undefined;
   await anon.emit(v);
   expect(screen.queryByRole("button", { name: "+rep" })).toBeNull();
+});
+
+it("shows an already-closed listing without the close button, and keeps it for the others", async () => {
+  const { emit } = mount();
+  await emit(view({}, [match, { ...(match as object), orderId: "o2", itemName: "Vitality" } as never], ["o1"]));
+  expect(screen.getAllByText("Listing closed")).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: "Close listing" })).toHaveLength(1);
 });

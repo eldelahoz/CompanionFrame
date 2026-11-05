@@ -81,7 +81,7 @@ export type PtImportResult = { imported: PtRunRecord[]; skipped: number };
 
 export const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-const DEFAULT_SETTINGS: Settings = { language: "en", game_language: "auto", theme: "dark", reward_scan_hotkey: "F8", overlay_move_hotkey: "F7", riven_rescan_hotkey: "F6", eelog_path: null, overlay_layouts: {}, overlay_enabled: {}, overlay_opacity: {}, message_notifications_enabled: true, message_notifications_while_focused: false, riven_similar_auctions_shown: true, theme_settings: "", ui_scale: 1, keep_running_on_close: false, data_source_mode: "passive", memory_consent_at: null, auto_inventory_sync: true, save_scan_captures: false, auto_update_check: true };
+const DEFAULT_SETTINGS: Settings = { language: "en", game_language: "auto", theme: "dark", reward_scan_hotkey: "F8", overlay_move_hotkey: "F7", riven_rescan_hotkey: "F6", eelog_path: null, overlay_layouts: {}, overlay_enabled: {}, overlay_opacity: {}, message_notifications_enabled: true, message_notifications_while_focused: false, riven_similar_auctions_shown: true, theme_settings: "", ui_scale: 1, keep_running_on_close: false, data_source_mode: "passive", memory_consent_at: null, auto_inventory_sync: true, save_scan_captures: false, auto_update_check: true, auto_close_trade_listings: false, trade_thanks_enabled: false, trade_thanks_message: "Thank you for your purchase. I appreciate the +rep <3" };
 let mockSettings: Settings = { ...DEFAULT_SETTINGS };
 const mockInfo: AppInfo = {
   name: "CompanionFrame",
