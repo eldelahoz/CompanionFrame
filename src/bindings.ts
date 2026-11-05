@@ -2143,6 +2143,9 @@ export type MyOrder_Deserialize = {
 	itemName: string,
 	itemSlug?: string | null,
 	itemThumb?: string | null,
+	/**  ISO timestamps from the v2 order; absent on older replies. */
+	createdAt?: string | null,
+	updatedAt?: string | null,
 };
 
 /**  One of my orders, with the item resolved through the catalog. */
@@ -2160,6 +2163,9 @@ export type MyOrder_Serialize = {
 	itemName: string,
 	itemSlug: string | null,
 	itemThumb: string | null,
+	/**  ISO timestamps from the v2 order; absent on older replies. */
+	createdAt: string | null,
+	updatedAt: string | null,
 };
 
 export type MyOrders = MyOrders_Serialize | MyOrders_Deserialize;

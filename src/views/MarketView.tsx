@@ -1,4 +1,4 @@
-import { LogOut, Plus, RefreshCw, ShoppingCart, Star, WandSparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, LogOut, Plus, RefreshCw, ShoppingCart, Star, WandSparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { normalizePerTrade } from "../../config/shared/wfmOrders";
 import HeaderTabs from "../components/HeaderTabs";
@@ -7,6 +7,10 @@ import MarketContracts from "../components/market/MarketContracts";
 import RepriceOrdersModal from "../components/market/RepriceOrdersModal";
 import MarketBrowseView, { type OrderDraft } from "../components/market/MarketBrowseView";
 import MarketOrderRow from "../components/market/MarketOrderRow";
+import MarketBulkBar from "../components/market/MarketBulkBar";
+import { sortOrders, type OrderSortDir, type OrderSortKey } from "../lib/market/sortOrders";
+import { wfmLookup } from "../lib/market/wfmLookup";
+import { usePersisted } from "../lib/usePersisted";
 import { useMarketArt } from "../lib/useMarketArt";
 import OrderModal from "../components/market/OrderModal";
 import SignInForm from "../components/market/SignInForm";
@@ -21,10 +25,10 @@ import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
 import { useWfmCatalog } from "../stores/market";
 import type { ItemDbEntry } from "../types/inventory";
-import type { WfmItemsLookup } from "../types/stats";
 
 type Tab = "sell" | "buy" | "rivens" | "browse" | "alerts";
 const POLL_MS = 30_000;
+const SORTS = (["name", "platinum", "quantity", "date"] as const).flatMap((k) => (["asc", "desc"] as const).map((d) => `${k}:${d}` as const));
 
 interface Props {
   tr: Translator;
@@ -46,17 +50,16 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [modal, setModal] = useState<{ order: MyOrder | null; draft?: OrderDraft } | null>(null);
-  const [repricing, setRepricing] = useState(false);
+  const [repricing, setRepricing] = useState<MyOrder[] | null>(null);
+  const [sort, setSort] = usePersisted("wf_market_orders_sort", SORTS, "date:desc");
+  const [sortKey, sortDir] = sort.split(":") as [OrderSortKey, OrderSortDir];
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const { catalog } = useWfmCatalog();
   const art = useMarketArt();
   const loggedIn = session?.logged_in === true;
   const { data: inventory } = useInventory();
   const parsed = useParsedInventory(inventory, items);
-  const wfmItems = useMemo((): WfmItemsLookup => {
-    const lookup: WfmItemsLookup = {};
-    for (const it of catalog?.items ?? []) lookup[it.name.toLowerCase()] = { url_name: it.slug, item_name: it.name, thumb: it.thumb, icon: it.icon, maxRank: it.maxRank, gameRef: it.gameRef };
-    return lookup;
-  }, [catalog]);
+  const wfmItems = useMemo(() => wfmLookup(catalog), [catalog]);
 
   const fetchOrders = useCallback(async (background = false) => {
     if (!background) setLoading(true);
@@ -69,6 +72,13 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => setSelected(new Set()), [tab]);
+  // a refetch can drop orders: forget their ids
+  useEffect(() => {
+    const live = new Set([...orders.sell, ...orders.buy].map((o) => o.id));
+    setSelected((cur) => (cur.size === 0 || [...cur].every((id) => live.has(id)) ? cur : new Set([...cur].filter((id) => live.has(id)))));
+  }, [orders]);
 
   useEffect(() => {
     if (!loggedIn) return setOrders({ sell: [], buy: [] });
@@ -147,6 +157,29 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
       await fetchOrders(true);
     });
 
+  const bulk = async (targets: MyOrder[], run: (o: MyOrder) => Promise<void>) => {
+    // one at a time: warframe.market rate limits
+    for (const o of targets) await guarded(o.id, () => run(o));
+    await fetchOrders(true);
+  };
+  const setAllVisible = (visible: boolean) =>
+    bulk(
+      list.filter((o) => selected.has(o.id) && o.visible !== visible),
+      async (o) => void (await wfmOrderUpdate(o.id, { visible } as never)),
+    );
+  const delSelected = async () => {
+    const targets = list.filter((o) => selected.has(o.id));
+    if (!(await askConfirm(tr("market.confirmDeleteOrders", { count: targets.length })))) return;
+    await bulk(targets, async (o) => void (await wfmOrderDelete(o.id)));
+    setSelected(new Set());
+  };
+  const toggleSelected = (id: string) =>
+    setSelected((cur) => {
+      const n = new Set(cur);
+      if (!n.delete(id)) n.add(id);
+      return n;
+    });
+
   const tabs = [
     { key: "sell", label: tr("market.tab.sell"), count: loggedIn ? orders.sell.length : undefined },
     { key: "buy", label: tr("market.tab.buy"), count: loggedIn ? orders.buy.length : undefined },
@@ -155,7 +188,16 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     { key: "alerts", label: tr("common.alerts") },
   ];
   const isOrders = tab === "sell" || tab === "buy";
-  const list = isOrders ? orders[tab] : [];
+  const list = useMemo(() => (isOrders ? sortOrders(orders[tab], sortKey, sortDir) : []), [isOrders, orders, tab, sortKey, sortDir]);
+  const pickedCount = list.filter((o) => selected.has(o.id)).length;
+  const sortHead = (key: OrderSortKey, label: string) => (
+    <th aria-sort={sortKey === key ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+      <button type="button" aria-label={tr("market.sortBy", { column: label })} onClick={() => setSort(sortKey === key ? `${key}:${sortDir === "asc" ? "desc" : "asc"}` : `${key}:${key === "name" ? "asc" : "desc"}`)}>
+        {label}
+        {sortKey === key && (sortDir === "asc" ? <ArrowUp className="size-3" aria-hidden /> : <ArrowDown className="size-3" aria-hidden />)}
+      </button>
+    </th>
+  );
 
   return (
     <div>
@@ -211,7 +253,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
               {tr("market.myOrders")}
             </h2>
             {tab === "sell" && (
-              <Button size="sm" icon={<WandSparkles />} data-market-reprice disabled={list.length === 0} onClick={() => setRepricing(true)}>
+              <Button size="sm" icon={<WandSparkles />} data-market-reprice disabled={list.length === 0} onClick={() => setRepricing(orders.sell)}>
                 {tr("market.repriceSelected")}
               </Button>
             )}
@@ -250,9 +292,19 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
               <Table mode="stack" label={tr("market.myOrders")}>
                 <thead>
                   <tr>
-                    <th>{tr("common.item")}</th>
-                    <th>{tr("common.platinum")}</th>
-                    <th>{tr("market.col.quantity")}</th>
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={pickedCount === list.length}
+                        ref={(el) => void (el && (el.indeterminate = pickedCount > 0 && pickedCount < list.length))}
+                        onChange={() => setSelected(pickedCount === list.length ? new Set() : new Set(list.map((o) => o.id)))}
+                        aria-label={tr("market.selectAllOrders")}
+                      />
+                    </th>
+                    {sortHead("name", tr("common.item"))}
+                    {sortHead("platinum", tr("common.platinum"))}
+                    {sortHead("quantity", tr("market.col.quantity"))}
+                    {sortHead("date", tr("market.col.listed"))}
                     <th>{tr("market.visibleColumn")}</th>
                     <th>
                       <span className="sr-only">{tr("common.actions")}</span>
@@ -267,6 +319,9 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
                       order={o}
                       art={art(o.itemSlug)}
                       busy={busy.has(o.id)}
+                      selected={selected.has(o.id)}
+                      onSelect={toggleSelected}
+                      locale={locale}
                       onEdit={(x) => setModal({ order: x })}
                       onDelete={del}
                       onCloseOne={closeOne}
@@ -283,12 +338,27 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
           )}
         </>
       )}
+      {pickedCount > 0 && (
+        <MarketBulkBar
+          count={pickedCount}
+          total={list.length}
+          canReprice={tab === "sell"}
+          busy={busy.size > 0}
+          onAll={() => setSelected(new Set(list.map((o) => o.id)))}
+          onHide={() => void setAllVisible(false)}
+          onShow={() => void setAllVisible(true)}
+          onReprice={() => setRepricing(list.filter((o) => selected.has(o.id)))}
+          onDelete={() => void delSelected()}
+          onCancel={() => setSelected(new Set())}
+          tr={tr}
+        />
+      )}
       {repricing && (
         <RepriceOrdersModal
-          orders={orders.sell}
+          orders={repricing}
           ownUserName={session?.user_name ?? null}
           tr={tr}
-          onClose={() => setRepricing(false)}
+          onClose={() => setRepricing(null)}
           onApplied={() => void fetchOrders(true)}
         />
       )}
