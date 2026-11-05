@@ -12,4 +12,4 @@ Hotkey: `riven_rescan` (default F6, configurable). Models: `pnpm game-data` + th
 8. Press the hotkey with no riven on screen: "Couldn't read the riven" message.
 9. Check the overlay does not appear in the captured frame on a rescan (grades must not change between two scans of the same card).
 
-Not done in this slice: `riven_overlay_save` (store a scanned riven), endo/plat per rerolls, similarity percent, roll-compare (old vs new) and the Chat/Roll layouts on the hotkey.
+Not covered here: the roll-compare screen (old card against new card, see [../riven-screens.md](../riven-screens.md)) and the Chat/Roll layouts on the hotkey.

@@ -37,7 +37,8 @@ CompanionFrame has no server and no telemetry. Everything is local:
 | warframe.market login token and user name | OS credential store (Windows Credential Manager, Secret Service on Linux), service `com.companionframe.app`, entry `wfm-session` | The password is zeroized after sign-in and never stored. If the credential store refuses, the login stays in memory only. |
 | Discord/generic webhook URLs | OS credential store | Treated as secrets. HTTPS only. |
 | Settings, notification channels, hotkeys | JSON files in the app data folder `com.companionframe.app` | No secrets. |
-| Caches, price history, trade ledger, runs, inventory snapshot | `companionframe.db` (SQLite) in the same folder | Contains your own game data. Not encrypted. |
+| Caches, price history, trade ledger, runs, inventory snapshot | `companionframe.db` (SQLite, with its `-wal` and `-shm` files) in the same folder | Contains your own game data. Not encrypted. |
+| Database backups | `backups` folder next to the database | A copy of the database made before an upgrade that changes it; the 3 newest are kept. Same data, same lack of encryption: delete or protect them like the database. |
 | Logs | `%LOCALAPPDATA%\com.companionframe.app\logs` (Windows), `~/.local/share/com.companionframe.app/logs` (Linux) | Request and response bodies are never logged; errors are stripped of URLs. Check a log before you share it. |
 | OCR scan captures | `logs/scans` in the log folder, last 20 | Only if you enable "Save scan captures for troubleshooting"; off by default. Nothing is uploaded. |
 
@@ -52,7 +53,7 @@ Off by default. Switching it on requires ticking an unchecked-by-default box und
 ## What the app does not do
 
 - It sends nothing to a CompanionFrame server (there is none).
-- It places no orders, auctions or +rep by itself: every warframe.market write is a click of yours.
+- It places no orders, auctions or +rep by itself: every warframe.market write is a click of yours. The one exception is a setting that is off by default (Settings > warframe.market & presence, "Close matched listings automatically"): when you turn it on, the app closes the listings a finished trade matches. Its description warns that warframe.market treats automation as a grey area.
 - It does not modify the game.
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#security-boundaries).

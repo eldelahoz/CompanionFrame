@@ -1,6 +1,6 @@
 # F6-T1 overlay manager: manual test with Warframe
 
-Setup: `pnpm tauri dev`, Warframe in borderless. Four hidden windows exist (`overlay-reward|riven|arbi|trade`); F8 toggles the reward one (default `overlay` hotkey, see `f6-t2-hotkeys.md`).
+Setup: `pnpm tauri dev`, Warframe in borderless. Four hidden windows exist (`overlay-reward|riven|arbi|trade`); F8 toggles the reward one (the default "Scan reward screen" hotkey, see `f6-t2-hotkeys.md`).
 Open the webview devtools of the main window for `invoke`:
 `const {invoke}=window.__TAURI_INTERNALS__` then `invoke('overlay_show',{kind:'trade'})`.
 

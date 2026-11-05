@@ -24,7 +24,7 @@ Game art, icons and other Digital Extremes assets are **not distributed** with t
 
 ## Services
 
-- **[warframe.market](https://warframe.market)** API and WebSocket: orders, prices and presence, used under the [API rules](https://docs.warframe.market/docs/rules/overview/) (identifiable User-Agent, rate limits, no automated trading). Market data belongs to warframe.market and its users. CompanionFrame is not affiliated with warframe.market.
+- **[warframe.market](https://warframe.market)** API and WebSocket: orders, prices and presence, used under the [API rules](https://docs.warframe.market/docs/rules/overview/) (identifiable User-Agent, rate limits, no automated trading; the only automatic write is the opt-in setting that closes the listings a finished trade matches, off by default). Market data belongs to warframe.market and its users. CompanionFrame is not affiliated with warframe.market.
 - **[warframe-api-helper](https://github.com/Sainan/warframe-api-helper)** by Sainan (Unlicense): an optional helper, downloaded only if you enable game-memory mode, from its official release at a pinned version, SHA-256 checked. It is **not redistributed** with CompanionFrame.
 
 ## OCR and runtime
