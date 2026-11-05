@@ -41,7 +41,7 @@ import {
   type OrderUpdates_Deserialize as OrderUpdates,
   type TrackersStatus_Serialize as TrackersStatus, type PresenceOptions, type PresenceState_Deserialize, type Status as WfmStatus, type WsStatus,
   type WorldState,
-  type ChannelState, type NotificationEntry, type NotificationSource, type SoundAsset, type SoundUpload, type SourceToggles, type WebhookChannel, type WebhookTestError, type WebhookUrlError, type DiscordPingError, type WorldNotifyPrefs_Serialize as WorldNotifyPrefs, type WorldFissureAlert, type ArbiRunRecord_Serialize as ArbiRunRecord, type ArbiRunsPayload_Serialize as ArbiRunsPayload, type ArbiImportResult_Serialize as ArbiImportResult, type PtRunRecord_Serialize, type PtPhase as PtPhaseBinding, type WfmContract_Serialize as WfmContract, type WfmContractsPage_Serialize as WfmContractsPage, type RivenSearchOptions_Deserialize as RivenSearchOptions, type RivenAuctionCreate_Deserialize as RivenAuctionCreate, type RivenAuctionUpdate_Deserialize as RivenAuctionUpdate, type SendRepResult, type ArbiScheduleEntry as ArbiScheduleEntryBinding, type ArbiScheduleAlerts as ArbiScheduleAlertsBinding, type TradeDetected_Serialize as TradeDetected, type LedgerBatch_Serialize as LedgerBatchBinding, type LedgerQuery_Deserialize as LedgerQuery, type LedgerPatch_Deserialize as LedgerPatch, type ImportPreview_Serialize as ImportPreview, type ApplyResult, type EeLogStatus_Serialize as EeLogStatus, type OnnxStatus_Serialize as OnnxStatus, type GameWindowInfo_Serialize as GameWindowInfo, type ScanDebug,
+  type ChannelState, type NotificationEntry, type NotificationSource, type SoundAsset, type SoundUpload, type SourceToggles, type WebhookChannel, type WebhookTestError, type WebhookUrlError, type DiscordPingError, type WorldNotifyPrefs_Serialize as WorldNotifyPrefs, type WorldFissureAlert, type ArbiRunRecord_Serialize as ArbiRunRecord, type ArbiRunsPayload_Serialize as ArbiRunsPayload, type ArbiImportResult_Serialize as ArbiImportResult, type PtRunRecord_Serialize, type PtPhase as PtPhaseBinding, type WfmContract_Serialize as WfmContract, type WfmContractsPage_Serialize as WfmContractsPage, type RivenSearchOptions_Deserialize as RivenSearchOptions, type RivenAuctionCreate_Deserialize as RivenAuctionCreate, type RivenAuctionUpdate_Deserialize as RivenAuctionUpdate, type SendRepResult, type ArbiScheduleEntry as ArbiScheduleEntryBinding, type ArbiScheduleAlerts as ArbiScheduleAlertsBinding, type TradeDetected_Serialize as TradeDetected, type LedgerBatch_Serialize as LedgerBatchBinding, type LedgerQuery_Deserialize as LedgerQuery, type LedgerPatch_Deserialize as LedgerPatch, type ImportPreview_Serialize as ImportPreview, type ApplyResult, type EeLogStatus_Serialize as EeLogStatus, type OnnxStatus_Serialize as OnnxStatus, type GameWindowInfo_Serialize as GameWindowInfo, type ScanDebug, type DevTradeSample,
 } from "../bindings";
 import type { TradeEvent } from "../types/stats";
 import { localDayKey } from "../../config/shared/dayKey";
@@ -81,7 +81,7 @@ export type PtImportResult = { imported: PtRunRecord[]; skipped: number };
 
 export const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-const DEFAULT_SETTINGS: Settings = { language: "en", game_language: "auto", theme: "dark", reward_scan_hotkey: "F8", overlay_move_hotkey: "F7", riven_rescan_hotkey: "F6", eelog_path: null, overlay_layouts: {}, overlay_enabled: {}, overlay_opacity: {}, message_notifications_enabled: true, message_notifications_while_focused: false, riven_similar_auctions_shown: true, theme_settings: "", ui_scale: 1, keep_running_on_close: false, data_source_mode: "passive", memory_consent_at: null, auto_inventory_sync: true, save_scan_captures: false, auto_update_check: true };
+const DEFAULT_SETTINGS: Settings = { language: "en", game_language: "auto", theme: "dark", reward_scan_hotkey: "F8", overlay_move_hotkey: "F7", riven_rescan_hotkey: "F6", eelog_path: null, overlay_layouts: {}, overlay_enabled: {}, overlay_opacity: {}, message_notifications_enabled: true, message_notifications_while_focused: false, riven_similar_auctions_shown: true, theme_settings: "", ui_scale: 1, keep_running_on_close: false, data_source_mode: "passive", memory_consent_at: null, auto_inventory_sync: true, save_scan_captures: false, auto_update_check: true, auto_close_trade_listings: false, trade_thanks_enabled: false, trade_thanks_message: "Thank you for your purchase. I appreciate the +rep <3" };
 let mockSettings: Settings = { ...DEFAULT_SETTINGS };
 const mockInfo: AppInfo = {
   name: "CompanionFrame",
@@ -248,6 +248,12 @@ export const captureGameWindowInfo = async (): Promise<GameWindowInfo> =>
   inTauri() ? unwrap(await commands.captureGameWindowInfo()) : { found: true, x: 0, y: 0, width: 1920, height: 1080, dpi: 96, source: "window", black: false, error: null };
 /** What the last reward scan saw; null before any scan. */
 export const rewardScanDebug = async (): Promise<ScanDebug | null> => (inTauri() ? unwrap(await commands.rewardScanDebug()) : { cards: 4, slots: [["Forma Blueprint"], ["Ash Prime Systems"], ["50 Endo"], ["Ivara Prime Chassis"]] });
+
+export type { DevTradeSample };
+/** Developer panel (debug builds only): shows the trade popup with sample data; nothing is recorded or sent to warframe.market. */
+export const devTradeSample = async (sample: DevTradeSample): Promise<void> => {
+  if (inTauri()) unwrap(await commands.devTradeSample(sample));
+};
 
 /** Whether Windows can read reward cards in the game language (its OCR pack is installed). */
 export const ocrLanguageStatus = async (): Promise<OcrLanguageStatus> => {

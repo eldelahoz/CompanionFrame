@@ -8,7 +8,7 @@ import { TRADE_OVERLAY_EVENT, TradeOverlay, type TradeApi } from "./TradeOverlay
 
 afterEach(cleanup);
 
-const view = (over: Partial<View> = {}, matches: View["current"] extends infer C ? (C extends { matches: infer M } ? M : never) : never = []): View => ({
+const view = (over: Partial<View> = {}, matches: View["current"] extends infer C ? (C extends { matches: infer M } ? M : never) : never = [], closed: string[] = []): View => ({
   current: {
     trade: {
       id: "t1", date: "", type: "sale", platChange: 45, partner: "Kestrel", schemaVersion: 2, source: "live",
@@ -18,6 +18,8 @@ const view = (over: Partial<View> = {}, matches: View["current"] extends infer C
       ],
     },
     matches,
+    closed,
+    thanksCopied: false,
   },
   queued: 0, token: 7, autoCloseMs: 20000, ...over,
 });
@@ -69,7 +71,9 @@ it("keeps the popup and says so when WFM refuses the close", async () => {
   const { emit } = mount(async () => false);
   await emit(view({}, [match]));
   await act(async () => fireEvent.click(screen.getByText(/Close listing/)));
-  expect(screen.getByRole("alert").textContent).toBe("Closing Failed");
+  expect(screen.getByRole("alert").textContent).toBe("warframe.market did not respond");
+  expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Close listing" })).toBeNull();
 });
 
 it("says no listing matched and dismisses with the token", async () => {
@@ -112,4 +116,63 @@ it("hides +rep when signed out or the partner is unknown", async () => {
   v.current!.trade.partner = undefined;
   await anon.emit(v);
   expect(screen.queryByRole("button", { name: "+rep" })).toBeNull();
+});
+
+it("shows an already-closed listing without the close button, and keeps it for the others", async () => {
+  const { emit } = mount();
+  await emit(view({}, [match, { ...(match as object), orderId: "o2", itemName: "Vitality" } as never], ["o1"]));
+  expect(screen.getAllByText("Listing closed")).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: "Close listing" })).toHaveLength(1);
+});
+
+it("puts the one open listing's button in the actions row, wide", async () => {
+  const { emit, container } = mount();
+  await emit(view({}, [match]));
+  const btn = screen.getByRole("button", { name: "Close listing" });
+  expect(btn.closest(".tr-actions")).toBeTruthy();
+  expect(btn.closest(".tr-match")).toBeNull();
+  expect(container.querySelector(".tr-match")?.textContent).toContain("2 at 45p");
+});
+
+it("gives each of two open listings its own button inside its card", async () => {
+  const { emit, container } = mount();
+  await emit(view({}, [match, { ...(match as object), orderId: "o2", itemName: "Vitality" } as never]));
+  const btns = screen.getAllByRole("button", { name: "Close listing" });
+  expect(btns).toHaveLength(2);
+  expect(btns.every((b) => b.closest(".tr-match"))).toBe(true);
+  expect(container.querySelector(".tr-actions")?.querySelector(".ov-btn-primary")).toBeNull();
+});
+
+it("marks a closed card and keeps the other one's button in the row", async () => {
+  const { emit, container } = mount();
+  await emit(view({}, [match, { ...(match as object), orderId: "o2" } as never], ["o1"]));
+  expect(container.querySelector('.tr-match[data-state="closed"]')?.textContent).toContain("Listing closed");
+  expect(screen.getByRole("button", { name: "Close listing" }).closest(".tr-actions")).toBeTruthy();
+});
+
+it("shows the copied notice only when the thank-you was copied", async () => {
+  const { emit } = mount();
+  await emit(view({}, [match], ["o1"]));
+  expect(screen.queryByText(/Thank-you message copied/)).toBeNull();
+  const v = view({}, [match], ["o1"]);
+  v.current!.thanksCopied = true;
+  await emit(v);
+  expect(screen.getByText("Thank-you message copied. Paste with Ctrl+V.")).toBeTruthy();
+});
+
+it("shows the platinum change with its sign in the header", async () => {
+  const { emit } = mount();
+  const sale = view();
+  sale.current!.trade.platChange = 35;
+  await emit(sale);
+  expect(screen.getByText("+35p")).toBeTruthy();
+  const buy = view();
+  buy.current!.trade.type = "purchase";
+  buy.current!.trade.platChange = -35;
+  await emit(buy);
+  expect(screen.getByText("-35p")).toBeTruthy();
+  const swap = view();
+  swap.current!.trade.type = "trade";
+  await emit(swap);
+  expect(screen.queryByText(/\dp$/)).toBeNull();
 });

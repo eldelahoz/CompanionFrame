@@ -1227,13 +1227,24 @@ div.ov-art svg {
 .tr-title strong {
   font-weight: 600;
 }
+.tr-title {
+  flex: 1;
+  min-width: 0;
+}
 .tr-who {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 0.75em;
+  display: block;
   color: var(--ov-text-secondary);
   font-size: 0.8125em;
+}
+.tr-plat {
+  font-size: 1.5em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  color: var(--ov-success);
+}
+.tr-plat[data-sign="-"] {
+  color: var(--ov-text);
 }
 .tr-items {
   margin: 0.5em 0 0;
@@ -1242,15 +1253,29 @@ div.ov-art svg {
   color: var(--ov-text-secondary);
   font-size: 0.875em;
 }
+/* A matched listing: accent wash by default, success once closed, warning when WFM failed. */
 .tr-match {
+  --c: var(--accent);
   display: grid;
-  grid-template-columns: 2.6em 1fr auto;
+  grid-template-columns: 2.6em 1fr;
   align-items: center;
-  gap: 0.4em 0.6em;
+  gap: 0.3em 0.6em;
   margin-top: 0.6em;
-  padding: 0.45em;
-  border-radius: 0.45em;
-  background: var(--ov-well);
+  padding: 0.45em 0.55em 0.55em;
+  border: 1px solid color-mix(in oklab, var(--c) 55%, transparent);
+  border-radius: 0.6em;
+  background: color-mix(in oklab, var(--c) 12%, transparent);
+}
+.tr-match[data-state="closed"] {
+  --c: var(--ov-success);
+}
+.tr-match[data-state="failed"] {
+  --c: var(--ov-warning);
+}
+.tr-match-label {
+  grid-column: 1 / -1;
+  color: var(--ov-text-muted);
+  font-size: 0.75em;
 }
 .tr-art {
   width: 2.6em;
@@ -1263,14 +1288,23 @@ div.ov-art svg {
   line-height: 1.2;
 }
 .tr-match-q {
-  display: flex;
-  gap: 0.6em;
   color: var(--ov-text-secondary);
   font-size: 0.8125em;
+}
+.tr-match-q.tr-closed {
+  color: var(--ov-success);
+}
+.tr-match-q.tr-failed {
+  color: var(--ov-warning);
 }
 .overlay-panel .tr-close {
   grid-column: 1 / -1;
   width: 100%;
+}
+.tr-copied {
+  margin: 0.5em 0 0;
+  color: var(--ov-info);
+  font-size: 0.8125em;
 }
 .tr-actions {
   display: flex;
@@ -1278,13 +1312,28 @@ div.ov-art svg {
   gap: 0.5em;
   margin-top: 0.6em;
 }
+.overlay-panel .tr-primary {
+  flex: 1;
+  height: 2.4em;
+  font-weight: 700;
+}
+.tr-rep {
+  color: var(--ov-text-secondary);
+  font-size: 0.8125em;
+}
+.overlay-panel .tr-dismiss {
+  border-color: transparent;
+  background: none;
+  color: var(--ov-text-secondary);
+}
 .trade-notice .trade-none {
   margin: 0.5em 0 0;
   color: var(--ov-text-muted);
   font-size: 0.8125em;
 }
 .trade-queued {
-  margin-left: auto;
+  display: block;
+  margin-top: 0.4em;
   color: var(--ov-text-muted);
   font-size: 0.8125em;
 }

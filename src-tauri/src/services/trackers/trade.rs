@@ -1,7 +1,8 @@
 //! Live trade tracker (port of WFHelper `tradeTracker.recordTradeFromLog` + `tradeWorkflow`): a
 //! confirmed trade from the EE.log dialog lands in the ledger once, is matched read-only against
-//! the user's WFM listings, and is announced as `trade-detected`. It never closes a listing: that
-//! stays a user action (`workbench_close_match`, WFM rules in `docs/wfm-auth.md` §4).
+//! the user's WFM listings, and is announced as `trade-detected`. It closes a listing only when the
+//! user turned on `auto_close_trade_listings`; otherwise that stays a click (`workbench_close_match`,
+//! WFM rules in `docs/wfm-auth.md` §4).
 
 use std::collections::{HashMap, HashSet};
 
@@ -25,6 +26,7 @@ use crate::services::workbench::matcher::{
     Matcher, WorkbenchTrade, WorkbenchTradeItem, WorkbenchTradeMatch, normalize_name,
     parse_traded_name, split_paren_suffix,
 };
+use crate::store::Store;
 
 /// The same log entry reaches us from the file and the live stream; stamped ones dedupe exactly.
 const DUPLICATE_WINDOW_MS: f64 = 30_000.0;
@@ -37,6 +39,10 @@ pub const EVENT: &str = "trade-detected";
 pub struct TradeDetected {
     pub trade: TradeEvent,
     pub matches: Vec<WorkbenchTradeMatch>,
+    /// Order ids of `matches` already closed (automatically); the popup shows them without a button.
+    pub closed: Vec<String>,
+    /// The automatic close copied the thank-you message; the popup says so.
+    pub thanks_copied: bool,
 }
 
 #[derive(Default)]
@@ -291,9 +297,17 @@ async fn record(app: AppHandle, mut parsed: ParsedLogTrade) {
             },
             notification_body(&event),
         ));
+    let auto_close = app.state::<Store>().read(|s| s.auto_close_trade_listings);
+    let (closed, thanks_copied) = if auto_close {
+        crate::services::overlay::trade::close_trade_matches(&app, &event.id, &matches, true).await
+    } else {
+        (Vec::new(), false)
+    };
     let detected = TradeDetected {
         trade: event,
         matches,
+        closed,
+        thanks_copied,
     };
     crate::services::overlay::trade::enqueue(&app, detected.clone());
     let _ = app.emit(EVENT, detected);

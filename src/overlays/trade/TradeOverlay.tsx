@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ItemImage from "../../components/ItemImage";
 import { inTauri, wfmSendPlusRep, wfmSessionStatus } from "../../lib/ipc";
 import { useMarketArt } from "../../lib/useMarketArt";
-import { OvReadout } from "../common/OvReadout";
 import { commands, type SendRepResult, type TradeItem, type TradeOverlayView_Serialize as TradeOverlayView } from "../../bindings";
 import type { OverlayContext } from "../common/OverlayShell";
 import { SAMPLE_TRADE } from "../common/moveSamples";
@@ -56,7 +55,7 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
   // `?mode=preview` shows the move-mode sample, for browser previews and screenshots.
   const [live, setView] = useState<TradeOverlayView | null>(() => (new URLSearchParams(window.location.search).get("mode") === "preview" ? SAMPLE_TRADE : null));
   const view = moving && !live?.current ? SAMPLE_TRADE : live;
-  const [failed, setFailed] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const [rep, setRep] = useState<RepState>("idle");
@@ -68,7 +67,7 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
   const shown = !!view?.current;
   // A new trade clears the last one's error.
   useEffect(() => {
-    setFailed(null);
+    setFailed([]);
     setRep("idle");
   }, [token]);
   useEffect(() => {
@@ -82,7 +81,7 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
     void api.setRegions(
       r ? [{ x: Math.round((window.screenX + r.left) * d), y: Math.round((window.screenY + r.top) * d), w: Math.round(r.width * d), h: Math.round(r.height * d) }] : [],
     );
-  }, [api, shown, token, view?.queued, failed, moving]);
+  }, [api, shown, token, view?.queued, failed, moving, view?.current?.thanksCopied]);
 
   const t = view?.current;
   if (!t) return null;
@@ -95,10 +94,20 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
   };
   const close = async (orderId: string) => {
     setBusy(orderId);
+    setFailed((f) => f.filter((id) => id !== orderId));
     const ok = await api.closeMatch(token, orderId).catch(() => false);
     setBusy(null);
-    if (!ok) setFailed(orderId);
+    if (!ok) setFailed((f) => [...f, orderId]);
   };
+  // Open (or failed) listings still need a click; one button goes in the actions row, several get their own.
+  const open = matches.filter((m) => !t.closed.includes(m.orderId));
+  const single = open.length === 1 ? open[0] : null;
+  const closeBtn = (orderId: string, cls = "") => (
+    <button type="button" className={`ov-btn ov-btn-primary ${cls}`} disabled={busy === orderId} onClick={() => void close(orderId)}>
+      {tr(failed.includes(orderId) ? "overlay.trade.retry" : "overlay.trade.closeListing")}
+    </button>
+  );
+  const sign = trade.type === "sale" ? "+" : trade.type === "purchase" ? "-" : null;
   return (
     <div ref={box} className="overlay-panel trade-notice" data-interactive>
       <div className="tr-head">
@@ -107,17 +116,9 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
         </span>
         <div className="tr-title">
           <strong>{tr("overlay.trade.tradeFinished")}</strong>
-          <span className="tr-who">
-            {trade.partner && <span>{tr("overlay.trade.with", { partner: trade.partner })}</span>}
-            {trade.type !== "trade" && trade.platChange != null && <OvReadout currency="platinum" value={trade.platChange} />}
-            {repOpen && (
-              <button type="button" className="ov-btn" onClick={() => void sendRep(trade.partner)}>
-                {tr("overlay.trade.plusRep")}
-              </button>
-            )}
-            {signedIn && rep !== "idle" && <span role="status">{tr(REP_TEXT[rep as keyof typeof REP_TEXT])}</span>}
-          </span>
+          {trade.partner && <span className="tr-who">{tr("overlay.trade.with", { partner: trade.partner })}</span>}
         </div>
+        {sign && trade.platChange != null && <span className="tr-plat" data-sign={sign}>{`${sign}${Math.abs(trade.platChange).toLocaleString()}p`}</span>}
       </div>
       <ul className="tr-items">
         {trade.items.map((i, n) => (
@@ -125,31 +126,50 @@ export function TradeOverlay({ tr, ipc, moving, api = tauriTradeApi }: OverlayCo
         ))}
       </ul>
       {matches.length === 0 && <p className="trade-none">{tr("overlay.trade.noListingMatched")}</p>}
-      {matches.map((m) => (
-        <div key={m.orderId} className="tr-match">
-          <span className="tr-art">
-            <ItemImage slug={m.itemUrlName} src={art(m.itemUrlName)} cls="ov-art" tr={tr} />
-          </span>
-          <div className="tr-match-text">
-            <div className="tr-match-name">{m.itemName}</div>
-            <div className="tr-match-q">
-              <span>{tr("overlay.trade.yourListing")}</span>
-              <span>{`×${m.quantity}`}</span>
+      {matches.map((m) => {
+        const state = t.closed.includes(m.orderId) ? "closed" : failed.includes(m.orderId) ? "failed" : "open";
+        return (
+          <div key={m.orderId} className="tr-match" data-state={state}>
+            <span className="tr-match-label">{tr("overlay.trade.matchesListing")}</span>
+            <span className="tr-art">
+              <ItemImage slug={m.itemUrlName} src={art(m.itemUrlName)} cls="ov-art" tr={tr} />
+            </span>
+            <div className="tr-match-text">
+              <div className="tr-match-name">{m.itemName}</div>
+              {state === "closed" ? (
+                <div role="status" className="tr-match-q tr-closed">
+                  {tr("overlay.trade.listingClosed")}
+                </div>
+              ) : state === "failed" ? (
+                <div role="alert" className="tr-match-q tr-failed">
+                  {tr("overlay.trade.marketNoResponse")}
+                </div>
+              ) : (
+                <div className="tr-match-q">{tr("overlay.trade.quantityAt", { quantity: m.quantity, platinum: m.platinum })}</div>
+              )}
             </div>
+            {state !== "closed" && !single && closeBtn(m.orderId, "tr-close")}
           </div>
-          <OvReadout currency="platinum" value={m.platinum} size="lg" />
-          <button type="button" className="ov-btn ov-btn-primary tr-close" disabled={busy === m.orderId} onClick={() => void close(m.orderId)}>
-            {tr("overlay.trade.closeListing")}
-          </button>
-        </div>
-      ))}
-      {failed && <p role="alert">{tr("overlay.trade.closingFailed")}</p>}
+        );
+      })}
+      {t.thanksCopied && (
+        <p role="status" className="tr-copied">
+          {tr("overlay.trade.thanksCopied")}
+        </p>
+      )}
       <div className="tr-actions">
-        <button type="button" className="ov-btn" onClick={() => void api.dismiss(token)}>
+        {single && closeBtn(single.orderId, "tr-primary")}
+        {repOpen && (
+          <button type="button" className="ov-btn" onClick={() => void sendRep(trade.partner)}>
+            {tr("overlay.trade.plusRep")}
+          </button>
+        )}
+        {signedIn && rep !== "idle" && <span role="status" className="tr-rep">{tr(REP_TEXT[rep as keyof typeof REP_TEXT])}</span>}
+        <button type="button" className="ov-btn tr-dismiss" onClick={() => void api.dismiss(token)}>
           {tr("overlay.trade.dismiss")}
         </button>
-        {view.queued > 0 && <span className="trade-queued">{tr("overlay.trade.queued", { count: view.queued })}</span>}
       </div>
+      {view.queued > 0 && <span className="trade-queued">{tr("overlay.trade.queued", { count: view.queued })}</span>}
       <i key={token} className="trade-timer" style={{ animationDuration: `${view.autoCloseMs}ms` }} />
     </div>
   );

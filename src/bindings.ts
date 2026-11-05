@@ -210,6 +210,11 @@ export const commands = {
 	 *  dismisses it. False when WFM refused, so the overlay stays for a retry.
 	 */
 	tradeNotificationCloseMatch: (token: number | null, orderId: string) => typedError<boolean, string>(__TAURI_INVOKE("trade_notification_close_match", { token, orderId })),
+	/**
+	 *  Developer panel: shows the popup for a sample trade, through the tracker's own `enqueue`. The
+	 *  sample is never recorded (no ledger, inventory or event) and never talks to warframe.market.
+	 */
+	devTradeSample: (sample: DevTradeSample) => typedError<null, string>(__TAURI_INVOKE("dev_trade_sample", { sample })),
 	/**  Closes the card. A `token` of an older round is ignored, so a late click cannot close the next. */
 	rewardOverlayClose: (token: number | null) => typedError<null, string>(__TAURI_INVOKE("reward_overlay_close", { token })),
 	/**  What the last frame read (card count and OCR candidates per slot), for diagnosing a miss. */
@@ -983,6 +988,11 @@ export type DecodedRivens_Serialize = {
 	veiled: VeiledRivenEntry_Serialize[],
 	veiledUnseen: VeiledRivenGroup[],
 };
+
+/**  The popup states the developer panel can preview. */
+export type DevTradeSample = "OneListing" | "TwoListings" | 
+/**  Auto-closed, thank-you copied. */
+"Closed" | "Purchase" | "NoListing" | "PlainTrade";
 
 export type Direction = "given" | "received";
 
@@ -3545,6 +3555,11 @@ export type Settings_Deserialize = {
 	save_scan_captures?: boolean,
 	/**  Look for a newer release on start and every 6 h (`src/stores/updater.ts`); the check asks github.com for `latest.json` only. */
 	auto_update_check?: boolean,
+	/**  Closes the matched warframe.market listings by itself when a trade is detected. */
+	auto_close_trade_listings?: boolean,
+	/**  Copies `trade_thanks_message` to the clipboard after a sale listing closes. */
+	trade_thanks_enabled?: boolean,
+	trade_thanks_message?: string,
 } & ({
 	/**  Scans the reward screen (or closes the shown card). Was `overlay_hotkey`. */
 	reward_scan_hotkey?: string,
@@ -3609,6 +3624,11 @@ export type Settings_Serialize = {
 	save_scan_captures: boolean,
 	/**  Look for a newer release on start and every 6 h (`src/stores/updater.ts`); the check asks github.com for `latest.json` only. */
 	auto_update_check: boolean,
+	/**  Closes the matched warframe.market listings by itself when a trade is detected. */
+	auto_close_trade_listings: boolean,
+	/**  Copies `trade_thanks_message` to the clipboard after a sale listing closes. */
+	trade_thanks_enabled: boolean,
+	trade_thanks_message: string,
 };
 
 /**  How far the similar search had to be loosened before listings turned up. */
@@ -3850,12 +3870,20 @@ export type TradeDetected = TradeDetected_Serialize | TradeDetected_Deserialize;
 export type TradeDetected_Deserialize = {
 	trade: TradeEvent_Deserialize,
 	matches: WorkbenchTradeMatch_Deserialize[],
+	/**  Order ids of `matches` already closed (automatically); the popup shows them without a button. */
+	closed: string[],
+	/**  The automatic close copied the thank-you message; the popup says so. */
+	thanksCopied: boolean,
 };
 
 /**  A recorded trade and the listings it would close (empty when signed out or nothing matches). */
 export type TradeDetected_Serialize = {
 	trade: TradeEvent_Serialize,
 	matches: WorkbenchTradeMatch_Serialize[],
+	/**  Order ids of `matches` already closed (automatically); the popup shows them without a button. */
+	closed: string[],
+	/**  The automatic close copied the thank-you message; the popup says so. */
+	thanksCopied: boolean,
 };
 
 export type TradeEvent = TradeEvent_Serialize | TradeEvent_Deserialize;

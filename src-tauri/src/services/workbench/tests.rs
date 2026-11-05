@@ -1937,3 +1937,29 @@ async fn a_closed_listing_is_not_matched_again_by_a_duplicate_log_line() {
     assert!(m.close_match(&first[0]).await);
     assert!(m.match_trade(&t).await.is_empty());
 }
+
+#[tokio::test]
+async fn close_all_closes_each_match_and_reports_only_the_accepted_ones() {
+    let (m, host) = FakeMatch::new().matcher();
+    let two = [
+        payload(WorkbenchMatchKind::Order, "a", 1, None),
+        payload(WorkbenchMatchKind::Contract, "b", 1, None),
+    ];
+    let mut seen = vec![];
+    let closed = m.close_all(&two, |x| seen.push(x.order_id.clone())).await;
+    assert_eq!(
+        (closed, seen),
+        (
+            vec!["a".into(), "b".into()],
+            vec!["a".to_string(), "b".into()]
+        )
+    );
+    assert_eq!(host.closed.lock().unwrap().len(), 2);
+
+    let mut f = FakeMatch::new();
+    f.close_err = true;
+    let (m, _) = f.matcher();
+    let mut called = false;
+    assert!(m.close_all(&two[..1], |_| called = true).await.is_empty());
+    assert!(!called, "a refused close announces nothing");
+}

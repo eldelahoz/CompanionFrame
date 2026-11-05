@@ -44,10 +44,10 @@ Everything runs locally on your PC: there is no CompanionFrame server. The app r
 - **Inventory and mastery**: import an inventory JSON (file picker or drag and drop) or AlecaFrame's cache, or paste a public profile id. The snapshot is kept current with EE.log trades and the relic rewards you confirm. Mastery progress, foundry, resources and syndicates are built from it. Filter any tab by surplus copies (with how many can be sold, keeping one copy of each mod and arcane and what recipes, sets and goals need), filter mods and arcanes by duplicates, not max rank and not equipped, and optionally see where each is equipped.
 - **Relics and drops**: relic and drop-table search with ducat and platinum values, plus a Wiki view.
 - **World state**: cycles, fissures, Baro (with a planner and wishlist), Varzia alerts and the arbitration schedule.
-- **warframe.market**: your orders, riven auctions (including your decoded owned rivens), listing warnings, price history, alerts and bulk selling (which keeps one copy of each mod and arcane). Every write is a click of yours.
+- **warframe.market**: your orders, riven auctions (including your decoded owned rivens), listing warnings, price history, alerts and bulk selling. Every write is a click of yours, except one opt-in setting (off by default) that closes the listings a finished trade matches; warframe.market's rules call automation a grey area, so turning it on is your call.
 - **Trade ledger** fed live from `EE.log`, with GDPR export import.
 - **Run analysis** for arbitrations and Profit-Taker, plus a missions view.
-- **Overlays** (Windows): relic reward scan and planner, riven scan and grading, arbitration counter, trade notice. Default hotkeys: F8 scan, F7 move overlays, F6 riven rescan (configurable).
+- **Overlays** (Windows): relic reward scan and planner, riven scan and grading, arbitration counter, trade notice (the listing a trade matches, closed with one click, and an optional thank-you message copied to the clipboard after a sale). Default hotkeys: F8 scan, F7 move overlays, F6 riven rescan (configurable).
 - **Notifications**: toast, sound and Discord/generic webhooks.
 - **Languages**: English, German, Spanish, French and Chinese.
 

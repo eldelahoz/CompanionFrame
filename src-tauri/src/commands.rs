@@ -50,6 +50,7 @@ pub fn set_settings(
     // Layouts are written only by the overlay editor; a stale settings form must not undo them.
     settings.overlay_layouts = store.get().overlay_layouts;
     overlay::settings::validate(&settings)?;
+    settings.sanitize_thanks()?;
     if !crate::services::game_locale::is_setting(&settings.game_language) {
         return Err("unknown game language".into());
     }
