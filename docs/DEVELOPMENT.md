@@ -97,9 +97,20 @@ Add the key to **all five** of `src/i18n/en.json`, `es.json`, `fr.json`, `de.jso
 5. Settings: enabled/opacity are keyed by kind name and validated against the known kinds (`overlay/settings.rs`); add i18n labels and the toggle in `OverlaySettings.tsx`.
 6. Add a `docs/manual-tests/` checklist.
 
-## Timing lines
+## Timing logs
 
-The backend logs `timing:` lines to the daily log file and the terminal (`pnpm tauri dev`), for before/after comparisons: `my_orders` (`http_ms`, `catalog_ms`: near 0 once the catalog is in memory), `wfm_prices_bulk`, `wfm_prices_refresh worker` (one line per drained queue), and at debug level `wfm_request priority= path_kind= wait_ms= ms=` per request (path kind is the first path segment, never an id) and `my_orders_fetch`. Set `RUST_LOG=debug` to see the debug ones.
+Slow loads are diagnosed with `timing:` lines, which print `key=value` pairs (milliseconds are `ms`).
+
+- **Rust** (all builds): `tracing::info!` lines in the daily log file (`companionframe.log.YYYY-MM-DD` in the log folder, see [CONTRIBUTING.md](../CONTRIBUTING.md)) and, in debug builds, in the terminal. Search the file for `timing:`. Examples: `timing: db_read <name> conn=reader1 wait_ms=0 ms=3`, `timing: wfm_prices_bulk slugs=… cached=… fetched=… kv_reads=… ms=…`, `timing: my_orders …`, `timing: get_inventory …`.
+- **Frontend** (`pnpm tauri dev` and `pnpm dev` only): `logTiming` in `src/lib/timing.ts` writes `timing: <name> …` to the devtools console (there is no bridge to the log file). Filter the console by `timing:`.
+
+In a `db_read` line, `conn` says which connection answered (`reader0` to `reader2`, or `writer` when no reader exists), `wait_ms` is the time spent waiting for that connection and `ms` is the total, so `ms` minus `wait_ms` is the query. A high `wait_ms` means all readers were busy; a high `ms` with a low `wait_ms` means a slow query. To add a line, wrap a read in `Db::timed_read(name, |conn| …)` or call `tracing::info!("timing: …")` in Rust, or `logTiming(name, { … })` in the frontend. Use the `timing:` prefix so the lines stay searchable.
+
+For warframe.market: `my_orders` (`http_ms`, `catalog_ms`: near 0 once the catalog is in memory), `wfm_prices_refresh worker` (one line per drained queue), and at debug level (`RUST_LOG=debug`) `wfm_request priority= path_kind= wait_ms= ms=` per request (path kind is the first path segment, never an id) and `my_orders_fetch`.
+
+## Developer card
+
+`pnpm tauri dev` (not a release build) adds a "Developer" card to Settings with buttons that show the trade popup with sample data (one listing, two, closed, purchase, no listing, plain trade). Nothing is sent to warframe.market. The card is English only and has no locale keys.
 
 ## README screenshots
 

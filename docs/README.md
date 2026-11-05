@@ -7,7 +7,7 @@ Start with the [project README](../README.md). Contributors: [CONTRIBUTING.md](.
 | Doc | What it covers |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, threads, IPC, backend services, frontend, persistence, inventory sources, external data sources, platform layer, security boundaries, data flows |
-| [DEVELOPMENT.md](DEVELOPMENT.md) | Setup, commands, testing strategy, recipes (command, migration, UI, i18n key, overlay), commits, disk tips |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Setup, commands, testing strategy, recipes (command, migration, UI, i18n key, overlay), timing logs, the dev-only Developer card, commits, disk tips |
 | [../DESIGN.md](../DESIGN.md) | Design system: tokens, components, theming |
 
 ## warframe.market
@@ -33,7 +33,7 @@ Start with the [project README](../README.md). Contributors: [CONTRIBUTING.md](.
 
 ## Testing with the game
 
-[manual-tests/](manual-tests/): checklists for everything that needs Warframe running (overlays, hotkeys, capture, ONNX, reward and riven scanners, the Linux build, the installer, auto-update, warframe.market web sign-in). The file prefixes (`f6-t…`) are historical task ids.
+[manual-tests/](manual-tests/): checklists for everything that needs Warframe running (overlays, hotkeys, capture, ONNX, reward and riven scanners, the Linux build, the installer, auto-update, warframe.market web sign-in, tray and close behavior, the trade overlay). The file prefixes (`f6-t…`) are historical task ids.
 
 ## Performance
 
