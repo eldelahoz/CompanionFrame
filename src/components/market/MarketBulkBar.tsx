@@ -55,7 +55,7 @@ export default function MarketBulkBar({ count, total, canReprice, busy: rowBusy,
         {tr("common.delete")}
       </Button>
       <Button size="sm" variant="ghost" onClick={onCancel}>
-        {tr("common.cancel")}
+        {tr(run ? "market.bulkStop" : "common.cancel")}
       </Button>
     </div>
   );

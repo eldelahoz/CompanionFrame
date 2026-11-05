@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, LogOut, Plus, RefreshCw, ShoppingCart, Star, WandSparkles } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { normalizePerTrade } from "../../config/shared/wfmOrders";
 import HeaderTabs from "../components/HeaderTabs";
 import MarketAlerts from "../components/market/alerts/MarketAlerts";
@@ -159,30 +159,53 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
       await fetchOrders(true);
     });
 
+  // Stop (or leaving the view) ends a bulk run before its next order; the one in flight finishes.
+  const stopBulk = useRef(false);
+  const gone = useRef(false);
+  useEffect(() => {
+    gone.current = false;
+    return () => {
+      gone.current = true;
+      stopBulk.current = true;
+    };
+  }, []);
+  const patchLocal = (id: string, fn: (o: MyOrder) => MyOrder | null) => {
+    const apply = (l: MyOrder[]) => l.flatMap((o) => (o.id !== id ? [o] : fn(o) ?? []));
+    setOrders((cur) => ({ sell: apply(cur.sell), buy: apply(cur.buy) }));
+  };
   const bulk = async (action: BulkRun["action"], targets: MyOrder[], run: (o: MyOrder) => Promise<void>) => {
+    stopBulk.current = false;
     setBulkRun({ action, done: 0, total: targets.length });
     try {
       // one at a time: warframe.market rate limits
       for (const [i, o] of targets.entries()) {
+        if (stopBulk.current) break;
         await guarded(o.id, () => run(o));
         setBulkRun({ action, done: i + 1, total: targets.length });
       }
-      await fetchOrders(true);
     } finally {
       setBulkRun(null);
+      // the one source of truth, unless the view was left
+      if (!gone.current) await fetchOrders(true);
     }
   };
   const setAllVisible = (visible: boolean) =>
     bulk(
       visible ? "show" : "hide",
       list.filter((o) => selected.has(o.id) && o.visible !== visible),
-      async (o) => void (await wfmOrderUpdate(o.id, { visible } as never)),
+      async (o) => {
+        await wfmOrderUpdate(o.id, { visible } as never);
+        patchLocal(o.id, (x) => ({ ...x, visible }));
+      },
     );
   const delSelected = async () => {
     const targets = list.filter((o) => selected.has(o.id));
     if (!(await askConfirm(tr("market.confirmDeleteOrders", { count: targets.length })))) return;
-    await bulk("delete", targets, async (o) => void (await wfmOrderDelete(o.id)));
-    setSelected(new Set());
+    await bulk("delete", targets, async (o) => {
+      await wfmOrderDelete(o.id);
+      patchLocal(o.id, () => null);
+      setSelected((cur) => applyIds(cur, [o.id], false));
+    });
   };
   // Shift+click takes every row between the last click and this one, in the sorted order.
   const toggleSelected = (id: string, shift: boolean) => {
@@ -350,7 +373,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
           )}
         </>
       )}
-      {pickedCount > 0 && (
+      {(pickedCount > 0 || bulkRun) && (
         <MarketBulkBar
           count={pickedCount}
           total={list.length}
@@ -362,7 +385,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
           onShow={() => void setAllVisible(true)}
           onReprice={() => setRepricing(list.filter((o) => selected.has(o.id)))}
           onDelete={() => void delSelected()}
-          onCancel={() => setSelected(new Set())}
+          onCancel={() => (bulkRun ? (stopBulk.current = true) : setSelected(new Set()))}
           tr={tr}
         />
       )}

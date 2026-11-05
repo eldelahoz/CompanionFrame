@@ -98,7 +98,8 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApp
       isSignedOut: async () => !(await wfmSessionStatus()).logged_in,
       onProgress: (applied, bad) => setProgress({ phase: "applying", done: applied + bad.length, total: sending.length }),
     });
-    if (cancelled.current) return;
+    // closed mid-run: the orders already sent still changed, so the table must refresh
+    if (cancelled.current) return void (result.applied.length > 0 && onApplied());
     setProgress(null);
     setFailed(result.failed);
     setStopped(result.stopReason === "auth");

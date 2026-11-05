@@ -2144,6 +2144,7 @@
   "market.selectedOf": "已选 {count} / {total}",
   "market.bulkHide": "隐藏",
   "market.bulkShow": "显示",
+  "market.bulkStop": "停止",
   "market.bulkHiding": "正在隐藏 {done} / {total}...",
   "market.bulkShowing": "正在显示 {done} / {total}...",
   "market.bulkDeleting": "正在删除 {done} / {total}...",
