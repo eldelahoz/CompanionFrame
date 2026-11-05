@@ -1983,7 +1983,7 @@
   "settings.behaviorTitle": "应用行为",
   "settings.behaviorInfo": "关闭窗口后，CompanionFrame 可以继续在系统托盘中运行，提醒照常工作。可从托盘菜单退出。",
   "settings.autoCloseListings": "自动关闭匹配的挂单",
-  "settings.autoCloseListingsInfo": "交易后无需确认，直接关闭匹配的 warframe.market 挂单。交易弹窗仍会显示已关闭的内容。",
+  "settings.autoCloseListingsInfo": "交易后无需确认，直接关闭匹配的 warframe.market 挂单。交易弹窗仍会显示已关闭的内容。warframe.market 的规则将自动化视为灰色地带，开启此功能需自行承担风险。",
   "settings.thanksEnabled": "出售后复制感谢消息",
   "settings.thanksInfo": "出售挂单关闭后，把下面的消息复制到剪贴板，方便粘贴到聊天中。",
   "settings.thanksMessage": "感谢消息",

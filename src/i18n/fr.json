@@ -1998,7 +1998,7 @@
   "settings.behaviorTitle": "Comportement de l'application",
   "settings.behaviorInfo": "Quand la fenêtre est fermée, CompanionFrame peut continuer à tourner dans la zone de notification pour que les alertes fonctionnent toujours. Quittez depuis le menu de la zone de notification.",
   "settings.autoCloseListings": "Clôturer automatiquement les annonces correspondantes",
-  "settings.autoCloseListingsInfo": "Après un échange, clôture sans demander les annonces warframe.market correspondantes. La fenêtre de l'échange montre toujours ce qui a été clôturé.",
+  "settings.autoCloseListingsInfo": "Après un échange, clôture sans demander les annonces warframe.market correspondantes. La fenêtre de l'échange montre toujours ce qui a été clôturé. Les règles de warframe.market considèrent l'automatisation comme une zone grise : activez cette option à vos risques et périls.",
   "settings.thanksEnabled": "Copier un remerciement après une vente",
   "settings.thanksInfo": "Quand une annonce de vente est clôturée, copie le message ci-dessous dans le presse-papiers pour le coller dans le chat.",
   "settings.thanksMessage": "Message de remerciement",

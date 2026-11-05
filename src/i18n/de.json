@@ -1982,7 +1982,7 @@
   "settings.behaviorTitle": "App-Verhalten",
   "settings.behaviorInfo": "Wenn das Fenster geschlossen wird, kann CompanionFrame im Infobereich weiterlaufen, damit Benachrichtigungen funktionieren. Beenden geht über das Tray-Menü.",
   "settings.autoCloseListings": "Passende Angebote automatisch schließen",
-  "settings.autoCloseListingsInfo": "Nach einem Handel werden die passenden warframe.market-Angebote ohne Nachfrage geschlossen. Das Handelsfenster zeigt weiterhin, was geschlossen wurde.",
+  "settings.autoCloseListingsInfo": "Nach einem Handel werden die passenden warframe.market-Angebote ohne Nachfrage geschlossen. Das Handelsfenster zeigt weiterhin, was geschlossen wurde. Die Regeln von warframe.market behandeln Automatisierung als Grauzone, daher aktivierst du die Option auf eigene Verantwortung.",
   "settings.thanksEnabled": "Nach einem Verkauf einen Dank kopieren",
   "settings.thanksInfo": "Wenn ein Verkaufsangebot geschlossen wird, wird die Nachricht unten in die Zwischenablage kopiert, damit du sie im Chat einfügen kannst.",
   "settings.thanksMessage": "Dankesnachricht",

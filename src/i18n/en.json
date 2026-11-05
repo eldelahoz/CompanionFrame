@@ -2000,7 +2000,7 @@
   "settings.behaviorTitle": "App behavior",
   "settings.behaviorInfo": "When the window is closed, CompanionFrame can keep running in the system tray so alerts keep working. Quit from the tray menu.",
   "settings.autoCloseListings": "Close matched listings automatically",
-  "settings.autoCloseListingsInfo": "After a trade, close the warframe.market listings it matches without asking. The trade popup still shows what was closed.",
+  "settings.autoCloseListingsInfo": "After a trade, close the warframe.market listings it matches without asking. The trade popup still shows what was closed. warframe.market's rules treat automation as a grey area: turn this on at your own risk.",
   "settings.thanksEnabled": "Copy a thank-you after a sale",
   "settings.thanksInfo": "When a sale listing closes, copy the message below to the clipboard so you can paste it in chat.",
   "settings.thanksMessage": "Thank-you message",

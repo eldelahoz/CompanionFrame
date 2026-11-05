@@ -2000,7 +2000,7 @@
   "settings.behaviorTitle": "Comportamiento de la app",
   "settings.behaviorInfo": "Al cerrar la ventana, CompanionFrame puede seguir ejecutándose en la bandeja del sistema para que las alertas sigan funcionando. Sal desde el menú de la bandeja.",
   "settings.autoCloseListings": "Cerrar automáticamente las publicaciones coincidentes",
-  "settings.autoCloseListingsInfo": "Tras un intercambio, cierra sin preguntar las publicaciones de warframe.market que coincidan. El aviso del intercambio sigue mostrando lo que se cerró.",
+  "settings.autoCloseListingsInfo": "Tras un intercambio, cierra sin preguntar las publicaciones de warframe.market que coincidan. El aviso del intercambio sigue mostrando lo que se cerró. Las normas de warframe.market tratan la automatización como una zona gris: actívalo bajo tu propio riesgo.",
   "settings.thanksEnabled": "Copiar un agradecimiento tras una venta",
   "settings.thanksInfo": "Cuando se cierra una publicación de venta, copia el mensaje de abajo al portapapeles para pegarlo en el chat.",
   "settings.thanksMessage": "Mensaje de agradecimiento",
