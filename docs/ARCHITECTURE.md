@@ -62,7 +62,7 @@ One OS process. Tauri owns the main thread and the WebView; everything else is a
 | Overlay watch loop | `services/overlay/mod.rs` `setup` | Task ticking every 250 ms (foreground follow, topmost) or 50 ms while click regions exist. |
 | Helper threads | `notify/sound.rs` (audio), `notify/webhook.rs`, `inventory/commands.rs` (file watcher), `net.rs` | Small, short-lived or process-lifetime. |
 
-Shared state is `app.manage(...)`d and read with `State<T>`: `Store` (settings), `Db` (one `Mutex<Connection>`), `Session` (WFM), `EeLog`, `Trackers`, `ItemDbState`, `Inventory`, overlay `Manager`, and so on.
+Shared state is `app.manage(...)`d and read with `State<T>`: `Store` (settings), `Db` (one writer connection and three read-only ones, see Persistence), `Session` (WFM), `EeLog`, `Trackers`, `ItemDbState`, `Inventory`, overlay `Manager`, and so on.
 
 ## IPC
 
@@ -70,7 +70,7 @@ Shared state is `app.manage(...)`d and read with `State<T>`: `Store` (settings),
 - **Bindings:** `pnpm bindings` runs `src-tauri/examples/export_bindings.rs` (headless). `pnpm tauri dev` also rewrites the file on start. CI regenerates and fails on `git diff src/bindings.ts`, so commit it with the command.
 - **Gateway:** `src/lib/ipc.ts` is the only module that imports `bindings.ts`, `invoke` or `listen`. It unwraps tauri-specta results (throws on error), narrows types (`Language`, `Theme`) and exposes `onXxx(cb)` subscriptions. Views and stores import from `lib/ipc`, never from Tauri.
 - **Mock mode:** `inTauri()` checks `window.__TAURI_INTERNALS__`. Outside Tauri (plain `pnpm dev` in a browser, vitest) each function returns in-memory mock data (`src/lib/*/mock*.ts`, `lib/world/fixture`), so the UI can be developed and driven with Playwright without the game or the backend.
-- **Events:** the backend `emit`s plain string events; `ipc.ts` wraps `listen`. Main ones: `inventory-updated`, `item-db-updated`, `game-locale-updated`, `relic-db-updated`, `world-state-updated`, `eelog-status-updated`, `game-running`, `game-login`, `trade-detected`, `arbi-run-saved`, `pt-run-saved`, `riven-session-saved`, `wfm-presence`, `wfm-ws-status`, `wfm-ws-event`, `notification-added`, `workbench-updated`, `market-alerts-changed`, `helper-download-progress`, `mission-reward`, `hotkey`. Overlay payload events: `reward-overlay`, `riven-overlay`, `arbi-live`, `trade-overlay`, `relic-planner`, plus `overlay-settings`, `overlay-layout-reset`, `overlay-editor`, `overlay-content-visible`. Payload types used only by events are registered with `.typ::<T>()`.
+- **Events:** the backend `emit`s plain string events; `ipc.ts` wraps `listen`. Main ones: `inventory-updated`, `item-db-updated`, `game-locale-updated`, `relic-db-updated`, `world-state-updated`, `eelog-status-updated`, `game-running`, `game-login`, `trade-detected`, `arbi-run-saved`, `pt-run-saved`, `riven-session-saved`, `wfm-presence`, `wfm-ws-status`, `wfm-ws-event`, `notification-added`, `workbench-updated`, `market-alerts-changed`, `helper-download-progress`, `mission-reward`, `hotkey`. Overlay payload events: `reward-overlay`, `riven-overlay`, `arbi-live`, `trade-overlay`, `relic-planner`, plus `overlay-settings`, `overlay-layout-reset`, `overlay-move-mode`, `overlay-content-visible`. Payload types used only by events are registered with `.typ::<T>()`.
 - **Errors:** commands return `Result<T, String>` or a typed error (`WfmError`, `WebhookTestError`, …) that serializes to a tagged union.
 
 ## Backend services
@@ -78,7 +78,7 @@ Shared state is `app.manage(...)`d and read with `State<T>`: `Store` (settings),
 All under `src-tauri/src/services/`, wired in `lib.rs` `setup()`. Pure logic is kept apart from IO so it is testable (`tests.rs` next to each module).
 
 ### Shared infrastructure
-- **`db/mod.rs`**: SQLite open + named migrations. **`store.rs`**: `Settings` JSON. **`atomic.rs`**: crash-safe write (tmp, fsync, rename). **`cache.rs`**: `kv_get`/`kv_put` over `kv_cache` (JSON + timestamp); the `http_cache` table is still migrated but no code reads it. **`net.rs`**: HTTP clients (UA `CompanionFrame/<ver>`, timeouts, body caps, HTTPS-only variant, ETag revalidation).
+- **`db/mod.rs`**: SQLite open, the writer and reader connections, named migrations, the backup before a migration and the daily prune. **`store.rs`**: `Settings` JSON. **`atomic.rs`**: crash-safe write (tmp, fsync, rename). **`cache.rs`**: `kv_get`/`kv_get_many`/`kv_put` over `kv_cache` (JSON + timestamp; batched reads go in chunks of 500 keys); the `http_cache` table is still migrated but no code reads it, and only the daily prune touches it. **`net.rs`**: HTTP clients (UA `CompanionFrame/<ver>`, timeouts, body caps, HTTPS-only variant, ETag revalidation). **`tray.rs`**: the tray icon (left click shows or hides the main window; the menu has Show/Hide and Quit, in the app language). **`window_state.rs`**: window position and size, and what closing the window does: it exits the app unless `keep_running_on_close` is on, in which case the window hides and the tray keeps the process alive.
 
 ### Game data
 - **Item database**: `item_db.rs`, `game_locale.rs`. Bundled data merged with DE's live export; English `name` is the join key, `displayName` is localized (DE dictionaries).
@@ -93,35 +93,35 @@ All under `src-tauri/src/services/`, wired in `lib.rs` `setup()`. Pure logic is 
 - **Import**: `gdpr_import.rs` (DE trade export → ledger rows), `ledger.rs` (trade ledger).
 
 ### EE.log
-- **Tail**: `eelog/` (`locate.rs` finds the log: manual path, `%LOCALAPPDATA%`, Proton/Wine prefixes; `tail.rs` handles truncation/restart). **Parsers**: `eelog_parsers/` (pure state machines: `arbi`, `profit_taker`, `trade`, `riven`, `lines`, `timing`, `sanitize`). **Hub**: `trackers/` (`hub.rs` is the only broadcast subscriber; stamps timing and source; fans out to `LineTracker`s: lifecycle, trade, inventory sync markers, riven, plus the run, mission-reward (memory mode) and overlay trackers). **Runs**: `runs/` (`arbi`, `pt`, shared `segment`/`store`; gzipped raw log per run). **Riven sessions and library**: `rivens/` (weapon data, grading, endo, best attributes, `riven_sessions` table).
+- **Tail**: `eelog/` (`locate.rs` finds the log: manual path, `%LOCALAPPDATA%`, Proton/Wine prefixes; `tail.rs` handles truncation/restart). **Parsers**: `eelog_parsers/` (pure state machines: `arbi`, `profit_taker`, `trade`, `riven`, `lines`, `timing`, `sanitize`). **Hub**: `trackers/` (`hub.rs` is the only broadcast subscriber; stamps timing and source; fans out to `LineTracker`s: lifecycle, trade (one parser for the file lines and another for the DBWIN lines, so half-dialogs from the two never mix; item names in the game language, with or without a rank suffix such as "(RARE RANG 0)", are translated to English before the ledger row is written; riven names are not translated yet), inventory sync markers, riven, plus the run, mission-reward (memory mode) and overlay trackers). **Runs**: `runs/` (`arbi`, `pt`, shared `segment`/`store`; gzipped raw log per run). **Riven sessions and library**: `rivens/` (weapon data, grading, endo, best attributes, `riven_sessions` table).
 
 ### warframe.market (`wfm/`)
 `client.rs` (HTTP, JWT on v1 / Bearer on v2, rotated-token adoption, no retries), `session.rs` (sign-in, keyring), `webview_login.rs` (optional sign-in through the site's own page), `ws.rs` (WebSocket, backoff), `presence.rs` + `live.rs` (online/ingame/invisible, wiring for the UI), `catalog.rs` + `riven_items.rs` (item and riven weapon lists, refreshed on `/v2/versions`), `prices.rs` + `stats_v1.rs` + `stats_history.rs` (48 h average, 90-day history in `price_history`), `orders.rs` + `validators.rs` (own orders, order book), `contracts.rs` + `riven_search.rs` + `legacy_v1.rs` + `reviews.rs` + `profile_slug.rs` (riven auctions and +rep on the v1 API), `scheduler.rs` (token bucket 2.5 req/s, burst 5, 3 concurrent, global gate after 429), `errors.rs`.
-Related: `market_alerts/` (rules, store, 3-minute checker) and `workbench/` (bulk-sell plans with a write-ahead journal, trade-to-listing matcher; every mutation is a user click).
+Related: `market_alerts/` (rules, store, 3-minute checker) and `workbench/` (bulk-sell plans with a write-ahead journal, trade-to-listing matcher; every mutation is a user click, except the opt-in auto-close of listings a trade matched). Own orders carry `createdAt` and `updatedAt` from the API.
 
 ### Scanners and overlays
 - **Capture / OCR**: `capture/` (`GameWindow`; `CaptureKind::Fixture` is kept for tests), `platform/windows/capture.rs`, `platform/windows/ocr.rs` + `reward.rs` (Windows.Media.Ocr), `ocr_onnx/` (ONNX Runtime loaded dynamically from `resources/onnxruntime`; PaddleOCR recognizer + PP-OCRv5 DBNet stat-line detector).
 - **Reward scan**: `reward_scan/` (card counter, slots, matcher, enrichment, retry flow, payload).
 - **Riven scan**: `riven_scan/` (crop, detect, text → stats, weapon label; `fingerprint.rs` decodes the user's owned rivens for the `rivens_decoded` command and the Rivens view's Unveiled/Veiled tabs).
-- **Overlay windows**: `overlay/` (`manager.rs` pure state machine, `host.rs` Tauri+Win32 host, `reward.rs`, `riven.rs`, `arbi.rs`, `trade.rs`, `layout.rs`, `settings.rs`). **Hotkeys**: `hotkeys/` (accelerator parsing, matcher, registry).
+- **Overlay windows**: `overlay/` (`manager.rs` pure state machine, `host.rs` Tauri+Win32 host, `reward.rs`, `riven.rs`, `riven_analyzer.rs`, `arbi.rs`, `trade.rs`, `layout.rs`, `placement.rs`, `settings.rs`). **Hotkeys**: `hotkeys/` (accelerator parsing, matcher, registry).
 - **Notifications**: `notify/` (toast, sound via rodio, Discord/generic webhooks, history capped at 200 rows, per-source routing).
 
 ## Frontend
 
 - **Entries:** `index.html` → `src/main.tsx` → `App.tsx` (main window). `overlay.html` → `src/overlay.tsx`. Vite builds both (`vite.config.ts` `rollupOptions.input`).
-- **Views** (`src/views/`): Dashboard, Inventory, Foundry, Mastery, Stats, World (cycles, Baro planner and wishlist in `stores/baro.ts`, arbitration schedule), Syndicates, Market (orders and contracts with listing-warning chips), MarketAnalysis, Relics, Rivens, Wiki (drop search), ArbiAnalyze, Missions, Settings, Setup. The sidebar list lives in `src/lib/viewRegistry.ts`; `App.tsx` switches on the active view (no router).
+- **Views** (`src/views/`): Dashboard, Inventory, Foundry, Mastery, Stats, World (cycles, Baro planner and wishlist in `stores/baro.ts`, arbitration schedule), Syndicates, Market (orders and contracts with listing-warning chips; the order table sorts by item, platinum, quantity, listed date or visible, selects rows with Shift+click ranges, and a floating bar hides, shows, reprices or deletes the selection with progress and a Stop button), MarketAnalysis, Relics, Rivens, Wiki (drop search), ArbiAnalyze, Missions, Settings, Setup. The sidebar list lives in `src/lib/viewRegistry.ts`; `App.tsx` switches on the active view (no router).
 - **Components** (`src/components/<domain>/`): per-domain widgets on top of the design system: base components in `components/ui`, icons and game art in `components/icons`, tokens in `styles/tokens.css` (see `DESIGN.md`)
 - **Stores** (`src/stores/`): small hooks over `ipc.ts` (item DB, inventory, WFM session, notifications, runs, world). They load once, subscribe to the matching event and reload. UI-only choices use `localStorage` through `lib/persistence.ts` / `usePersisted` (always try/catch).
 - **Lib** (`src/lib/`): pure view logic (relic EV, market naming and repricing, run stats, mastery projection), mocks, `viewRegistry`, `i18n`.
 - **Shared TS** (`config/shared/`): pure modules used by both UI and overlays (overlay layouts, reward presentation, notification kinds, WFM naming/validators, relic ordering). Imported with relative paths.
 - **i18n:** `src/i18n/{en,es,fr,de,zh}.json`; `lib/i18n.ts` `translator(lang)` with `{param}` placeholders and English fallback. `MessageKey` is derived from `en.json`, so a missing key is a type error.
-- **Overlays:** one Vite entry, four windows. `overlay.html?kind=reward|riven|arbi|trade` → `OverlayShell` (theme, opacity, i18n gate, interaction mode, draggable offset) around the screen in `src/overlays/screens.tsx`. Overlays are display-only: they receive their view through events (`overlayIpc.ts`) and use a few overlay commands. Layout editing is in `overlays/reward/RewardOverlayEditor.tsx`.
+- **Overlays:** one Vite entry, four windows. `overlay.html?kind=reward|riven|arbi|trade` → `OverlayShell` (theme, opacity, i18n gate, interaction mode, draggable offset) around the screen in `src/overlays/screens.tsx`. Overlays are display-only: they receive their view through events (`overlayIpc.ts`) and use a few overlay commands. Overlays are placed in move mode (the Move overlays hotkey or the button in Settings): `overlays/common/MovablePanel.tsx` and `overlayDrag.ts` let the user drag each panel, and the position is saved per game resolution (`overlay/placement.rs`).
 
 ## Persistence
 
 Data dir = Tauri `app_data_dir()` (`com.companionframe.app`); logs in `app_log_dir()` (daily `companionframe.log`; `COMPANIONFRAME_LOG` or `RUST_LOG` sets the filter).
 
-- **SQLite** `companionframe.db`, one `Mutex<Connection>`. `MIGRATIONS` in `src-tauri/src/db/mod.rs` is an append-only list of named, idempotent entries tracked in `schema_migrations`. Tables by domain:
+- **SQLite** `companionframe.db` in WAL mode, so the folder also holds `companionframe.db-wal` and `companionframe.db-shm` while the app runs. `Db` (`db/mod.rs`) has one writer connection (`lock()`) and three read-only readers (`read()`, picked in rotation; read-only paths only, because a reader does not see a write that is still open). All connections set `busy_timeout` 5 s; the writer sets `synchronous=NORMAL` and `temp_store=MEMORY`; every connection sets a 256 MiB `mmap_size` and a 16 MB page cache. `foreign_keys` is left off on purpose, so deleting a parent row never cascades. In-memory test databases have no readers and read through the writer. `MIGRATIONS` in `src-tauri/src/db/mod.rs` is an append-only list of named, idempotent entries tracked in `schema_migrations`. Tables by domain:
 
 | Domain | Tables |
 |---|---|
@@ -137,6 +137,7 @@ Data dir = Tauri `app_data_dir()` (`com.companionframe.app`); logs in `app_log_d
 | Inventory snapshot and deltas, stats | `inventory_snapshot`, `inventory_deltas`, `stats_daily` |
 | Mission rewards (memory mode) | `mission_rewards`, `mission_reward_items` (dropped by `drop_mission_rewards`, re-created by `mission_rewards_restore`) |
 
+- **Backups and pruning:** before a migration that is still pending on a database that already has tables, `VACUUM INTO` writes `<data dir>/backups/companionframe-<unix time>.db` and the 3 newest stay. If the backup fails, the start aborts, so a migration never runs without one. At startup, at most once a day, `wfm:price:*` entries in `kv_cache` and `http_cache` rows older than 30 days are deleted (user data is never pruned), then `PRAGMA optimize` runs.
 - **Settings** `settings.json` (`store.rs`): language, theme, hotkeys, EE.log path, per-overlay layout/enabled/opacity, `data_source_mode` (`passive` default / `memory`), `memory_consent_at`, `auto_inventory_sync`. Partial or corrupt files fall back to defaults. Other small JSON files: `notification-channels.json`, `notification-sound.json`, `world-notify.json`, `codex-profile.json` (the public profile account id the user pasted, or in memory mode the one behind a working helper fetch), `wfm-device-id`, and in memory mode `api-helper/inventory.json`.
 - **Keyring** (`keyring` crate: Windows Credential Manager, Secret Service on Linux): the WFM session (`com.companionframe.app` / `wfm-session`) and webhook URLs. If the keyring refuses, the login lives in memory only (`persistable: false`).
 - **Never persisted:** the WFM password (zeroized after use), and the game's auth string (`accountId`/`nonce`): in passive mode it is never obtained; in memory mode it is read from memory or the helper, only formatted into the request to DE's own hosts, stripped from errors, and never stored, logged or sent anywhere else. The EE.log is read-only.
@@ -155,7 +156,7 @@ The inventory is **a snapshot plus deltas**, never a live read of the game. Cons
 | warframe-api-helper fetch (memory mode only; `api_helper` -> `Inventory::import_helper`) | Full snapshot, source `helper`; same content keeps the deltas | Exact at fetch time |
 | EE.log `SyncInventoryFromDB` / `LoginDone` | No data: only flags "your game synced since your last import, re-import for exact counts" | n/a |
 
-Persistence: migration `inventory_snapshot` creates `inventory_snapshot` (one row) and `inventory_deltas`. A new import replaces the snapshot and deletes its deltas. The UI shows freshness ("Imported 3d ago · 5 trades") in the titlebar pill and the Inventory header, and views that rely on counts say which import they are based on. Not covered: mission drops, purchases, crafting, foundry claims, vendor buys. They drift until the next import.
+Persistence: migration `inventory_snapshot` creates `inventory_snapshot` (one row) and `inventory_deltas`. A new import replaces the snapshot and deletes its deltas. The UI shows freshness (how long ago the import was and how many trades were applied since) in the titlebar pill and the Inventory header, and views that rely on counts say which import they are based on. Not covered: mission drops, purchases, crafting, foundry claims, vendor buys. They drift until the next import.
 
 ## External data sources
 
@@ -194,7 +195,7 @@ All outgoing requests go through `net.rs`/`wfm/client.rs` (identifiable UA, time
 
 - **Capabilities** (`src-tauri/capabilities/`): `default.json` gives `main` and `overlay` `core:default`; each overlay window (`overlay-reward|riven|arbi|trade`) has its own file granting only `core:event:default`. CSP is currently `null` in `tauri.conf.json` (the WebView loads only bundled assets; remote images are plain `<img>`).
 - **Trust boundary:** the WebView is untrusted input. WFM payloads are typed structs with `deny_unknown_fields` and range checks (`wfm/validators.rs`: platinum ≤ 900 000, quantity ≤ 9 999, ids are 24 hex chars so they are safe in URL paths); `set_settings` validates hotkeys and overlay settings before saving and preserves backend-owned fields; layouts are size/JSON-checked (`overlay/layout.rs`); workbench payloads, webhook URLs and GDPR imports are validated in Rust.
-- **Outward-facing writes are user actions:** orders, auctions, +rep and listing closes never run from a timer or a tracker (`trackers/trade.rs` matches read-only; closing is `workbench_close_match`). +rep refuses unconfirmed names.
+- **Outward-facing writes are user actions:** orders, auctions, +rep and listing closes never run from a timer, with one exception. `trackers/trade.rs` matches read-only and closing is `workbench_close_match` (a click), unless the user turned on `auto_close_trade_listings` (off by default, with a warning in Settings that warframe.market treats automation as a grey area): then the tracker closes the listings a detected trade matched. +rep refuses unconfirmed names.
 - **Secrets:** WFM token and webhook URLs in the keyring; passwords in `Zeroizing` buffers; request/response bodies never logged; errors are stripped of URLs (`reqwest::Error::without_url`, webhook and authz errors). In memory mode only: the helper exe is downloaded only from the pinned release and only runs if its SHA-256 is in the pin set; game memory access is read-only.
 - **Platform integrity:** the app only reads the game (log, screen, and memory in the opt-in mode); it never writes to or injects into the game process.
 
@@ -244,9 +245,12 @@ sequenceDiagram
   T->>T: drop duplicates (30 s window)
   T->>DB: ledger::add_events
   T->>T: match own WFM listings (read-only)
+  opt auto_close_trade_listings (off by default)
+    T->>T: close the matches, copy the thank-you if enabled
+  end
   T->>UI: emit "trade-detected"
   T->>N: toast / sound / webhook / overlay
-  UI->>UI: user may close listing (workbench_close_match)
+  UI->>UI: otherwise the user closes a listing with a click (workbench_close_match)
 ```
 
 ### Market sign-in and order
