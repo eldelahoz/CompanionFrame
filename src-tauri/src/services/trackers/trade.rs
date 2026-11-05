@@ -268,7 +268,7 @@ async fn record(app: AppHandle, mut parsed: ParsedLogTrade) {
     let event = to_event(&parsed, &known_items(&app).await, id, date);
     let saved = {
         let db = app.state::<Db>();
-        ledger::add_events(&mut db.0.lock().unwrap(), std::slice::from_ref(&event))
+        ledger::add_events(&mut db.lock(), std::slice::from_ref(&event))
     };
     match saved {
         Ok(o) if o.applied == 1 => {}

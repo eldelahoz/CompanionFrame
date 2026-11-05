@@ -27,7 +27,7 @@ fn today() -> String {
 pub fn setup(app: &tauri::App) {
     let stats = Stats::default();
     let day = today();
-    let saved = store::load_all(&app.state::<Db>().0.lock().unwrap()).unwrap_or_default();
+    let saved = store::load_all(&app.state::<Db>().lock()).unwrap_or_default();
     // Claiming the day at zero matters: the first payload would otherwise roll over and drop
     // the deltas resumed here.
     if let Some(entry) = saved.iter().find(|e| e.date == day) {
@@ -42,7 +42,7 @@ pub fn setup(app: &tauri::App) {
 
 fn record(app: &AppHandle, f: impl FnOnce(&mut Tracker) -> DailyStatEntry) {
     let entry = f(&mut app.state::<Stats>().0.lock().unwrap());
-    if let Err(e) = store::upsert(&app.state::<Db>().0.lock().unwrap(), &entry) {
+    if let Err(e) = store::upsert(&app.state::<Db>().lock(), &entry) {
         tracing::warn!("stats save failed: {e}");
     }
 }
@@ -65,7 +65,7 @@ pub fn stats_get_session(stats: State<Stats>) -> SessionStats {
 #[tauri::command]
 #[specta::specta]
 pub fn stats_get_daily(db: State<Db>) -> Result<Vec<DailyStatEntry>, String> {
-    store::load_all(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    store::load_all(&db.read()).map_err(|e| e.to_string())
 }
 
 /// One day as exported by WFHelper: the six pre-map resources are flat fields.
@@ -171,7 +171,7 @@ pub fn stats_import(db: State<Db>, entries: Vec<StatsImportEntry>) -> StatsImpor
             count: 0,
         };
     };
-    match store::import(&mut db.0.lock().unwrap(), &rows, &today()) {
+    match store::import(&mut db.lock(), &rows, &today()) {
         Ok(count) => StatsImportResult { ok: true, count },
         Err(_) => StatsImportResult {
             ok: false,
@@ -184,7 +184,7 @@ pub fn stats_import(db: State<Db>, entries: Vec<StatsImportEntry>) -> StatsImpor
 #[tauri::command]
 #[specta::specta]
 pub fn stats_reset(db: State<Db>, stats: State<Stats>) -> Result<(), String> {
-    store::clear(&db.0.lock().unwrap()).map_err(|e| e.to_string())?;
+    store::clear(&db.lock()).map_err(|e| e.to_string())?;
     *stats.0.lock().unwrap() = Tracker::default();
     Ok(())
 }

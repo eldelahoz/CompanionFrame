@@ -24,7 +24,7 @@ use super::session::Session;
 use super::stats_history::{self, MarketStatPoint, MergeMode};
 use super::stats_v1;
 use crate::db::Db;
-use crate::services::cache::{kv_get, kv_put, kv_read_totals};
+use crate::services::cache::{kv_get, kv_get_many, kv_put, kv_read_totals};
 
 /// Fresh for interactive lookups (Market, history): a trader wants the live number.
 const TTL_MS: i64 = 5 * 60 * 1000;
@@ -96,9 +96,13 @@ fn key(slug: &str) -> String {
     format!("wfm:price:{slug}")
 }
 
-fn read(db: &Db, slug: &str) -> Option<Cached> {
-    let c: Cached = serde_json::from_str(&kv_get(db, &key(slug)).ok()??).ok()?;
+fn parse(raw: &str) -> Option<Cached> {
+    let c: Cached = serde_json::from_str(raw).ok()?;
     matches!(c.status, PriceStatus::Ok | PriceStatus::NoData).then_some(c)
+}
+
+fn read(db: &Db, slug: &str) -> Option<Cached> {
+    parse(&kv_get(db, &key(slug)).ok()??)
 }
 
 fn write(db: &Db, slug: &str, c: &Cached) {
@@ -281,10 +285,20 @@ impl Prices {
         let requested = slugs.len();
         let fetched = AtomicUsize::new(0);
         let mut stale = Vec::new();
+        // One batched read for every slug; a failed read just means each one is fetched as if uncached.
+        let keys: Vec<_> = slugs
+            .iter()
+            .filter_map(|s| normalize_slug(s).ok().map(|n| key(&n)))
+            .collect();
+        let stored = kv_get_many(db, &keys).unwrap_or_default();
         let out = futures_util::stream::iter(slugs)
             .map(|s| async {
                 let norm = normalize_slug(&s).ok();
-                if let Some((n, c)) = norm.and_then(|n| read(db, &n).map(|c| (n, c))) {
+                let hit = norm.and_then(|n| {
+                    let c = parse(stored.get(&key(&n))?)?;
+                    Some((n, c))
+                });
+                if let Some((n, c)) = hit {
                     // 2: pre-rank-pricing entry (no max price), revalidated first; 1: merely old.
                     let old = if c.v < CACHE_V {
                         2

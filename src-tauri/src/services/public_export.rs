@@ -609,8 +609,7 @@ mod tests {
         let (db, server) = (mem_db(), Server::start(INDEX));
         run(&db, &server).await;
         let updated = |db: &Db| {
-            db.0.lock()
-                .unwrap()
+            db.lock()
                 .query_row(
                     "SELECT updated_at, value FROM kv_cache WHERE key = ?1",
                     [CACHE_KEY],
@@ -618,8 +617,7 @@ mod tests {
                 )
                 .unwrap()
         };
-        db.0.lock()
-            .unwrap()
+        db.lock()
             .execute("UPDATE kv_cache SET updated_at = 1", [])
             .unwrap();
         let before = updated(&db);

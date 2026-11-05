@@ -599,7 +599,7 @@ impl Effects for AppEffects {
         // A failed history write costs the entry only, never the notification.
         let db = self.app.state::<Db>();
         let entry = {
-            let conn = db.0.lock().unwrap();
+            let conn = db.lock();
             log::record(&conn, kind, title, body)
         };
         match entry {
@@ -695,19 +695,19 @@ pub fn notif_set_discord_ping(
 #[tauri::command]
 #[specta::specta]
 pub fn notif_log_get(db: State<'_, Db>) -> Result<Vec<NotificationEntry>, String> {
-    log::get_all(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    log::get_all(&db.lock()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn notif_log_remove(db: State<'_, Db>, id: String) -> Result<bool, String> {
-    log::remove(&db.0.lock().unwrap(), &id).map_err(|e| e.to_string())
+    log::remove(&db.lock(), &id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn notif_log_clear(db: State<'_, Db>) -> Result<(), String> {
-    log::clear(&db.0.lock().unwrap()).map_err(|e| e.to_string())
+    log::clear(&db.lock()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

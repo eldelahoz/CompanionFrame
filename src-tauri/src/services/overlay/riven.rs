@@ -763,12 +763,7 @@ pub async fn scan(app: &AppHandle, layout: RivenCardLayout) -> Result<(), String
             },
         };
         if !compare {
-            remember_card(
-                &app.state::<Db>().0.lock().unwrap(),
-                &data,
-                &rolls,
-                &read_as,
-            );
+            remember_card(&app.state::<Db>().lock(), &data, &rolls, &read_as);
         }
         let mut st = session();
         if !compare {
@@ -781,12 +776,7 @@ pub async fn scan(app: &AppHandle, layout: RivenCardLayout) -> Result<(), String
     let mut cur_stats = vec![];
     if compare {
         let new_weapon = view.card.as_ref().and_then(|c| c.weapon.clone());
-        let old = recalled(
-            &app.state::<Db>().0.lock().unwrap(),
-            &data,
-            &rolls,
-            read.old,
-        );
+        let old = recalled(&app.state::<Db>().lock(), &data, &rolls, read.old);
         let current = current_card(&data, &rolls, new_weapon.as_deref(), old);
         if let Some((card, stats)) = current {
             view.layout = RivenViewLayout::Compare;
@@ -1221,7 +1211,7 @@ mod tests {
     fn the_compare_takes_its_current_from_memory_and_confirming_promotes_the_new_card() {
         let Some(data) = data() else { return };
         let db = crate::db::mem_db();
-        let conn = db.0.lock().unwrap();
+        let conn = db.lock();
         let names = |o: Option<(RivenCardView, Vec<RivenStat>)>| {
             o.unwrap()
                 .0

@@ -53,7 +53,7 @@ impl Ctx<'_> {
     }
 
     fn db<T>(&self, f: impl FnOnce(&rusqlite::Connection) -> T) -> T {
-        f(&self.db.0.lock().unwrap())
+        f(&self.db.lock())
     }
 }
 
@@ -388,7 +388,7 @@ impl Engine {
     }
 
     pub fn status(&self, db: &Db) -> MarketAlertEngineStatus {
-        let rules = store::load(&db.0.lock().unwrap()).unwrap_or_default();
+        let rules = store::load(&db.lock()).unwrap_or_default();
         let mut rt = self.rt();
         let now = now_ms();
         rt.requests.retain(|t| *t > now - HOUR_MS);

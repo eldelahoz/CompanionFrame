@@ -244,7 +244,7 @@ fn a_saved_run_survives_reopening_the_database() {
     let id = {
         let d = db::open(&path).unwrap();
         let run = save(
-            &mut d.0.lock().unwrap(),
+            &mut d.lock(),
             Finished {
                 parsed: parse_lines(&[
                     mission(100.0, CASTA),
@@ -264,7 +264,7 @@ fn a_saved_run_survives_reopening_the_database() {
         run.id
     };
     let reopened = db::open(&path).unwrap();
-    let got = get(&reopened.0.lock().unwrap(), &id).unwrap();
+    let got = get(&reopened.lock(), &id).unwrap();
     assert_eq!((got.rotations, got.drones), (2, 2));
     drop(reopened);
     let _ = std::fs::remove_dir_all(&dir);

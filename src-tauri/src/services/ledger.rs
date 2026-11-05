@@ -265,7 +265,7 @@ fn all(conn: &Connection) -> rusqlite::Result<Vec<TradeEvent>> {
 pub struct SqlSink<'a>(pub &'a Db);
 impl LedgerSink for SqlSink<'_> {
     fn add_events(&self, events: Vec<TradeEvent>) -> Result<ApplyOutcome, LedgerErrorCode> {
-        let mut conn = self.0.0.lock().unwrap();
+        let mut conn = self.0.lock();
         add_events(&mut conn, &events).map_err(|e| {
             tracing::warn!("[Ledger] write failed: {e}");
             LedgerErrorCode::ImportWriteFailed
@@ -281,13 +281,13 @@ fn read_err(e: rusqlite::Error) -> LedgerErrorCode {
 #[tauri::command]
 #[specta::specta]
 pub fn ledger_get_range(db: State<Db>, query: LedgerQuery) -> Result<LedgerPage, LedgerErrorCode> {
-    self::query(&db.0.lock().unwrap(), &query).map_err(read_err)
+    self::query(&db.read(), &query).map_err(read_err)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn ledger_add(db: State<Db>, event: TradeEvent) -> Result<(), LedgerErrorCode> {
-    add_events(&mut db.0.lock().unwrap(), &[event])
+    add_events(&mut db.lock(), &[event])
         .map(drop)
         .map_err(|_| LedgerErrorCode::SaveFailed)
 }
@@ -295,19 +295,19 @@ pub fn ledger_add(db: State<Db>, event: TradeEvent) -> Result<(), LedgerErrorCod
 #[tauri::command]
 #[specta::specta]
 pub fn ledger_edit(db: State<Db>, id: String, patch: LedgerPatch) -> Result<(), LedgerErrorCode> {
-    edit(&db.0.lock().unwrap(), &id, &patch)
+    edit(&db.lock(), &id, &patch)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn ledger_undo_batch(db: State<Db>, batch_id: String) -> Result<u32, LedgerErrorCode> {
-    delete_batch(&db.0.lock().unwrap(), &batch_id).map_err(|_| LedgerErrorCode::SaveFailed)
+    delete_batch(&db.lock(), &batch_id).map_err(|_| LedgerErrorCode::SaveFailed)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn ledger_list_batches(db: State<Db>) -> Result<Vec<LedgerBatch>, LedgerErrorCode> {
-    list_batches(&db.0.lock().unwrap(), 5).map_err(read_err)
+    list_batches(&db.read(), 5).map_err(read_err)
 }
 
 #[tauri::command]
@@ -317,7 +317,7 @@ pub fn gdpr_preview_file(
     staging: State<GdprStaging>,
     db: State<Db>,
 ) -> Result<ImportPreview, LedgerErrorCode> {
-    let existing = all(&db.0.lock().unwrap()).map_err(read_err)?;
+    let existing = all(&db.lock()).map_err(read_err)?;
     staging.preview_file(std::path::Path::new(&path), &existing, &NoCatalog)
 }
 
@@ -499,21 +499,21 @@ mod tests {
             "Date,Type,Item,Platinum,Partner\n2024-03-04,Sale,Ash Prime Chassis,45,Kestrel\n2024-03-05,Purchase,Nikana Prime Blade,30,Vor\nnot a row\n",
         )
         .unwrap();
-        let db = Db(std::sync::Mutex::new(mem_conn()));
+        let db = Db::new(mem_conn());
         let staging = GdprStaging::default();
         let preview = staging.preview_file(&file, &[], &NoCatalog).unwrap();
         let out = staging.apply(&preview.batch_id, &SqlSink(&db)).unwrap();
         assert_eq!(out.applied, 2);
         assert!(preview.counts.rejected >= 1 || preview.counts.unresolved >= 1);
 
-        let existing = all(&db.0.lock().unwrap()).unwrap();
+        let existing = all(&db.lock()).unwrap();
         let again = staging.preview_file(&file, &existing, &NoCatalog).unwrap();
         assert_eq!(again.counts.parsed, 0);
         assert_eq!(again.counts.duplicates, 2);
         let out = staging.apply(&again.batch_id, &SqlSink(&db)).unwrap();
         assert_eq!(out.applied, 0);
 
-        let conn = db.0.lock().unwrap();
+        let conn = db.lock();
         assert_eq!(query(&conn, &LedgerQuery::default()).unwrap().total, 2);
         assert_eq!(delete_batch(&conn, &preview.batch_id).unwrap(), 2);
         std::fs::remove_dir_all(dir).ok();

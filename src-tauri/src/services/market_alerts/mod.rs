@@ -87,7 +87,7 @@ pub fn market_alerts_get(
     engine: State<'_, Engine>,
 ) -> Result<Vec<MarketAlertEntry>, String> {
     let now = now_ms();
-    let rows = store::load(&db.0.lock().unwrap()).map_err(db_err)?;
+    let rows = store::load(&db.lock()).map_err(db_err)?;
     Ok(rows
         .into_iter()
         .map(|(rule, binding)| MarketAlertEntry {
@@ -108,7 +108,7 @@ pub fn market_alerts_set(
 ) -> Result<MarketAlertRule, String> {
     let mut rule = payload.rule;
     rule.validate()?;
-    let conn = db.0.lock().unwrap();
+    let conn = db.lock();
     let rule = store::save(&conn, rule, payload.binding.unwrap_or_default())?;
     if let (Some(item), Some(n)) = (&rule.item, payload.owned_count) {
         store::set_owned(&conn, &item.item_url_name, n).map_err(db_err)?;
@@ -128,7 +128,7 @@ pub fn market_alerts_delete(
     engine: State<'_, Engine>,
     id: String,
 ) -> Result<bool, String> {
-    let gone = store::delete(&db.0.lock().unwrap(), &id).map_err(db_err)?;
+    let gone = store::delete(&db.lock(), &id).map_err(db_err)?;
     engine.forget_rule(&id);
     emit_changed(&app);
     Ok(gone)
@@ -143,7 +143,7 @@ pub fn market_alerts_set_enabled(
     id: String,
     enabled: bool,
 ) -> Result<bool, String> {
-    let found = store::set_enabled(&db.0.lock().unwrap(), &id, enabled).map_err(db_err)?;
+    let found = store::set_enabled(&db.lock(), &id, enabled).map_err(db_err)?;
     if enabled {
         engine.reset_rule(&id);
     } else {
@@ -160,9 +160,7 @@ pub fn market_alerts_clear_cooldown(
     engine: State<'_, Engine>,
     id: String,
 ) -> Result<bool, String> {
-    let found = store::get(&db.0.lock().unwrap(), &id)
-        .map_err(db_err)?
-        .is_some();
+    let found = store::get(&db.lock(), &id).map_err(db_err)?.is_some();
     if found {
         engine.reset_rule(&id);
     }
@@ -191,13 +189,13 @@ pub async fn market_alerts_test(
 #[tauri::command]
 #[specta::specta]
 pub fn market_alerts_hits_get(db: State<'_, Db>) -> Result<Vec<MarketAlertHit>, String> {
-    store::hits(&db.0.lock().unwrap()).map_err(db_err)
+    store::hits(&db.lock()).map_err(db_err)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub fn market_alerts_hits_clear(app: AppHandle, db: State<'_, Db>) -> Result<(), String> {
-    store::clear_hits(&db.0.lock().unwrap()).map_err(db_err)?;
+    store::clear_hits(&db.lock()).map_err(db_err)?;
     emit_changed(&app);
     Ok(())
 }
@@ -215,7 +213,7 @@ pub fn market_alerts_status(
 #[tauri::command]
 #[specta::specta]
 pub fn market_alerts_export(db: State<'_, Db>, ids: Option<Vec<String>>) -> Result<String, String> {
-    let rows = store::load(&db.0.lock().unwrap()).map_err(db_err)?;
+    let rows = store::load(&db.lock()).map_err(db_err)?;
     let picked: Vec<_> = rows
         .into_iter()
         .map(|(r, _)| r)
@@ -233,7 +231,7 @@ pub fn market_alerts_import(
     text: String,
 ) -> Result<u32, String> {
     let parsed = parse_import(&text)?;
-    let conn = db.0.lock().unwrap();
+    let conn = db.lock();
     let have = store::load(&conn).map_err(db_err)?.len();
     if have + parsed.len() > MAX_RULES {
         return Err("rule limit reached".into());

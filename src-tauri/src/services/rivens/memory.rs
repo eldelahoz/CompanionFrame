@@ -76,7 +76,7 @@ mod tests {
     #[test]
     fn a_card_round_trips_by_weapon_and_rolls_newest_first() {
         let db = mem_db();
-        let conn = db.0.lock().unwrap();
+        let conn = db.lock();
         assert_eq!(recall(&conn, "Staticor", 7), None);
         let (a, b) = (
             card("Staticor", 7, 94.2, 10),

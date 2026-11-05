@@ -149,7 +149,7 @@ pub fn points_from_payload(body: &Value, now_ms: f64) -> Vec<MarketStatPoint> {
 }
 
 pub fn load(db: &Db, slug: &str) -> rusqlite::Result<Vec<MarketStatPoint>> {
-    let conn = db.0.lock().unwrap();
+    let conn = db.read();
     let mut stmt = conn.prepare(
         "SELECT source, time, volume, median, moving_avg, avg_price, open_price, closed_price,
                 min_price, max_price, donch_top, donch_bot, rank
@@ -192,7 +192,7 @@ pub fn record(
         return Ok(stored);
     }
     let merged = merge(stored, fresh, mode);
-    let mut conn = db.0.lock().unwrap();
+    let mut conn = db.lock();
     let tx = conn.transaction()?;
     tx.execute("DELETE FROM price_history WHERE slug = ?1", [slug])?;
     {

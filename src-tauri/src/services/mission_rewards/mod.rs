@@ -794,8 +794,7 @@ impl Deps for AppDeps {
     fn changed(&self) {
         let status = self.shared.engine.lock().unwrap().status();
         let db = self.app.state::<Db>();
-        let summaries =
-            history::recent(&db.0.lock().unwrap(), history::RECENT_LIMIT).unwrap_or_default();
+        let summaries = history::recent(&db.lock(), history::RECENT_LIMIT).unwrap_or_default();
         let _ = self.app.emit(
             "mission-reward",
             MissionRewardsPayload { summaries, status },
@@ -837,7 +836,7 @@ pub fn tracker(app: &AppHandle) -> Box<dyn LineTracker> {
     let sink_app = app.clone();
     let shared = Arc::new(Shared::new(Engine::new(Box::new(move |summary| {
         let db = sink_app.state::<Db>();
-        if let Err(e) = history::append(&db.0.lock().unwrap(), &summary) {
+        if let Err(e) = history::append(&db.lock(), &summary) {
             tracing::warn!("[MissionRewards] saving a mission failed: {e}");
         }
     }))));
@@ -845,7 +844,7 @@ pub fn tracker(app: &AppHandle) -> Box<dyn LineTracker> {
         app: app.clone(),
         shared: shared.clone(),
     });
-    if tracking_saved(&app.state::<Db>().0.lock().unwrap()) {
+    if tracking_saved(&app.state::<Db>().lock()) {
         shared
             .engine
             .lock()
@@ -868,7 +867,7 @@ pub fn mission_rewards_page(
 ) -> Result<MissionRewardsPage, String> {
     let q = history::normalize_query(query)?;
     let status = mr.shared.engine.lock().unwrap().status();
-    history::query(&db.0.lock().unwrap(), &q, status).map_err(db_err)
+    history::query(&db.lock(), &q, status).map_err(db_err)
 }
 
 #[tauri::command]
@@ -881,7 +880,7 @@ pub fn mission_rewards_set_tracking(
     if enabled {
         crate::services::memory_gate::require()?;
     }
-    save_tracking(&db.0.lock().unwrap(), enabled).map_err(db_err)?;
+    save_tracking(&db.lock(), enabled).map_err(db_err)?;
     let current = mr.deps.current_inventory();
     let status = {
         let mut e = mr.shared.engine.lock().unwrap();
