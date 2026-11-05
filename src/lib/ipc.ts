@@ -41,7 +41,7 @@ import {
   type OrderUpdates_Deserialize as OrderUpdates,
   type TrackersStatus_Serialize as TrackersStatus, type PresenceOptions, type PresenceState_Deserialize, type Status as WfmStatus, type WsStatus,
   type WorldState,
-  type ChannelState, type NotificationEntry, type NotificationSource, type SoundAsset, type SoundUpload, type SourceToggles, type WebhookChannel, type WebhookTestError, type WebhookUrlError, type DiscordPingError, type WorldNotifyPrefs_Serialize as WorldNotifyPrefs, type WorldFissureAlert, type ArbiRunRecord_Serialize as ArbiRunRecord, type ArbiRunsPayload_Serialize as ArbiRunsPayload, type ArbiImportResult_Serialize as ArbiImportResult, type PtRunRecord_Serialize, type PtPhase as PtPhaseBinding, type WfmContract_Serialize as WfmContract, type WfmContractsPage_Serialize as WfmContractsPage, type RivenSearchOptions_Deserialize as RivenSearchOptions, type RivenAuctionCreate_Deserialize as RivenAuctionCreate, type RivenAuctionUpdate_Deserialize as RivenAuctionUpdate, type SendRepResult, type ArbiScheduleEntry as ArbiScheduleEntryBinding, type ArbiScheduleAlerts as ArbiScheduleAlertsBinding, type TradeDetected_Serialize as TradeDetected, type LedgerBatch_Serialize as LedgerBatchBinding, type LedgerQuery_Deserialize as LedgerQuery, type LedgerPatch_Deserialize as LedgerPatch, type ImportPreview_Serialize as ImportPreview, type ApplyResult, type EeLogStatus_Serialize as EeLogStatus, type OnnxStatus_Serialize as OnnxStatus, type GameWindowInfo_Serialize as GameWindowInfo, type ScanDebug,
+  type ChannelState, type NotificationEntry, type NotificationSource, type SoundAsset, type SoundUpload, type SourceToggles, type WebhookChannel, type WebhookTestError, type WebhookUrlError, type DiscordPingError, type WorldNotifyPrefs_Serialize as WorldNotifyPrefs, type WorldFissureAlert, type ArbiRunRecord_Serialize as ArbiRunRecord, type ArbiRunsPayload_Serialize as ArbiRunsPayload, type ArbiImportResult_Serialize as ArbiImportResult, type PtRunRecord_Serialize, type PtPhase as PtPhaseBinding, type WfmContract_Serialize as WfmContract, type WfmContractsPage_Serialize as WfmContractsPage, type RivenSearchOptions_Deserialize as RivenSearchOptions, type RivenAuctionCreate_Deserialize as RivenAuctionCreate, type RivenAuctionUpdate_Deserialize as RivenAuctionUpdate, type SendRepResult, type ArbiScheduleEntry as ArbiScheduleEntryBinding, type ArbiScheduleAlerts as ArbiScheduleAlertsBinding, type TradeDetected_Serialize as TradeDetected, type LedgerBatch_Serialize as LedgerBatchBinding, type LedgerQuery_Deserialize as LedgerQuery, type LedgerPatch_Deserialize as LedgerPatch, type ImportPreview_Serialize as ImportPreview, type ApplyResult, type EeLogStatus_Serialize as EeLogStatus, type OnnxStatus_Serialize as OnnxStatus, type GameWindowInfo_Serialize as GameWindowInfo, type ScanDebug, type DevTradeSample,
 } from "../bindings";
 import type { TradeEvent } from "../types/stats";
 import { localDayKey } from "../../config/shared/dayKey";
@@ -248,6 +248,12 @@ export const captureGameWindowInfo = async (): Promise<GameWindowInfo> =>
   inTauri() ? unwrap(await commands.captureGameWindowInfo()) : { found: true, x: 0, y: 0, width: 1920, height: 1080, dpi: 96, source: "window", black: false, error: null };
 /** What the last reward scan saw; null before any scan. */
 export const rewardScanDebug = async (): Promise<ScanDebug | null> => (inTauri() ? unwrap(await commands.rewardScanDebug()) : { cards: 4, slots: [["Forma Blueprint"], ["Ash Prime Systems"], ["50 Endo"], ["Ivara Prime Chassis"]] });
+
+export type { DevTradeSample };
+/** Developer panel (debug builds only): shows the trade popup with sample data; nothing is recorded or sent to warframe.market. */
+export const devTradeSample = async (sample: DevTradeSample): Promise<void> => {
+  if (inTauri()) unwrap(await commands.devTradeSample(sample));
+};
 
 /** Whether Windows can read reward cards in the game language (its OCR pack is installed). */
 export const ocrLanguageStatus = async (): Promise<OcrLanguageStatus> => {

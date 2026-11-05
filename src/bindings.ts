@@ -210,6 +210,11 @@ export const commands = {
 	 *  dismisses it. False when WFM refused, so the overlay stays for a retry.
 	 */
 	tradeNotificationCloseMatch: (token: number | null, orderId: string) => typedError<boolean, string>(__TAURI_INVOKE("trade_notification_close_match", { token, orderId })),
+	/**
+	 *  Developer panel: shows the popup for a sample trade, through the tracker's own `enqueue`. The
+	 *  sample is never recorded (no ledger, inventory or event) and never talks to warframe.market.
+	 */
+	devTradeSample: (sample: DevTradeSample) => typedError<null, string>(__TAURI_INVOKE("dev_trade_sample", { sample })),
 	/**  Closes the card. A `token` of an older round is ignored, so a late click cannot close the next. */
 	rewardOverlayClose: (token: number | null) => typedError<null, string>(__TAURI_INVOKE("reward_overlay_close", { token })),
 	/**  What the last frame read (card count and OCR candidates per slot), for diagnosing a miss. */
@@ -983,6 +988,11 @@ export type DecodedRivens_Serialize = {
 	veiled: VeiledRivenEntry_Serialize[],
 	veiledUnseen: VeiledRivenGroup[],
 };
+
+/**  The popup states the developer panel can preview. */
+export type DevTradeSample = "OneListing" | "TwoListings" | 
+/**  Auto-closed, thank-you copied. */
+"Closed" | "Purchase" | "NoListing" | "PlainTrade";
 
 export type Direction = "given" | "received";
 

@@ -5,6 +5,7 @@ import { LOCALE_OPTIONS, type MessageKey, type Translator } from "../lib/i18n";
 import WorldNotifySettings from "../components/settings/WorldNotifySettings";
 import OverlaySettings from "../components/settings/OverlaySettings";
 import DiagnosticsCard from "../components/settings/DiagnosticsCard";
+import DeveloperCard from "../components/settings/DeveloperCard";
 import AboutCard from "../components/settings/AboutCard";
 import UpdatesCard from "../components/settings/UpdatesCard";
 import HelpCard from "../components/settings/HelpCard";
@@ -205,6 +206,7 @@ export default function SettingsView({ settings, onChange, tr, market }: Props) 
               <div className="settings-card-body">{s.body}</div>
             </Card>
           ))}
+          {import.meta.env.DEV && <DeveloperCard />}
           {visible.length === 0 && (
             <Card className="settings-card">
               <EmptyState icon={<SearchX />} title={tr("settings.searchEmpty", { query })} />

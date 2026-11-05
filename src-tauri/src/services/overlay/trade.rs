@@ -7,15 +7,15 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 use super::{OverlayKind, with};
-use crate::services::gdpr_import::TradeType;
+use crate::services::gdpr_import::{Direction, TradeEvent, TradeItem, TradeType};
 use crate::services::trackers::TradeDetected;
 use crate::services::workbench::commands::WfmHost;
-use crate::services::workbench::matcher::{Matcher, WorkbenchTradeMatch};
+use crate::services::workbench::matcher::{Matcher, WorkbenchMatchKind, WorkbenchTradeMatch};
 use crate::store::{Settings, Store};
 
 /// `trade-overlay` carries a [`TradeOverlayView`]; `current: None` means the queue is empty.
@@ -182,9 +182,15 @@ pub async fn close_trade_matches(
     matches: &[WorkbenchTradeMatch],
     thank: bool,
 ) -> (Vec<String>, bool) {
+    // Dev samples never reach warframe.market: they stay open so the failed state can be previewed.
+    let real: Vec<_> = matches
+        .iter()
+        .filter(|m| !is_sample_order(&m.order_id))
+        .cloned()
+        .collect();
     let closed = app
         .state::<Matcher<WfmHost>>()
-        .close_all(matches, |m| {
+        .close_all(&real, |m| {
             crate::services::workbench::commands::announce_order_closed(app, m);
         })
         .await;
@@ -214,6 +220,135 @@ pub async fn close_trade_matches(
         }
     });
     (closed, copied)
+}
+
+/// Order ids of the developer panel's sample trades start with this.
+const SAMPLE_PREFIX: &str = "dev-sample-";
+
+fn is_sample_order(order_id: &str) -> bool {
+    order_id.starts_with(SAMPLE_PREFIX)
+}
+
+/// The popup states the developer panel can preview.
+#[derive(Clone, Copy, Debug, Deserialize, specta::Type)]
+pub enum DevTradeSample {
+    OneListing,
+    TwoListings,
+    /// Auto-closed, thank-you copied.
+    Closed,
+    Purchase,
+    NoListing,
+    PlainTrade,
+}
+
+fn sample_trade(sample: DevTradeSample) -> TradeDetected {
+    use DevTradeSample::*;
+    let item = |name: &str, count, direction| TradeItem {
+        internal_name: String::new(),
+        display_name: name.into(),
+        count,
+        direction,
+        wfm_slug: None,
+        wfm_thumb: None,
+    };
+    let order = |n: u32, name: &str, platinum, trade_type| WorkbenchTradeMatch {
+        kind: WorkbenchMatchKind::Order,
+        order_id: format!("{SAMPLE_PREFIX}{n}"),
+        item_name: name.into(),
+        item_url_name: None,
+        item_thumb: None,
+        quantity: 1,
+        platinum,
+        partner: "TraderName".into(),
+        trade_type,
+        per_trade: None,
+    };
+    let (kind, plat_change, items, matches) = match sample {
+        OneListing | Closed => (
+            TradeType::Sale,
+            90,
+            vec![item("Sample Prime Set", 1, Direction::Given)],
+            vec![order(1, "Sample Prime Set", 90, TradeType::Sale)],
+        ),
+        TwoListings => (
+            TradeType::Sale,
+            120,
+            vec![
+                item("Sample Prime Set", 1, Direction::Given),
+                item("Sample Mod", 1, Direction::Given),
+            ],
+            vec![
+                order(1, "Sample Prime Set", 90, TradeType::Sale),
+                order(2, "Sample Mod", 30, TradeType::Sale),
+            ],
+        ),
+        Purchase => (
+            TradeType::Purchase,
+            50,
+            vec![item("Sample Mod", 1, Direction::Received)],
+            vec![order(1, "Sample Mod", 50, TradeType::Purchase)],
+        ),
+        NoListing => (
+            TradeType::Sale,
+            40,
+            vec![item("Sample Mod", 1, Direction::Given)],
+            vec![],
+        ),
+        PlainTrade => (
+            TradeType::Trade,
+            0,
+            vec![
+                item("Sample Prime Set", 1, Direction::Given),
+                item("Sample Mod", 1, Direction::Received),
+            ],
+            vec![],
+        ),
+    };
+    let (mut items, closed) = (items, matches!(sample, Closed));
+    if kind != TradeType::Trade {
+        let dir = if kind == TradeType::Sale {
+            Direction::Received
+        } else {
+            Direction::Given
+        };
+        items.push(item("Platinum", plat_change as u32, dir));
+    }
+    TradeDetected {
+        closed: matches
+            .iter()
+            .filter(|_| closed)
+            .map(|m| m.order_id.clone())
+            .collect(),
+        thanks_copied: closed,
+        matches,
+        trade: TradeEvent {
+            id: format!("{SAMPLE_PREFIX}trade"),
+            date: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            kind,
+            plat_change,
+            items,
+            partner: Some("TraderName".into()),
+            schema_version: None,
+            source: None,
+            source_record_id: None,
+            import_batch_id: None,
+            wfm_closed: None,
+            credits: None,
+            trade_tax: None,
+        },
+    }
+}
+
+/// Developer panel: shows the popup for a sample trade, through the tracker's own `enqueue`. The
+/// sample is never recorded (no ledger, inventory or event) and never talks to warframe.market.
+#[tauri::command]
+#[specta::specta]
+pub async fn dev_trade_sample(app: AppHandle, sample: DevTradeSample) -> Result<(), String> {
+    if !cfg!(debug_assertions) {
+        return Err("developer samples exist only in development builds".into());
+    }
+    enqueue(&app, sample_trade(sample));
+    Ok(())
 }
 
 /// The message to copy: only for a closed sale, when the user enabled it and wrote something.
@@ -271,6 +406,54 @@ mod tests {
         assert_eq!(thanks(true, "ty", &[]), None);
         assert_eq!(thanks(false, "ty", &[Sale]), None);
         assert_eq!(thanks(true, "  ", &[Sale]), None);
+    }
+
+    #[test]
+    fn sample_orders_are_told_apart_from_real_ones() {
+        assert!(is_sample_order("dev-sample-1"));
+        assert!(!is_sample_order("65f0c1"));
+        // Every sample match carries the reserved prefix, so none can reach WFM.
+        use DevTradeSample::*;
+        for s in [OneListing, TwoListings, Closed, Purchase] {
+            assert!(
+                sample_trade(s)
+                    .matches
+                    .iter()
+                    .all(|m| is_sample_order(&m.order_id))
+            );
+        }
+    }
+
+    #[test]
+    fn each_sample_builds_the_intended_state() {
+        use DevTradeSample::*;
+        // (sample, type, matches, closed, thanks_copied)
+        let cases = [
+            (OneListing, TradeType::Sale, 1, 0, false),
+            (TwoListings, TradeType::Sale, 2, 0, false),
+            (Closed, TradeType::Sale, 1, 1, true),
+            (Purchase, TradeType::Purchase, 1, 0, false),
+            (NoListing, TradeType::Sale, 0, 0, false),
+            (PlainTrade, TradeType::Trade, 0, 0, false),
+        ];
+        for (sample, kind, matches, closed, thanks) in cases {
+            let d = sample_trade(sample);
+            assert_eq!(
+                (
+                    d.trade.kind,
+                    d.matches.len(),
+                    d.closed.len(),
+                    d.thanks_copied
+                ),
+                (kind, matches, closed, thanks),
+                "{sample:?}"
+            );
+            assert!(
+                d.closed
+                    .iter()
+                    .all(|c| d.matches.iter().any(|m| &m.order_id == c))
+            );
+        }
     }
 
     fn head(q: &Queue) -> Option<String> {

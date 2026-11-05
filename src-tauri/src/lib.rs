@@ -208,6 +208,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::overlay::overlay_move_mode,
             services::overlay::trade::trade_notification_dismiss,
             services::overlay::trade::trade_notification_close_match,
+            services::overlay::trade::dev_trade_sample,
             services::overlay::reward::reward_overlay_close,
             services::overlay::reward::reward_scan_debug,
             services::overlay::riven::riven_overlay_scan,
