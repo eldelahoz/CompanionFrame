@@ -45,7 +45,7 @@ Needs a real login to verify, see [manual-tests/wfm-webview-login.md](manual-tes
 
 ## Rules that shape the client
 
-From the warframe.market API rules: use an identifiable User-Agent and do not pose as a browser; rate limits can change without notice (the scheduler in `scheduler.rs` stays well under them); automation and trade bots are a "grey area", so every order, auction or +rep write is a user click.
+From the warframe.market API rules: use an identifiable User-Agent and do not pose as a browser; rate limits can change without notice (the scheduler in `scheduler.rs` stays well under them); automation and trade bots are a "grey area", so every order, auction or +rep write is a user click. The one exception is the opt-in `auto_close_trade_listings` setting (off by default, warned in Settings), which closes the listings a detected trade matches.
 
 ## Open questions
 
