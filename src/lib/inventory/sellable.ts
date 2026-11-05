@@ -57,11 +57,13 @@ export function verdictResolver(items: readonly ParsedItem[], context: SafetyCon
 /** Sellable copies of a row and the main rule that keeps the others. */
 export interface Sellable {
   count: number;
+  /** Copies owned, the denominator of "1 of 3". */
+  of: number;
   reasonKey?: SafetyReservation["reasonKey"];
   params?: Readonly<Record<string, string | number>>;
 }
 
 export function toSellable(verdict: SafetyVerdict): Sellable {
   const why = verdict.reserved > 0 ? verdict.reservations.find((r) => r.binding && r.quantity > 0) : undefined;
-  return { count: verdict.safe, reasonKey: why?.reasonKey, params: why?.params ?? { count: verdict.reserved } };
+  return { count: verdict.safe, of: verdict.total, reasonKey: why?.reasonKey, params: why?.params ?? { count: verdict.reserved } };
 }

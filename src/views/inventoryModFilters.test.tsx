@@ -112,13 +112,23 @@ test("no chip, no sellable count", async () => {
 test("Hornet Strike R0 x2 with nothing else sells one", async () => {
   await openMods();
   press("data-inventory-mod-duplicates");
-  expect(sellableOf(HS)).toEqual(["Sellable 1"]);
+  expect(sellableOf(HS)).toEqual(["1 of 2"]);
+});
+
+test("the card shows Sellable as a value row with its label, never in the badges", async () => {
+  await openMods();
+  press("data-inventory-mod-duplicates");
+  const card = document.querySelector(`[data-inventory-card='${HS}']`)!;
+  expect(card.querySelector(".inv-card-badges [data-inventory-sellable]")).toBeNull();
+  const row = card.querySelector(".inv-card-values .inv-price-row [data-inventory-sellable]")!;
+  expect(row.textContent).toBe("1 of 2");
+  expect(row.closest(".inv-price-row")?.querySelector(".inv-price-label")?.textContent).toBe("Sellable");
 });
 
 test("Continuity R0 x4 beside an equipped R5 sells all four, and the R5 none", async () => {
   await openMods();
   press("data-inventory-mod-duplicates");
-  await waitFor(() => expect(sellableOf(CON)).toEqual(["Sellable 4", "Sellable 0"]));
+  await waitFor(() => expect(sellableOf(CON)).toEqual(["4 of 4", "0 of 1"]));
 });
 
 test("the sellable count follows the list view too", async () => {

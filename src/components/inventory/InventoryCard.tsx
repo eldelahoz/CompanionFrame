@@ -8,7 +8,7 @@ import type { PriceInfo } from "../../lib/inventory/itemPrices";
 import type { InvRow } from "../../lib/inventory/inventoryRows";
 import type { MasteryMark as Mark } from "../../lib/inventory/masteryMark";
 import MasteryMark from "./MasteryMark";
-import SellableTag from "./SellableTag";
+import { SellableRow } from "./SellableTag";
 import type { Sellable } from "../../lib/inventory/sellable";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
 
@@ -58,7 +58,6 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
           </Badge>
         )}
         <MasteryMark mark={mastery} tr={tr} />
-        {sellable && <SellableTag sellable={sellable} tr={tr} />}
       </div>
       {row.slug && (
         <IconButton label={tr("inventory.openMarket")} className="inv-card-book" onClick={onBook}>
@@ -67,6 +66,7 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
       )}
       <div className="inv-card-values">
         <RankIndicator row={row} tr={tr} />
+        {sellable && <SellableRow sellable={sellable} tr={tr} />}
         {row.slug && (
           <>
             <div className="inv-price-row">

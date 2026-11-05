@@ -2091,6 +2091,8 @@
   "inventory.mods.notMax": "Nicht max. Rang",
   "inventory.mods.notEquipped": "Nicht ausgerüstet",
   "inventory.sellable": "Verkaufbar {count}",
+  "inventory.sellableLabel": "Verkaufbar",
+  "inventory.sellableOf": "{count} von {total}",
   "inventory.surplus": "Überschuss",
   "inventory.averageHint": "Median der Tagesmediane der letzten 7 Tage auf warframe.market",
   "inventory.loadAverage": "Laden",

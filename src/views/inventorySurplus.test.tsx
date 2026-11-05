@@ -78,15 +78,15 @@ test("Surplus on Everything shows the Akarius barrels, three owned and two for t
   await open(/Everything/);
   await waitFor(() => expect(chip("data-inventory-surplus")).toBeTruthy());
   press("data-inventory-surplus");
-  await waitFor(() => expect(sellableOf(BARREL)).toEqual(["Sellable 1"]));
-  expect(cards(BARREL)[0].querySelector("[data-inventory-sellable]")?.getAttribute("title")).toContain("2");
+  await waitFor(() => expect(sellableOf(BARREL)).toEqual(["1 of 3"]));
+  expect(cards(BARREL)[0].querySelector("[data-inventory-sellable]")?.closest(".inv-price-row")?.getAttribute("title")).toContain("2");
 });
 
 test("a part of a mastered weapon has no floor, so every copy is sellable", async () => {
   await open(/Everything/);
   await waitFor(() => expect(chip("data-inventory-surplus")).toBeTruthy());
   press("data-inventory-surplus");
-  await waitFor(() => expect(sellableOf(RECEIVER)).toEqual(["Sellable 2"]));
+  await waitFor(() => expect(sellableOf(RECEIVER)).toEqual(["2 of 2"]));
 });
 
 test("Surplus hides rows with nothing to sell and combines with Tradable only", async () => {
@@ -94,10 +94,10 @@ test("Surplus hides rows with nothing to sell and combines with Tradable only", 
   await waitFor(() => expect(chip("data-inventory-surplus")).toBeTruthy());
   const before = document.querySelectorAll("[data-inventory-card]").length;
   press("data-inventory-surplus");
-  await waitFor(() => expect(sellableOf(RECEIVER)).toEqual(["Sellable 2"]));
+  await waitFor(() => expect(sellableOf(RECEIVER)).toEqual(["2 of 2"]));
   const cardsNow = [...document.querySelectorAll("[data-inventory-card]")];
   expect(cardsNow.length).toBeLessThan(before);
-  expect(cardsNow.every((c) => c.querySelector("[data-inventory-sellable]")?.textContent !== "Sellable 0")).toBe(true);
+  expect(cardsNow.every((c) => !c.querySelector("[data-inventory-sellable]")?.textContent?.startsWith("0 of"))).toBe(true);
   // A lone R5 arcane is the kept copy of its mod, so ARC_B (one copy) never shows.
   expect(cards(ARC_B)).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Tradable only" }));
@@ -108,7 +108,7 @@ test("Surplus shows on every listed tab and not on Resources", async () => {
   await open(/Mods/);
   await waitFor(() => expect(chip("data-inventory-surplus")).toBeTruthy());
   press("data-inventory-surplus");
-  await waitFor(() => expect(sellableOf(HS)).toEqual(["Sellable 1"]));
+  await waitFor(() => expect(sellableOf(HS)).toEqual(["1 of 2"]));
   fireEvent.click(screen.getByRole("tab", { name: /Resources/ }));
   expect(chip("data-inventory-surplus")).toBeNull();
 });

@@ -583,8 +583,14 @@
   }
   .inv-sellable {
     margin-inline-start: var(--space-2);
-    color: var(--text-muted);
+    color: var(--success);
     font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+  .inv-sellable-fig {
+    color: var(--success);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
   .inv-more {
