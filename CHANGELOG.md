@@ -2,6 +2,17 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.1 (2026-11-05)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Fixed
+* fix(eelog): parse ee.log and dbwin trade lines separately by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/21
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.4.0...v0.4.1
+
 ## 0.4.0 (2026-11-01)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
