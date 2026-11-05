@@ -112,3 +112,10 @@ test("Surplus shows on every listed tab and not on Resources", async () => {
   fireEvent.click(screen.getByRole("tab", { name: /Resources/ }));
   expect(chip("data-inventory-surplus")).toBeNull();
 });
+
+test("the filter chips explain themselves in their title", async () => {
+  await open(/Everything/);
+  await waitFor(() => expect(chip("data-inventory-surplus")).toBeTruthy());
+  expect(chip("data-inventory-surplus")!.getAttribute("title")).toBe(tr("inventory.surplus.hint"));
+  expect(chip("data-inventory-surplus")!.getAttribute("title")).toContain("Keeps one copy");
+});

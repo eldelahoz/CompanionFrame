@@ -326,11 +326,11 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                 <Chip pressed={tradableOnly} onClick={manual(() => setTradableOnly(!tradableOnly))}>
                   {tr("inventory.tradableOnly")}
                 </Chip>
-                <Chip pressed={surplusOnly} data-inventory-surplus onClick={manual(() => setSurplusOnly(!surplusOnly))}>
+                <Chip pressed={surplusOnly} title={tr("inventory.surplus.hint")} data-inventory-surplus onClick={manual(() => setSurplusOnly(!surplusOnly))}>
                   {tr("inventory.surplus")}
                 </Chip>
                 {hasEquipped && (
-                  <Chip pressed={equippedView} data-inventory-equipped-toggle onClick={() => setEquippedView(!equippedView)}>
+                  <Chip pressed={equippedView} title={tr("inventory.equipped.hint")} data-inventory-equipped-toggle onClick={() => setEquippedView(!equippedView)}>
                     {tr("inventory.equipped")}
                   </Chip>
                 )}
@@ -341,13 +341,13 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                 )}
                 {canFilterMods && (
                   <>
-                    <Chip pressed={modWant.duplicates} data-inventory-mod-duplicates onClick={manual(() => toggleMod("duplicates"))}>
+                    <Chip pressed={modWant.duplicates} title={tr("inventory.mods.duplicates.hint")} data-inventory-mod-duplicates onClick={manual(() => toggleMod("duplicates"))}>
                       {tr("inventory.mods.duplicates")}
                     </Chip>
-                    <Chip pressed={modWant.notMax} data-inventory-mod-not-max onClick={manual(() => toggleMod("notMax"))}>
+                    <Chip pressed={modWant.notMax} title={tr("inventory.mods.notMax.hint")} data-inventory-mod-not-max onClick={manual(() => toggleMod("notMax"))}>
                       {tr("inventory.mods.notMax")}
                     </Chip>
-                    <Chip pressed={modWant.notEquipped} data-inventory-mod-not-equipped onClick={manual(() => toggleMod("notEquipped"))}>
+                    <Chip pressed={modWant.notEquipped} title={tr("inventory.mods.notEquipped.hint")} data-inventory-mod-not-equipped onClick={manual(() => toggleMod("notEquipped"))}>
                       {tr("inventory.mods.notEquipped")}
                     </Chip>
                   </>
