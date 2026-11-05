@@ -2091,6 +2091,7 @@
   "inventory.mods.notMax": "Not max rank",
   "inventory.mods.notEquipped": "Not equipped",
   "inventory.sellable": "Sellable {count}",
+  "inventory.surplus": "Surplus",
   "inventory.averageHint": "Median of the daily median prices of the last 7 days on warframe.market",
   "inventory.loadAverage": "Load",
   "inventory.priceHint": "Average sale price of the last 48 hours on warframe.market",

@@ -90,6 +90,7 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   const [primeWant, setPrimeWant] = useState<"all" | "prime" | "non">("all");
   const [masteryWant, setMasteryWant] = useState<"all" | "mastered" | "missing">("all");
   const [modWant, setModWant] = useState<ModFilters>(NO_MOD_FILTERS);
+  const [surplusOnly, setSurplusOnly] = useState(false);
   const toggleMod = (key: keyof ModFilters) => setModWant((cur) => ({ ...cur, [key]: !cur[key] }));
   // A goal is a shortcut: it sets exactly its filters, and touching any filter by hand releases it.
   const pickGoal = (g: Goal) => {
@@ -100,6 +101,7 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
     setMasteryWant(f.masteryWant);
     setPrimeWant("all");
     setModWant(NO_MOD_FILTERS);
+    setSurplusOnly(false);
     setRange(f.range);
     setCustomRange(false);
   };
@@ -166,7 +168,7 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   const modFilter = canFilterMods ? modWant : NO_MOD_FILTERS;
   const copies = useMemo(() => modCopies(rows), [rows]);
   // The safety context (mastery, foundry walk) is only worth building while a chip asks for the sellable count.
-  const showSellable = modFiltersOn(modFilter);
+  const showSellable = surplusOnly || modFiltersOn(modFilter);
   const safety = useInventorySafety(showSellable ? data : null, items as unknown as Record<string, ItemDbEntry>);
   const sellable = useMemo(() => {
     if (!showSellable) return null;
@@ -176,12 +178,12 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   }, [showSellable, parsed, inTab, safety.context]);
   const sellableOf = (row: InvRow) => sellable?.get(row.key);
   const filtered = useMemo(
-    () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
+    () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (!surplusOnly || (sellable?.get(r.key)?.count ?? 0) > 0) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
     // masteryOf only reads masteryIndex and items.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [inTab, tradableOnly, ducatsFilter, copies, modFilter, primeFilter, masteryFilter, masteryIndex, items],
+    [inTab, tradableOnly, ducatsFilter, copies, modFilter, surplusOnly, sellable, primeFilter, masteryFilter, masteryIndex, items],
   );
-  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${modFilter.duplicates}|${modFilter.notMax}|${modFilter.notEquipped}|${primeFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
+  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${modFilter.duplicates}|${modFilter.notMax}|${modFilter.notEquipped}|${surplusOnly}|${primeFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
 
   // Prices: the rows on screen first, then the rest of the tab and every row the value strip counts, in the background.
   // Missing parts of incomplete sets are priced like any row: through the same queue.
@@ -319,6 +321,9 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                 />
                 <Chip pressed={tradableOnly} onClick={manual(() => setTradableOnly(!tradableOnly))}>
                   {tr("inventory.tradableOnly")}
+                </Chip>
+                <Chip pressed={surplusOnly} data-inventory-surplus onClick={manual(() => setSurplusOnly(!surplusOnly))}>
+                  {tr("inventory.surplus")}
                 </Chip>
                 {canFilterDucats && (
                   <Chip pressed={ducatsOnly} data-inventory-ducats onClick={manual(() => setDucatsOnly(!ducatsOnly))}>

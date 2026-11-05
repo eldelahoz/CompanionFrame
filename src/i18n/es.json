@@ -2091,6 +2091,7 @@
   "inventory.mods.notMax": "No están al máximo",
   "inventory.mods.notEquipped": "No equipados",
   "inventory.sellable": "Vendibles {count}",
+  "inventory.surplus": "Sobrantes",
   "inventory.averageHint": "Mediana de las medianas diarias de los últimos 7 días en warframe.market",
   "inventory.loadAverage": "Cargar",
   "inventory.priceHint": "Precio medio de venta de las últimas 48 horas en warframe.market",

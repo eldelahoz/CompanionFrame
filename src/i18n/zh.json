@@ -2091,6 +2091,7 @@
   "inventory.mods.notMax": "未满级",
   "inventory.mods.notEquipped": "未装备",
   "inventory.sellable": "可出售 {count}",
+  "inventory.surplus": "多余",
   "inventory.averageHint": "warframe.market 上最近7天每日中位价的中位数",
   "inventory.loadAverage": "加载",
   "inventory.priceHint": "warframe.market 上最近48小时的平均成交价",
