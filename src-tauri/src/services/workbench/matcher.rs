@@ -126,6 +126,14 @@ re!(RIVEN_RANK, r"(?i)riven\s+rank");
 re!(VEILED_RIVEN, r"(?i)riven\s+mod$");
 re!(BLUEPRINT_SUFFIX, r"(?i) Blueprint$");
 
+/// "Serration (RANK 10)" -> ("Serration", "(RANK 10)"); None without a parenthesised suffix.
+pub(crate) fn split_paren_suffix(name: &str) -> Option<(&str, &str)> {
+    let c = PAREN_SUFFIX.captures(name.trim())?;
+    let (base, suffix) = (c.get(1)?, c.get(2)?);
+    // Keep the suffix verbatim, parentheses included.
+    Some((base.as_str().trim(), &name.trim()[suffix.start() - 1..]))
+}
+
 /// "Serration (RANK 10)" / "Rubico Visio-Critatis (RIVEN RANK 0)" -> base name, rank, riven parts.
 pub(crate) fn parse_traded_name(display: &str) -> ParsedName {
     let name = display.trim();
@@ -594,5 +602,20 @@ fn order_match(
         partner: trade.partner.clone(),
         trade_type: trade.kind,
         per_trade: Some(o.per_trade.max(1)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn localized_rank_suffix_parses_rank_and_base() {
+        let p = parse_traded_name("Pistol Mutation (RARE RANG 0)");
+        assert_eq!((p.base_name.as_str(), p.rank), ("Pistol Mutation", Some(0)));
+        assert_eq!(
+            split_paren_suffix("Mutation de Pistolet (RARE RANG 0)"),
+            Some(("Mutation de Pistolet", "(RARE RANG 0)"))
+        );
     }
 }
