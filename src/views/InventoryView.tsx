@@ -20,6 +20,7 @@ import { parseOwnedRelics } from "../lib/relic/relicInventory";
 import { SORT_KEYS, buildRows, hasDucats, sortRows, valueEntries, type InvRow, type SortKey } from "../lib/inventory/inventoryRows";
 import { GOALS, GOAL_FILTERS, PLAT_PRESETS, parseBound, passesPlatRange, presetKey, usePersistedRange, type Goal } from "../lib/inventory/invFilters";
 import { computeInventoryValueTotals } from "../lib/inventory/valueTotals";
+import { NO_MOD_FILTERS, modCopies, passesModFilters, type ModFilters } from "../lib/inventory/modFilters";
 import { usePersisted } from "../lib/usePersisted";
 import { useInventory, useParsedInventory, useResources } from "../stores/inventory";
 import NoInventoryState from "../components/inventory/NoInventoryState";
@@ -86,6 +87,8 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   const [ducatsOnly, setDucatsOnly] = useState(false);
   const [primeWant, setPrimeWant] = useState<"all" | "prime" | "non">("all");
   const [masteryWant, setMasteryWant] = useState<"all" | "mastered" | "missing">("all");
+  const [modWant, setModWant] = useState<ModFilters>(NO_MOD_FILTERS);
+  const toggleMod = (key: keyof ModFilters) => setModWant((cur) => ({ ...cur, [key]: !cur[key] }));
   // A goal is a shortcut: it sets exactly its filters, and touching any filter by hand releases it.
   const pickGoal = (g: Goal) => {
     const f = GOAL_FILTERS[g];
@@ -94,6 +97,7 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
     setDucatsOnly(f.ducatsOnly);
     setMasteryWant(f.masteryWant);
     setPrimeWant("all");
+    setModWant(NO_MOD_FILTERS);
     setRange(f.range);
     setCustomRange(false);
   };
@@ -155,13 +159,17 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   }, [rows, tab]);
   const primeFilter = canFilterPrime ? primeWant : "all";
   const ducatsFilter = ducatsOnly && canFilterDucats;
+  // The mod chips show only where mods are listed; a copy count spans every rank row of a mod, whatever the search hides.
+  const canFilterMods = useMemo(() => (tab === "everything" || tab === "mods") && rows.some((r) => r.item.inventoryGroup === "mods"), [rows, tab]);
+  const modFilter = canFilterMods ? modWant : NO_MOD_FILTERS;
+  const copies = useMemo(() => modCopies(rows), [rows]);
   const filtered = useMemo(
-    () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
+    () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
     // masteryOf only reads masteryIndex and items.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [inTab, tradableOnly, ducatsFilter, primeFilter, masteryFilter, masteryIndex, items],
+    [inTab, tradableOnly, ducatsFilter, copies, modFilter, primeFilter, masteryFilter, masteryIndex, items],
   );
-  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${primeFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
+  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${modFilter.duplicates}|${modFilter.notMax}|${modFilter.notEquipped}|${primeFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
 
   // Prices: the rows on screen first, then the rest of the tab and every row the value strip counts, in the background.
   // Missing parts of incomplete sets are priced like any row: through the same queue.
@@ -304,6 +312,19 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                   <Chip pressed={ducatsOnly} data-inventory-ducats onClick={manual(() => setDucatsOnly(!ducatsOnly))}>
                     {tr("common.ducats")}
                   </Chip>
+                )}
+                {canFilterMods && (
+                  <>
+                    <Chip pressed={modWant.duplicates} data-inventory-mod-duplicates onClick={manual(() => toggleMod("duplicates"))}>
+                      {tr("inventory.mods.duplicates")}
+                    </Chip>
+                    <Chip pressed={modWant.notMax} data-inventory-mod-not-max onClick={manual(() => toggleMod("notMax"))}>
+                      {tr("inventory.mods.notMax")}
+                    </Chip>
+                    <Chip pressed={modWant.notEquipped} data-inventory-mod-not-equipped onClick={manual(() => toggleMod("notEquipped"))}>
+                      {tr("inventory.mods.notEquipped")}
+                    </Chip>
+                  </>
                 )}
                 {canFilterPrime && (
                   <>
