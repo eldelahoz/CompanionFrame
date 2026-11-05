@@ -34,7 +34,8 @@ pub fn arbi_tracker(app: &AppHandle) -> Box<dyn LineTracker> {
 #[tauri::command]
 #[specta::specta]
 pub fn arbi_runs_get(db: State<Db>) -> Result<ArbiRunsPayload, String> {
-    arbi::payload(&db.read()).map_err(|e| e.to_string())
+    db.timed_read("arbi_payload", arbi::payload)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -114,7 +115,8 @@ pub fn pt_tracker(app: &AppHandle) -> Box<dyn LineTracker> {
 #[tauri::command]
 #[specta::specta]
 pub fn pt_runs_get(db: State<Db>) -> Result<PtRunsPayload, String> {
-    pt::payload(&db.read()).map_err(|e| e.to_string())
+    db.timed_read("pt_payload", pt::payload)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

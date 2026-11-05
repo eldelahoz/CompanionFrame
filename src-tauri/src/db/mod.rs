@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError, TryLockError};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use rusqlite::Connection;
 
@@ -118,29 +118,51 @@ impl Db {
     /// A free reader, trying each once from a rotating start, else waiting on one. Read-only paths only:
     /// a reader never sees an uncommitted write, so nothing that reads then writes belongs here.
     pub fn read(&self) -> MutexGuard<'_, Connection> {
+        self.read_via().0
+    }
+
+    /// `read` plus which connection answered: a reader's index, or `None` for the writer.
+    fn read_via(&self) -> (MutexGuard<'_, Connection>, Option<usize>) {
         let n = self.readers.len();
         if n == 0 {
-            return self.lock();
+            return (self.lock(), None);
         }
         let start = self.next.fetch_add(1, Ordering::Relaxed) % n;
         for i in 0..n {
-            match self.readers[(start + i) % n].try_lock() {
-                Ok(g) => return g,
+            let at = (start + i) % n;
+            match self.readers[at].try_lock() {
+                Ok(g) => return (g, Some(at)),
                 // A reader holds no state worth losing: take it over.
-                Err(TryLockError::Poisoned(p)) => return p.into_inner(),
+                Err(TryLockError::Poisoned(p)) => return (p.into_inner(), Some(at)),
                 Err(TryLockError::WouldBlock) => {}
             }
         }
-        self.readers[start]
+        let g = self.readers[start]
             .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .unwrap_or_else(PoisonError::into_inner);
+        (g, Some(start))
+    }
+
+    /// `read` around `f`, logging the connection used, the wait for it and the total time.
+    pub fn timed_read<T>(&self, name: &str, f: impl FnOnce(&Connection) -> T) -> T {
+        let t = Instant::now();
+        let (conn, via) = self.read_via();
+        let wait = t.elapsed();
+        let out = f(&conn);
+        let conn_name = via.map_or_else(|| "writer".to_owned(), |i| format!("reader{i}"));
+        tracing::info!(
+            "timing: db_read {name} conn={conn_name} wait_ms={} ms={}",
+            wait.as_millis(),
+            t.elapsed().as_millis()
+        );
+        out
     }
 }
 
 pub fn open(path: &Path) -> rusqlite::Result<Db> {
     let mut conn = Connection::open(path)?;
     conn.execute_batch(
-        "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; PRAGMA temp_store=MEMORY;",
+        "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; PRAGMA temp_store=MEMORY; PRAGMA mmap_size=268435456; PRAGMA cache_size=-16000;",
     )?;
     backup_before_migrating(&conn, path)?;
     migrate(&mut conn)?;
@@ -151,7 +173,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Db> {
     let readers = (0..READERS)
         .map(|_| {
             let r = Connection::open(path)?;
-            r.execute_batch("PRAGMA busy_timeout=5000; PRAGMA query_only=ON;")?;
+            r.execute_batch("PRAGMA busy_timeout=5000; PRAGMA query_only=ON; PRAGMA mmap_size=268435456; PRAGMA cache_size=-16000;")?;
             Ok(r)
         })
         .collect::<rusqlite::Result<_>>()?;

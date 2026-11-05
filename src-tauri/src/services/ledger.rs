@@ -281,7 +281,8 @@ fn read_err(e: rusqlite::Error) -> LedgerErrorCode {
 #[tauri::command]
 #[specta::specta]
 pub fn ledger_get_range(db: State<Db>, query: LedgerQuery) -> Result<LedgerPage, LedgerErrorCode> {
-    self::query(&db.read(), &query).map_err(read_err)
+    db.timed_read("ledger_query", |c| self::query(c, &query))
+        .map_err(read_err)
 }
 
 #[tauri::command]
@@ -307,7 +308,8 @@ pub fn ledger_undo_batch(db: State<Db>, batch_id: String) -> Result<u32, LedgerE
 #[tauri::command]
 #[specta::specta]
 pub fn ledger_list_batches(db: State<Db>) -> Result<Vec<LedgerBatch>, LedgerErrorCode> {
-    list_batches(&db.read(), 5).map_err(read_err)
+    db.timed_read("ledger_batches", |c| list_batches(c, 5))
+        .map_err(read_err)
 }
 
 #[tauri::command]

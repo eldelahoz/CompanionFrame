@@ -65,7 +65,8 @@ pub fn stats_get_session(stats: State<Stats>) -> SessionStats {
 #[tauri::command]
 #[specta::specta]
 pub fn stats_get_daily(db: State<Db>) -> Result<Vec<DailyStatEntry>, String> {
-    store::load_all(&db.read()).map_err(|e| e.to_string())
+    db.timed_read("stats_load_all", store::load_all)
+        .map_err(|e| e.to_string())
 }
 
 /// One day as exported by WFHelper: the six pre-map resources are flat fields.
