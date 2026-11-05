@@ -4,6 +4,9 @@
 //! Only successes are cached. A 401/403/408/429/5xx (see `errors::Class`) never turns into "no data":
 //! the stale list is served, or the error surfaces. Only 400/404 on a single item mean "not there".
 
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
 use reqwest::Method;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -35,6 +38,17 @@ fn data(v: Value) -> Option<Value> {
     }
 }
 
+/// `/versions` `collections.<collection>`; `None` when it cannot be read (offline, rate limited).
+async fn collection_version(client: &WfmClient, collection: &str) -> Option<String> {
+    let v = client
+        .request(Api::V2, Method::GET, "/versions", None)
+        .await
+        .ok()?;
+    v.pointer(&format!("/data/collections/{collection}"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+}
+
 /// Cached list for `path`, re-fetched when `/versions` `collections.<collection>` changed.
 /// `parse` yields the rows from `data`; an empty result is an error, never a cached empty list.
 pub(super) async fn cached_collection<T: Serialize + DeserializeOwned>(
@@ -45,26 +59,33 @@ pub(super) async fn cached_collection<T: Serialize + DeserializeOwned>(
     collection: &str,
     parse: fn(&Value) -> Vec<T>,
 ) -> Result<Vec<T>, WfmError> {
+    let version = collection_version(client, collection).await;
+    Ok(cached_collection_at(client, db, key, path, parse, version)
+        .await?
+        .0)
+}
+
+/// `cached_collection` with the current version already known; also returns the version of the rows.
+async fn cached_collection_at<T: Serialize + DeserializeOwned>(
+    client: &WfmClient,
+    db: &Db,
+    key: &str,
+    path: &str,
+    parse: fn(&Value) -> Vec<T>,
+    version: Option<String>,
+) -> Result<(Vec<T>, Option<String>), WfmError> {
     let cached = kv_get(db, key)
         .ok()
         .flatten()
         .and_then(|s| serde_json::from_str::<Stored<T>>(&s).ok())
         .filter(|s| !s.items.is_empty());
-    let version = client
-        .request(Api::V2, Method::GET, "/versions", None)
-        .await
-        .ok()
-        .and_then(|v| {
-            v.pointer(&format!("/data/collections/{collection}"))
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-        });
     // Unknown current version (offline, rate limited): the cached copy beats nothing.
     if cached
         .as_ref()
         .is_some_and(|c| version.is_none() || c.version == version)
     {
-        return Ok(cached.unwrap().items);
+        let c = cached.unwrap();
+        return Ok((c.items, c.version));
     }
     let fresh = match client.request(Api::V2, Method::GET, path, None).await {
         Ok(body) => data(body).map(|d| parse(&d)).filter(|r| !r.is_empty()),
@@ -80,9 +101,9 @@ pub(super) async fn cached_collection<T: Serialize + DeserializeOwned>(
             {
                 tracing::warn!(error = %e, key, "wfm cache write failed");
             }
-            Ok(stored.items)
+            Ok((stored.items, stored.version))
         }
-        (None, Some(c)) => Ok(c.items),
+        (None, Some(c)) => Ok((c.items, c.version)),
         (None, None) => Err(unusable(path)),
     }
 }
@@ -97,8 +118,75 @@ fn parse_items(d: &Value) -> Vec<CatalogItem> {
         .collect()
 }
 
-pub async fn items(client: &WfmClient, db: &Db) -> Result<Vec<CatalogItem>, WfmError> {
-    cached_collection(client, db, ITEMS_KEY, "/items", "items", parse_items).await
+/// `/versions` is asked at most this often while the catalog is in memory.
+const VERSION_EVERY: Duration = Duration::from_secs(600);
+/// A lookup that misses may force a check, but not more often than this.
+const MISS_EVERY: Duration = Duration::from_secs(60);
+
+/// The parsed catalog, kept for the life of the client. `kv_cache` stays the copy for a cold start.
+#[derive(Default)]
+pub(super) struct CatalogMem {
+    items: Option<Arc<Vec<CatalogItem>>>,
+    version: Option<String>,
+    checked: Option<Instant>,
+    miss_checked: Option<Instant>,
+}
+
+/// The catalog from memory. Parsing and `/versions` happen on a cold start, then once per
+/// `VERSION_EVERY`; a new collection version swaps the list.
+pub async fn items(client: &WfmClient, db: &Db) -> Result<Arc<Vec<CatalogItem>>, WfmError> {
+    load(client, db, false).await
+}
+
+/// `items`, and when `has` finds nothing in the list (a just-added item?) one forced check, at most
+/// once per `MISS_EVERY`.
+pub async fn items_containing(
+    client: &WfmClient,
+    db: &Db,
+    has: impl Fn(&[CatalogItem]) -> bool,
+) -> Result<Arc<Vec<CatalogItem>>, WfmError> {
+    let items = load(client, db, false).await?;
+    if has(&items) {
+        return Ok(items);
+    }
+    {
+        let mut mem = client.catalog.lock().await;
+        if mem.miss_checked.is_some_and(|t| t.elapsed() < MISS_EVERY) {
+            return Ok(items);
+        }
+        mem.miss_checked = Some(Instant::now());
+    }
+    load(client, db, true).await
+}
+
+async fn load(client: &WfmClient, db: &Db, force: bool) -> Result<Arc<Vec<CatalogItem>>, WfmError> {
+    // Held across the fetch: concurrent callers wait for it and then read memory.
+    let mut mem = client.catalog.lock().await;
+    let held = mem.items.clone();
+    if let (Some(items), Some(t), false) = (&held, mem.checked, force)
+        && t.elapsed() < VERSION_EVERY
+    {
+        return Ok(items.clone());
+    }
+    let version = collection_version(client, "items").await;
+    if let Some(items) = &held
+        && (version.is_none() || version == mem.version)
+    {
+        mem.checked = Some(Instant::now());
+        return Ok(items.clone());
+    }
+    match cached_collection_at(client, db, ITEMS_KEY, "/items", parse_items, version).await {
+        Ok((rows, v)) => {
+            let rows = Arc::new(rows);
+            (mem.items, mem.version, mem.checked) = (Some(rows.clone()), v, Some(Instant::now()));
+            Ok(rows)
+        }
+        Err(_) if held.is_some() => {
+            mem.checked = Some(Instant::now());
+            Ok(held.unwrap())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// A slug goes into the URL path: refuse anything that could change the route.
@@ -196,7 +284,7 @@ pub async fn get_wfm_items(
     session: State<'_, Session>,
     db: State<'_, Db>,
 ) -> Result<Vec<CatalogItem>, WfmError> {
-    items(session.client(), &db).await
+    Ok(items(session.client(), &db).await?.to_vec())
 }
 
 #[tauri::command]
@@ -251,7 +339,7 @@ mod tests {
                 "https://warframe.market/static/assets/items/images/en/thumbs/serration.711b19665b2acbac445c68c9e8f8b550.128x128.png"
             )
         );
-        // Same version: no second /items request.
+        // In memory: no second /versions and no second /items request.
         assert_eq!(items(&c, &db).await.unwrap(), list);
         assert_eq!(count(&m, "/items"), 1);
     }
@@ -266,6 +354,7 @@ mod tests {
         ]);
         let (c, db) = (client(&m), mem_db());
         items(&c, &db).await.unwrap();
+        age(&c);
         items(&c, &db).await.unwrap();
         assert_eq!(count(&m, "/items"), 2);
     }
@@ -283,14 +372,66 @@ mod tests {
             ]);
             let (c, db) = (client(&m), mem_db());
             items(&c, &db).await.unwrap();
+            age(&c);
             assert_eq!(items(&c, &db).await.unwrap().len(), 3, "stale on {status}");
             c.lift_gate();
             // The failure left no marker: the next call fetches again.
+            age(&c);
             items(&c, &db).await.unwrap();
             assert_eq!(count(&m, "/items"), 3, "retried after {status}");
         }
     }
 
+    /// Makes the in-memory catalog due for its `/versions` check.
+    fn age(c: &WfmClient) {
+        c.catalog.try_lock().unwrap().checked = None;
+    }
+
+    #[tokio::test]
+    async fn two_calls_in_the_window_ask_versions_once() {
+        let m = spawn(vec![reply(200, &versions("v1")), reply(200, ITEMS)]);
+        let (c, db) = (client(&m), mem_db());
+        let a = items(&c, &db).await.unwrap();
+        let b = items(&c, &db).await.unwrap();
+        assert!(Arc::ptr_eq(&a, &b));
+        assert_eq!((count(&m, "/versions"), count(&m, "/items")), (1, 1));
+    }
+
+    #[tokio::test]
+    async fn an_unchanged_version_keeps_the_parsed_list_and_a_new_one_swaps_it() {
+        let m = spawn(vec![
+            reply(200, &versions("v1")),
+            reply(200, ITEMS),
+            reply(200, &versions("v1")),
+            reply(200, &versions("v2")),
+            reply(200, ITEMS),
+        ]);
+        let (c, db) = (client(&m), mem_db());
+        let a = items(&c, &db).await.unwrap();
+        age(&c);
+        assert!(Arc::ptr_eq(&a, &items(&c, &db).await.unwrap()));
+        assert_eq!(count(&m, "/items"), 1);
+        age(&c);
+        assert!(!Arc::ptr_eq(&a, &items(&c, &db).await.unwrap()));
+        assert_eq!(count(&m, "/items"), 2);
+    }
+
+    #[tokio::test]
+    async fn a_missing_item_forces_one_check_a_minute() {
+        let m = spawn(vec![
+            reply(200, &versions("v1")),
+            reply(200, ITEMS),
+            reply(200, &versions("v1")),
+        ]);
+        let (c, db) = (client(&m), mem_db());
+        for _ in 0..3 {
+            let l = items_containing(&c, &db, |l| l.iter().any(|i| i.slug == "new_item"))
+                .await
+                .unwrap();
+            assert_eq!(l.len(), 3);
+        }
+        assert_eq!(count(&m, "/versions"), 2, "one cold start, one forced");
+    }
     #[tokio::test]
     async fn cold_cache_errors_surface_and_are_not_cached() {
         let m = spawn(vec![

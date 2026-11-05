@@ -184,7 +184,7 @@ pub async fn my_orders(client: &WfmClient, db: &Db) -> Result<MyOrders, WfmError
     // Without the catalog the list still renders, just with "(unknown)" names.
     let t = Instant::now();
     let items = if raw.is_empty() {
-        vec![]
+        Default::default()
     } else {
         catalog::items(client, db).await.unwrap_or_default()
     };
@@ -425,7 +425,9 @@ pub async fn orders_item(
 }
 
 async fn subtype_choices(client: &WfmClient, db: &Db, item_id: &str) -> Vec<String> {
-    let Ok(items) = catalog::items(client, db).await else {
+    let Ok(items) =
+        catalog::items_containing(client, db, |l| l.iter().any(|i| i.id == item_id)).await
+    else {
         return vec![];
     };
     let Some(slug) = items.iter().find(|i| i.id == item_id).map(|i| &i.slug) else {

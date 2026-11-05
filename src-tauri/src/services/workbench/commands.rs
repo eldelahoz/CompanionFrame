@@ -84,8 +84,11 @@ impl WorkbenchHost for WfmHost {
     }
 
     async fn item_id(&self, slug: &str) -> Result<Option<String>, WfmError> {
-        let items = catalog::items(self.session().client(), &self.db()).await?;
-        Ok(items.into_iter().find(|i| i.slug == slug).map(|i| i.id))
+        let items = catalog::items_containing(self.session().client(), &self.db(), |l| {
+            l.iter().any(|i| i.slug == slug)
+        })
+        .await?;
+        Ok(items.iter().find(|i| i.slug == slug).map(|i| i.id.clone()))
     }
 
     fn with_db<R>(&self, f: impl FnOnce(&Connection) -> R) -> R {
@@ -112,9 +115,9 @@ impl MatchHost for WfmHost {
             .await
             .ok()?;
         items
-            .into_iter()
+            .iter()
             .find(|i| i.name.to_lowercase() == wanted)
-            .map(|i| i.slug)
+            .map(|i| i.slug.clone())
     }
 
     async fn item_rank_info(&self, slug: &str) -> Result<Option<ItemRankInfo>, WfmError> {

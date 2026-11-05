@@ -240,8 +240,13 @@ async fn known_items(app: &AppHandle) -> HashMap<String, Known> {
         .await
         .unwrap_or_default();
     items
-        .into_iter()
-        .map(|i| (normalize_name(&i.name), (i.game_ref, i.slug, i.thumb)))
+        .iter()
+        .map(|i| {
+            (
+                normalize_name(&i.name),
+                (i.game_ref.clone(), i.slug.clone(), i.thumb.clone()),
+            )
+        })
         .collect()
 }
 

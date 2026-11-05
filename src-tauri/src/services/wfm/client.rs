@@ -9,6 +9,7 @@ use reqwest::{Method, Response, header};
 use serde_json::Value;
 use zeroize::Zeroizing;
 
+use super::catalog::CatalogMem;
 use super::errors::{Class, WfmError, error_detail};
 use super::scheduler::{self, Kind, Priority, Scheduler};
 use crate::services::net;
@@ -41,6 +42,7 @@ pub struct WfmClient {
     v2: String,
     token: Mutex<Option<String>>,
     sink: TokenSink,
+    pub(super) catalog: tokio::sync::Mutex<CatalogMem>,
     sched: Scheduler,
 }
 
@@ -71,6 +73,7 @@ impl WfmClient {
             token: Mutex::new(None),
             sink,
             sched: Scheduler::default(),
+            catalog: Default::default(),
         })
     }
 
