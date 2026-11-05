@@ -18,6 +18,7 @@ use crate::services::wfm::contracts::{self, Contracts, WfmContract};
 use crate::services::wfm::errors::WfmError;
 use crate::services::wfm::legacy_v1;
 use crate::services::wfm::orders::{self, MyOrder, MyOrders, SEND_PER_TRADE};
+use crate::services::wfm::scheduler::{self, Priority};
 use crate::services::wfm::session::Session;
 use crate::services::wfm::validators::{CreateOrder, OrderUpdates};
 
@@ -49,8 +50,11 @@ impl WorkbenchHost for WfmHost {
             per_trade: None,
             subtype: o.subtype,
         };
-        let created =
-            orders::create(self.session().client(), &self.db(), order, &SEND_PER_TRADE).await?;
+        let created = scheduler::scoped(
+            Priority::Job,
+            orders::create(self.session().client(), &self.db(), order, &SEND_PER_TRADE),
+        )
+        .await?;
         Ok(created.id)
     }
 
@@ -65,9 +69,12 @@ impl WorkbenchHost for WfmHost {
             quantity: Some(quantity),
             ..Default::default()
         };
-        Ok(orders::update(self.session().client(), id, updates)
-            .await?
-            .id)
+        Ok(scheduler::scoped(
+            Priority::Job,
+            orders::update(self.session().client(), id, updates),
+        )
+        .await?
+        .id)
     }
 
     async fn my_sell_orders(&self) -> Result<Vec<MyOrder>, WfmError> {

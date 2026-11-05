@@ -10,6 +10,7 @@ use serde_json::Value;
 use zeroize::Zeroizing;
 
 use super::errors::{Class, WfmError, error_detail};
+use super::scheduler::{self, Kind, Priority, Scheduler};
 use crate::services::net;
 
 pub const BASE_V1: &str = "https://api.warframe.market/v1";
@@ -40,6 +41,7 @@ pub struct WfmClient {
     v2: String,
     token: Mutex<Option<String>>,
     sink: TokenSink,
+    sched: Scheduler,
 }
 
 fn network(e: reqwest::Error) -> WfmError {
@@ -68,7 +70,13 @@ impl WfmClient {
             v2: v2.trim_end_matches('/').into(),
             token: Mutex::new(None),
             sink,
+            sched: Scheduler::default(),
         })
+    }
+
+    #[cfg(test)]
+    pub(super) fn lift_gate(&self) {
+        self.sched.lift_gate();
     }
 
     pub fn token(&self) -> Option<String> {
@@ -135,6 +143,7 @@ impl WfmClient {
     }
 
     /// JSON request against `api`, authenticated when a token is held. Adopts any rotated token.
+    /// Scheduled at the task's priority (`scheduler::scoped`), a user's call unless set otherwise.
     pub async fn request(
         &self,
         api: Api,
@@ -142,7 +151,22 @@ impl WfmClient {
         path: &str,
         json: Option<Zeroizing<String>>,
     ) -> Result<Value, WfmError> {
-        match self.send(&self.http, api, method, path, json).await? {
+        self.request_with(scheduler::current(), api, method, path, json)
+            .await
+    }
+
+    pub async fn request_with(
+        &self,
+        priority: Priority,
+        api: Api,
+        method: Method,
+        path: &str,
+        json: Option<Zeroizing<String>>,
+    ) -> Result<Value, WfmError> {
+        match self
+            .scheduled(&self.http, priority, api, method, path, json)
+            .await?
+        {
             Sent::Done(v) => Ok(v),
             Sent::Redirect(_) => Err(WfmError::invalid("unexpected redirect")),
         }
@@ -156,7 +180,45 @@ impl WfmClient {
         path: &str,
         json: Option<Zeroizing<String>>,
     ) -> Result<Sent, WfmError> {
-        self.send(&self.manual, api, method, path, json).await
+        let priority = scheduler::current();
+        self.scheduled(&self.manual, priority, api, method, path, json)
+            .await
+    }
+
+    /// `send` under the shared budget. Sign-in and the token probe skip it: they are one-off, and
+    /// must work while a 429 gate is up.
+    async fn scheduled(
+        &self,
+        http: &reqwest::Client,
+        priority: Priority,
+        api: Api,
+        method: Method,
+        path: &str,
+        json: Option<Zeroizing<String>>,
+    ) -> Result<Sent, WfmError> {
+        let kind = if method == Method::GET
+            && (path.contains("/contracts") || path.contains("/auctions"))
+        {
+            Kind::Contract
+        } else {
+            Kind::Normal
+        };
+        let queued = std::time::Instant::now();
+        self.sched
+            .run_kind(priority, kind, || async {
+                let (wait, started) = (queued.elapsed(), std::time::Instant::now());
+                let result = self.send(http, api, method, path, json).await;
+                // The first path segment is a fixed word (orders, items, ...), never an id.
+                let path_kind = path.trim_start_matches('/').split(['/', '?']).next();
+                tracing::debug!(
+                    "timing: wfm_request priority={priority:?} path_kind={} wait_ms={} ms={}",
+                    path_kind.unwrap_or(""),
+                    wait.as_millis(),
+                    started.elapsed().as_millis()
+                );
+                result
+            })
+            .await
     }
 
     async fn send(

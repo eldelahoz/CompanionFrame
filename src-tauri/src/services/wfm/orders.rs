@@ -19,6 +19,7 @@ use zeroize::Zeroizing;
 use super::catalog::{self, path_slug};
 use super::client::{Api, WfmClient};
 use super::errors::{Class, WfmError};
+use super::scheduler::{self, Priority};
 use super::session::Session;
 use super::types::{CatalogItem, asset_url};
 use super::validators::{self, CreateOrder, OrderUpdates};
@@ -360,18 +361,20 @@ pub async fn set_visible(
             visible: Some(visible),
             ..Default::default()
         };
-        out.push(match update(client, &id, updates).await {
-            Ok(order) => VisibilityResult {
-                id,
-                order: Some(order),
-                error: None,
+        out.push(
+            match scheduler::scoped(Priority::Job, update(client, &id, updates)).await {
+                Ok(order) => VisibilityResult {
+                    id,
+                    order: Some(order),
+                    error: None,
+                },
+                Err(e) => VisibilityResult {
+                    id,
+                    order: None,
+                    error: Some(e.to_string()),
+                },
             },
-            Err(e) => VisibilityResult {
-                id,
-                order: None,
-                error: Some(e.to_string()),
-            },
-        });
+        );
     }
     Ok(out)
 }
@@ -942,6 +945,7 @@ mod tests {
             orders_item(&c, "x", false, None, None).await,
             Err(WfmError::RateLimited { .. })
         ));
+        c.lift_gate();
         assert!(matches!(
             orders_item(&c, "x", false, None, None).await,
             Err(WfmError::Api { status: 503, .. })

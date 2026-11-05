@@ -284,6 +284,7 @@ mod tests {
             let (c, db) = (client(&m), mem_db());
             items(&c, &db).await.unwrap();
             assert_eq!(items(&c, &db).await.unwrap().len(), 3, "stale on {status}");
+            c.lift_gate();
             // The failure left no marker: the next call fetches again.
             items(&c, &db).await.unwrap();
             assert_eq!(count(&m, "/items"), 3, "retried after {status}");
