@@ -1,4 +1,5 @@
 // The only module that talks to the generated bindings. Outside Tauri (plain Vite, tests) an in-memory mock answers.
+import { logTiming, msSince } from "./timing";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -368,7 +369,13 @@ const mockStatus = (): InventoryStatus => ({
   picksApplied: mockSource === "none" ? 0 : 2,
   gameSyncedSinceImport: false,
 });
-const parseInv = (text: string | null): RawInventoryData | null => (text ? (JSON.parse(text) as RawInventoryData) : null);
+const parseInv = (text: string | null): RawInventoryData | null => {
+  if (!text) return null;
+  const t0 = performance.now();
+  const data = JSON.parse(text) as RawInventoryData;
+  logTiming("json_parse_inventory", { bytes: text.length, ms: msSince(t0) });
+  return data;
+};
 
 /** `?bigInv=2617` fills the mock with that many tradable mods, to check the Inventory view at a real account's size. */
 const bigInv = (): number => Math.min(10_000, Number(mockParam("bigInv")) || 0);
@@ -867,8 +874,12 @@ const mockOrderById = (id: string): MyOrder => {
   return o;
 };
 
-export const wfmOrdersMy = async (): Promise<MyOrders> =>
-  inTauri() ? unwrapWfm(await commands.wfmOrdersMy()) : mockOrderSplit();
+export const wfmOrdersMy = async (): Promise<MyOrders> => {
+  const t0 = performance.now();
+  const orders = inTauri() ? unwrapWfm(await commands.wfmOrdersMy()) : mockOrderSplit();
+  logTiming("fetch_orders", { orders: orders.sell.length + orders.buy.length, ms: msSince(t0) });
+  return orders;
+};
 
 export const wfmOrderCreate = async (order: CreateOrder): Promise<MyOrder> => {
   if (inTauri()) return unwrapWfm(await commands.wfmOrderCreate(order));

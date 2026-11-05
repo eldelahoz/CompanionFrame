@@ -1,6 +1,7 @@
 //! SQLite-backed `kv_cache` (small JSON blobs).
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use rusqlite::{OptionalExtension, params};
 
@@ -12,13 +13,30 @@ fn now() -> i64 {
         .map_or(0, |d| d.as_secs() as i64)
 }
 
+/// Running totals of `kv_get` calls and microseconds (lock wait included); callers diff two snapshots for the timing logs.
+static READS: AtomicU64 = AtomicU64::new(0);
+static READ_US: AtomicU64 = AtomicU64::new(0);
+
+/// `(calls, microseconds)` spent in `kv_get` so far.
+pub fn kv_read_totals() -> (u64, u64) {
+    (
+        READS.load(Ordering::Relaxed),
+        READ_US.load(Ordering::Relaxed),
+    )
+}
+
 pub fn kv_get(db: &Db, key: &str) -> rusqlite::Result<Option<String>> {
-    db.0.lock()
-        .unwrap()
-        .query_row("SELECT value FROM kv_cache WHERE key = ?1", [key], |r| {
-            r.get(0)
-        })
-        .optional()
+    let t = Instant::now();
+    let r =
+        db.0.lock()
+            .unwrap()
+            .query_row("SELECT value FROM kv_cache WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
+            .optional();
+    READS.fetch_add(1, Ordering::Relaxed);
+    READ_US.fetch_add(t.elapsed().as_micros() as u64, Ordering::Relaxed);
+    r
 }
 
 pub fn kv_put(db: &Db, key: &str, value: &str) -> rusqlite::Result<()> {
