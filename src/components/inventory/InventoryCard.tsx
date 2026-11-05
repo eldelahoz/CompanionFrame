@@ -9,6 +9,7 @@ import type { InvRow } from "../../lib/inventory/inventoryRows";
 import type { MasteryMark as Mark } from "../../lib/inventory/masteryMark";
 import MasteryMark from "./MasteryMark";
 import { SellableRow } from "./SellableTag";
+import EquippedPopover from "./EquippedOn";
 import type { Sellable } from "../../lib/inventory/sellable";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
 
@@ -27,11 +28,13 @@ interface Props {
   mastery?: Mark | null;
   /** Copies safe to sell; set only while the Surplus or a mod chip is on. */
   sellable?: Sellable;
+  /** The Equipped toggle is on: show where a mod or arcane is fitted. */
+  showEquipped?: boolean;
   tr: Translator;
 }
 
 /** One owned item: art, name, stack and its value chips. In selection mode the whole card toggles. */
-export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, tr }: Props) {
+export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, showEquipped, tr }: Props) {
   const { item } = row;
   const { bind, node } = useItemPreview({ name: row.label, slug: row.artSlug, src: item.imageUrl, fallback: item.fallbackImageUrl, tr });
   return (
@@ -59,6 +62,11 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
         )}
         <MasteryMark mark={mastery} tr={tr} />
       </div>
+      {showEquipped && !!item.equippedOn?.length && (
+        <div className="inv-card-equip">
+          <EquippedPopover list={item.equippedOn} variant="pill" tr={tr} />
+        </div>
+      )}
       {row.slug && (
         <IconButton label={tr("inventory.openMarket")} className="inv-card-book" onClick={onBook}>
           <Scale />

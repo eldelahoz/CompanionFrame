@@ -91,6 +91,7 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   const [masteryWant, setMasteryWant] = useState<"all" | "mastered" | "missing">("all");
   const [modWant, setModWant] = useState<ModFilters>(NO_MOD_FILTERS);
   const [surplusOnly, setSurplusOnly] = useState(false);
+  const [equippedView, setEquippedView] = useState(false);
   const toggleMod = (key: keyof ModFilters) => setModWant((cur) => ({ ...cur, [key]: !cur[key] }));
   // A goal is a shortcut: it sets exactly its filters, and touching any filter by hand releases it.
   const pickGoal = (g: Goal) => {
@@ -166,6 +167,9 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   // The mod chips show only where mods or arcanes are listed; a copy count spans every rank row, whatever the search hides.
   const canFilterMods = useMemo(() => (tab === "everything" || tab === "mods" || tab === "arcanes") && rows.some((r) => isUpgrade(r.item) && (tab === "everything" || r.item.inventoryGroup === tab)), [rows, tab]);
   const modFilter = canFilterMods ? modWant : NO_MOD_FILTERS;
+  // The Equipped toggle shows only where some listed mod or arcane has equipped data; it adds to the rows, never filters them.
+  const hasEquipped = useMemo(() => (tab === "everything" || tab === "mods" || tab === "arcanes") && rows.some((r) => !!r.item.equippedOn?.length && (tab === "everything" || r.item.inventoryGroup === tab)), [rows, tab]);
+  const showEquipped = equippedView && hasEquipped;
   const copies = useMemo(() => modCopies(rows), [rows]);
   // The safety context (mastery, foundry walk) is only worth building while a chip asks for the sellable count.
   const showSellable = surplusOnly || modFiltersOn(modFilter);
@@ -325,6 +329,11 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                 <Chip pressed={surplusOnly} data-inventory-surplus onClick={manual(() => setSurplusOnly(!surplusOnly))}>
                   {tr("inventory.surplus")}
                 </Chip>
+                {hasEquipped && (
+                  <Chip pressed={equippedView} data-inventory-equipped-toggle onClick={() => setEquippedView(!equippedView)}>
+                    {tr("inventory.equipped")}
+                  </Chip>
+                )}
                 {canFilterDucats && (
                   <Chip pressed={ducatsOnly} data-inventory-ducats onClick={manual(() => setDucatsOnly(!ducatsOnly))}>
                     {tr("common.ducats")}
@@ -481,12 +490,13 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                     extra={extraOf(row)}
                     mastery={masteryOf(row)}
                     sellable={sellableOf(row)}
+                    showEquipped={showEquipped}
                     tr={tr}
                   />
                 ))}
               </div>
             ) : (
-              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} tr={tr} />
+              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} tr={tr} />
             )}
             <ShowMore shown={shown.length} total={visible.length} onMore={more} tr={tr} />
           </div>

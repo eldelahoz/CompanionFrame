@@ -9,6 +9,7 @@ import type { InvRow } from "../../lib/inventory/inventoryRows";
 import type { MasteryMark as Mark } from "../../lib/inventory/masteryMark";
 import MasteryMark from "./MasteryMark";
 import SellableTag from "./SellableTag";
+import EquippedPopover from "./EquippedOn";
 import type { Sellable } from "../../lib/inventory/sellable";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
 
@@ -25,11 +26,12 @@ interface Props {
   extraOf?: (row: InvRow) => ReactNode;
   masteryOf?: (row: InvRow) => Mark | null;
   sellableOf?: (row: InvRow) => Sellable | undefined;
+  showEquipped?: boolean;
   tr: Translator;
 }
 
 /** Rows turn into labelled cards in a narrow container (Table mode="stack"). */
-export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, sellableOf, tr }: Props) {
+export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, sellableOf, showEquipped, tr }: Props) {
   return (
     <Table mode="stack" label={tr("inventory.viewList")} className="inv-list">
       <thead>
@@ -40,6 +42,7 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
           <th className="ui-num">{tr("inventory.col.platinum")}</th>
           <th className="ui-num">{tr("inventory.col.average")}</th>
           <th className="ui-num">{tr("inventory.col.ducats")}</th>
+          {showEquipped && <th>{tr("inventory.equipped")}</th>}
           <th aria-hidden="true" />
         </tr>
       </thead>
@@ -85,6 +88,11 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
               <td className="ui-num" data-label={tr("inventory.col.ducats")}>
                 <DucatValue row={row} />
               </td>
+              {showEquipped && (
+                <td data-label={tr("inventory.equipped")}>
+                  {row.item.equippedOn?.length ? <EquippedPopover list={row.item.equippedOn} variant="link" tr={tr} /> : <span className="text-text-muted">{tr("inventory.equipped.no")}</span>}
+                </td>
+              )}
               <td data-actions>
                 {row.slug && (
                   <IconButton label={tr("inventory.openMarket")} onClick={() => onBook(row)}>
