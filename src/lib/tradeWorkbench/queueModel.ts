@@ -174,13 +174,14 @@ export function buildQueueRows(
   context: SafetyContext,
   lookup: CatalogIndex,
   relicQuality?: RelicQualityResolver,
+  verdictOf: (item: ParsedItem) => SafetyVerdict = (item) => safeToList(item, context),
 ): WorkbenchQueueRow[] {
   const rows: WorkbenchQueueRow[] = [];
   for (const item of items) {
     if (item.inventoryGroup === "incomplete_sets") continue;
     const slug = resolveQueueSlug(item, lookup);
     if (!slug || isWfmExcludedSlug(slug)) continue;
-    const verdict = safeToList(item, context);
+    const verdict = verdictOf(item);
     if (verdict.total <= 0) continue;
     rows.push({
       rowId: `r${rows.length}`,
@@ -228,9 +229,10 @@ export function buildSelectedQueueRows(
   lookup: CatalogIndex,
   selection: ReadonlySet<string>,
   relicQuality?: RelicQualityResolver,
+  verdictOf?: (item: ParsedItem) => SafetyVerdict,
 ): WorkbenchQueueRow[] {
   const picked = items.filter((item) => selection.has(selectionKeyFor(item)));
-  return buildQueueRows(picked, context, lookup, relicQuality).map((row) => ({
+  return buildQueueRows(picked, context, lookup, relicQuality, verdictOf).map((row) => ({
     ...row,
     selected: true,
   }));
@@ -598,10 +600,11 @@ export function captureSafetySnapshot(
   rows: readonly WorkbenchQueueRow[],
   context: SafetyContext,
   now: number,
+  verdictOf: (item: ParsedItem) => SafetyVerdict = (item) => safeToList(item, context),
 ): WorkbenchSafetySnapshot {
   const snapshot: WorkbenchSafetySnapshot = { capturedAt: now, rows: {} };
   for (const row of rows) {
-    const verdict = safeToList(row.item, context);
+    const verdict = verdictOf(row.item);
     snapshot.rows[row.rowId] = { safe: verdict.safe, total: verdict.total };
   }
   return snapshot;

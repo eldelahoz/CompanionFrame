@@ -150,3 +150,14 @@ test("degraded protection rules are named in words, not ids, and stay put", asyn
   await new Promise((r) => setTimeout(r, 300));
   expect(document.querySelector("[data-workbench-degraded]")).toBeTruthy();
 });
+
+test("a mod and an arcane keep one copy at item level, so two copies queue one", async () => {
+  const upgrade = (name: string, group: "mods" | "arcanes", rank: number, amount: number) => ({ ...item(name, amount), inventoryGroup: group, rank, inventoryKey: `${name}#r${rank}` }) as ParsedItem;
+  const items = [upgrade("Hornet Strike", "mods", 0, 2), upgrade("Arcane Energize", "arcanes", 0, 2), upgrade("Arcane Energize", "arcanes", 3, 1)];
+  const upgradeCatalog = buildCatalogIndex([cat("Hornet Strike", "hornet_strike"), cat("Arcane Energize", "arcane_energize")]);
+  render(<BulkSellModal items={items} selection={new Set(items.slice(0, 2).map(selectionKeyFor))} inventory={null} itemDb={{}} catalog={upgradeCatalog} locale="en" tr={tr} onClose={() => {}} />);
+  await screen.findByText("Hornet Strike", { selector: "span" });
+  // The R3 arcane is not picked but still holds the kept copy, so the whole R0 stack of two sells.
+  const qty = [...document.querySelectorAll<HTMLInputElement>("[data-workbench-qty]")].map((i) => i.value);
+  expect(qty).toEqual(["1", "2"]);
+});

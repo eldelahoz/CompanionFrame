@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { WORKBENCH_MAX_ROWS_PER_RUN } from "../../../config/shared/tradeWorkbenchTypes";
 import type { MessageKey, Translator } from "../../lib/i18n";
 import { setRootOf } from "../../lib/inventory/fullSets";
-import { SAFETY_REASON_KEYS, safeToList } from "../../lib/inventory/safetyRules";
+import { SAFETY_REASON_KEYS } from "../../lib/inventory/safetyRules";
+import { verdictResolver } from "../../lib/inventory/sellable";
 import {
   workbenchAckOverride,
   workbenchCancelRun,
@@ -115,6 +116,8 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export default function BulkSellModal({ items, selection, inventory, itemDb, catalog, locale, tr, onClose }: Props) {
   const safety = useInventorySafety(inventory, itemDb);
   const ctx = safety.context;
+  // Mods and arcanes keep one copy at item level, the same rule the inventory's sellable count uses.
+  const verdictOf = useMemo(() => verdictResolver(items, ctx), [items, ctx]);
   const [wb, setWb] = useWorkbenchState();
 
   const [rows, setRows] = useState<QueueRow[]>(() => [...readCachedQueueRows()]);
@@ -219,7 +222,7 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
       if (signedIn) await loadOwnOrders();
       if (!live) return;
       // The existing order is always re-read from the fresh account orders, so a carried row reports what is listed right now.
-      const built = catalog ? buildSelectedQueueRows(items, ctx, catalog, selection).map((r) => attachMarketData(r, null, null, ordersRef.current)) : [];
+      const built = catalog ? buildSelectedQueueRows(items, ctx, catalog, selection, undefined, verdictOf).map((r) => attachMarketData(r, null, null, ordersRef.current)) : [];
       setRows(mergeQueueRows(restored, built));
       setQueueBuilt(true);
     })();
@@ -238,7 +241,7 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
   const patchRow = (next: QueueRow) => setRows((prev) => prev.map((r) => (r.rowId === next.rowId ? next : r)));
 
   /** Recompute verdicts against the live safety settings, keeping edits. */
-  const refreshSafety = () => setRows((prev) => prev.map((r) => setRowQuantity({ ...r, verdict: safeToList(r.item, ctx) }, r.quantity)));
+  const refreshSafety = () => setRows((prev) => prev.map((r) => setRowQuantity({ ...r, verdict: verdictOf(r.item) }, r.quantity)));
   // Settings edits rebuild the context; re-run the verdicts once it exists.
   const firstSafety = useRef(true);
   useEffect(() => {
@@ -320,7 +323,7 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
     void workbenchAckOverride({ planId: "queue", rowId: next.rowId, itemName: next.itemName, safeQuantity: next.verdict.safe, requestedQuantity: next.quantity, reasonKeys: bindingReasonKeys(next.verdict), acknowledgedAt: at }).catch(() => {});
   }
 
-  const snapshotFor = (planRowIds: Set<string>, now: number) => captureSafetySnapshot(rows.filter((r) => planRowIds.has(r.rowId)), ctx, now);
+  const snapshotFor = (planRowIds: Set<string>, now: number) => captureSafetySnapshot(rows.filter((r) => planRowIds.has(r.rowId)), ctx, now, verdictOf);
 
   function previewPlan() {
     setError(null);
