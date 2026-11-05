@@ -167,6 +167,22 @@ fn dispatch(slots: &Arc<Mutex<Slots>>) {
     }
 }
 
+/// One counted place in the queue, given back when dropped.
+struct Place<'a>(&'a AtomicUsize);
+
+impl<'a> Place<'a> {
+    fn take(counter: &'a AtomicUsize) -> Self {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Self(counter)
+    }
+}
+
+impl Drop for Place<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 pub struct Scheduler {
     bucket: Mutex<Bucket>,
     contracts: Mutex<Bucket>,
@@ -241,13 +257,12 @@ impl Scheduler {
     where
         Fut: Future<Output = Result<T, WfmError>>,
     {
-        if self.queued.fetch_add(1, Ordering::SeqCst) >= MAX_QUEUE {
-            self.queued.fetch_sub(1, Ordering::SeqCst);
+        // Released on drop: a caller that gives up (a timeout drops this future) must not leak its place.
+        let _place = Place::take(&self.queued);
+        if _place.0.load(Ordering::SeqCst) > MAX_QUEUE {
             return Err(WfmError::invalid("WFM request queue full"));
         }
-        let result = self.run_admitted(priority, kind, f).await;
-        self.queued.fetch_sub(1, Ordering::SeqCst);
-        result
+        self.run_admitted(priority, kind, f).await
     }
 
     /// Waits for a token of `bucket`; only a user's call gives up on a long wait.
@@ -501,6 +516,26 @@ mod tests {
         s.run(Priority::Job, ok).await.unwrap();
         assert!(t0.elapsed() >= Duration::from_secs(59));
         s.run(Priority::Background, ok).await.unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_caller_that_gives_up_releases_its_place_in_the_queue() {
+        let s = Scheduler::default();
+        let _ = s
+            .run(Priority::Interactive, || async {
+                Err::<u8, _>(WfmError::RateLimited {
+                    retry_after_secs: Some(300),
+                })
+            })
+            .await;
+        // Behind the gate these wait; each is dropped by its timeout. More than MAX_QUEUE of them.
+        for _ in 0..MAX_QUEUE + 5 {
+            let r =
+                tokio::time::timeout(Duration::from_secs(1), s.run(Priority::Background, ok)).await;
+            assert!(r.is_err(), "still waiting at the timeout");
+        }
+        assert_eq!(s.queued.load(Ordering::SeqCst), 0);
+        s.run(Priority::Job, ok).await.unwrap();
     }
 
     #[tokio::test(start_paused = true)]
