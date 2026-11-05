@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Translator } from "../../lib/i18n";
 import type { TradeEvent, TradeType } from "../../types/stats";
+import { useMarketArt } from "../../lib/useMarketArt";
 import ItemImage from "../ItemImage";
 import { ArrowDown, ArrowLeftRight, ArrowUp, SearchX } from "lucide-react";
 import { Badge, Button, Card, CardHeader, Chip, EmptyState, Readout, SearchInput } from "../ui";
@@ -13,6 +14,7 @@ const TYPE_LABEL = { sale: "stats.filterSale", purchase: "stats.filterPurchase",
 const TYPE_TONE = { sale: "success", purchase: "info", trade: "neutral" } as const;
 
 export default function StatsTradePanel({ trades, locale, tr }: { trades: TradeEvent[]; locale: string; tr: Translator }) {
+  const art = useMarketArt();
   const [filter, setFilter] = useState<TradeFilter>("all");
   const [search, setSearch] = useState("");
   const [visibleRows, setVisibleRows] = useState(PAGE_ROWS);
@@ -101,7 +103,7 @@ export default function StatsTradePanel({ trades, locale, tr }: { trades: TradeE
                   <div className="mt-1 flex flex-wrap gap-1">
                     {trade.items.map((item, i) => (
                       <span key={i} className="inline-flex max-w-full items-center gap-1 truncate rounded-[var(--radius-sm)] border border-border bg-bg-surface px-1.5 py-0.5 text-xs text-text-secondary">
-                        {item.wfmSlug && <ItemImage slug={item.wfmSlug} cls="size-4 shrink-0 rounded-sm object-contain" tr={tr} />}
+                        {item.wfmSlug && <ItemImage src={art(item.wfmSlug)} slug={item.wfmSlug} cls="size-4! shrink-0 rounded-sm object-contain" tr={tr} />}
                         {item.direction === "received" ? <ArrowDown className="size-3 shrink-0 text-success" aria-label={tr("stats.itemReceived")} /> : <ArrowUp className="size-3 shrink-0 text-danger" aria-label={tr("stats.itemSent")} />}
                         {item.count > 1 ? `${item.count}×` : ""}
                         {item.displayName}

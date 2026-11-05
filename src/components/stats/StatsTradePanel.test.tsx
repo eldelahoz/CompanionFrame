@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { Translator } from "../../lib/i18n";
 import type { TradeEvent } from "../../types/stats";
 import StatsTradePanel from "./StatsTradePanel";
+
+vi.mock("../../lib/useMarketArt", () => ({ useMarketArt: () => (slug: string | null | undefined) => (slug === "serration" ? "/art/serration.png" : null) }));
 
 afterEach(cleanup);
 
@@ -13,11 +15,16 @@ const item = (over: Partial<TradeEvent["items"][number]>): TradeEvent["items"][n
 
 it("loads item art through ItemImage, never from warframe.market/static", () => {
   const { container } = render(
-    <StatsTradePanel trades={[trade([item({ wfmSlug: "serration", wfmThumb: "items/images/en/thumbs/serration.png" })])]} locale="en" tr={tr} />,
+    <StatsTradePanel trades={[trade([item({ wfmSlug: "unknown_mod", wfmThumb: "items/images/en/thumbs/serration.png" })])]} locale="en" tr={tr} />,
   );
   for (const img of container.querySelectorAll("img")) expect(img.getAttribute("src")).not.toContain("warframe.market/static");
   // Outside Tauri there is no proxy source, so ItemImage shows its placeholder.
   expect(container.querySelector('[title="common.noImageAvailable"]')).not.toBeNull();
+});
+
+it("prefers local game art over the proxy", () => {
+  const { container } = render(<StatsTradePanel trades={[trade([item({ wfmSlug: "serration" })])]} locale="en" tr={tr} />);
+  expect(container.querySelector('img[src="/art/serration.png"]')).not.toBeNull();
 });
 
 it("renders no image for an item without a slug", () => {
