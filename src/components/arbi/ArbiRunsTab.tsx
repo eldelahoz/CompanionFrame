@@ -10,6 +10,7 @@ import { Button, Card, Checkbox, EmptyState, Field, Input, Select, Skeleton } fr
 import ArbiCompare from "./ArbiCompare";
 import ArbiRunDetail from "./ArbiRunDetail";
 import ArbiRunList from "./ArbiRunList";
+import { applyIds, useRangeSelect } from "../../lib/useRangeSelect";
 
 type TypeFilter = "all" | "defense" | "interception" | "disruption" | "other";
 type SourceFilter = "all" | "live" | "imported";
@@ -112,7 +113,9 @@ export default function ArbiRunsTab({ tr, selectedId, onSelect, refresh, busy }:
   const compareRuns = runs.filter((r) => selected.has(r.id)).slice(0, ARBI_COMPARE_MAX);
   const canCompare = picked.length >= 2 && picked.length <= ARBI_COMPARE_MAX;
 
-  const toggle = (id: string) => setSelected(new Set(selected.has(id) ? picked.filter((x) => x !== id) : [...picked, id]));
+  const range = useRangeSelect(filtered.map((r) => r.id));
+  // Shift+click takes every listed run between the last click and this one.
+  const toggle = (id: string, shift: boolean) => setSelected(applyIds(new Set(picked), range(id, shift), !selected.has(id)));
   const toggleAll = () => {
     const ids = filtered.map((r) => r.id);
     setSelected(new Set(ids.every((id) => selected.has(id)) ? picked.filter((id) => !ids.includes(id)) : [...picked, ...ids]));

@@ -12,7 +12,7 @@ interface Props {
   runs: ArbiRun[];
   onSelect: (id: string) => void;
   selected: ReadonlySet<string>;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: (id: string, shift: boolean) => void;
   onToggleSelectAll: () => void;
   tr: Translator;
 }

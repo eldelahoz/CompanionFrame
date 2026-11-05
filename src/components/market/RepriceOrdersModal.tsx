@@ -6,6 +6,7 @@ import { workbenchMedianLoader } from "../../lib/tradeWorkbench/medianReference"
 import { DEFAULT_DAMPING_RULE, isMedianStrategy, type StrategyConfig, type WorkbenchStrategyId } from "../../lib/tradeWorkbench/pricingStrategies";
 import { fetchItemOrderBookBySlug } from "../../lib/wfm/orderBook";
 import SegmentedControl from "../SegmentedControl";
+import { shiftOf, useRangeSelect } from "../../lib/useRangeSelect";
 
 // shortcut: no target-margin here, an order has no cost basis to price against; BulkSellModal asks for one by hand.
 const STRATEGIES = ["match-cheapest", "cheapest-minus-one", "percent-offset", "median-48h", "median-90d"] as const satisfies readonly WorkbenchStrategyId[];
@@ -97,7 +98,8 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApp
       isSignedOut: async () => !(await wfmSessionStatus()).logged_in,
       onProgress: (applied, bad) => setProgress({ phase: "applying", done: applied + bad.length, total: sending.length }),
     });
-    if (cancelled.current) return;
+    // closed mid-run: the orders already sent still changed, so the table must refresh
+    if (cancelled.current) return void (result.applied.length > 0 && onApplied());
     setProgress(null);
     setFailed(result.failed);
     setStopped(result.stopReason === "auth");
@@ -107,7 +109,13 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApp
     setRows((rs) => rs.filter((r) => !done.has(r.rowId)));
   };
 
-  const toggle = (id: string) => setRows((rs) => rs.map((r) => (r.rowId === id ? { ...r, selected: !r.selected } : r)));
+  const range = useRangeSelect(shown.map((r) => r.rowId));
+  // Shift+click takes every listed row between the last click and this one.
+  const toggle = (id: string, shift: boolean) => {
+    const on = !rows.find((r) => r.rowId === id)?.selected;
+    const ids = new Set(range(id, shift));
+    setRows((rs) => rs.map((r) => (ids.has(r.rowId) ? { ...r, selected: on } : r)));
+  };
   const inputCls = "w-20 rounded-md border border-border bg-surface-input px-2 py-1 text-sm text-text-primary outline-none focus:border-accent/70";
 
   return (
@@ -169,7 +177,7 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApp
               {shown.map((r) => (
                 <tr key={r.rowId} className="border-t border-border" data-reprice-row={r.rowId}>
                   <td className="px-2 py-1">
-                    <input type="checkbox" checked={r.selected} disabled={busy} aria-label={r.label} onChange={() => toggle(r.rowId)} />
+                    <input type="checkbox" checked={r.selected} disabled={busy} aria-label={r.label} onChange={(e) => toggle(r.rowId, shiftOf(e))} />
                   </td>
                   <td className="px-2 py-1">
                     {r.label}

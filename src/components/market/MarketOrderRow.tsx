@@ -4,11 +4,13 @@ import { normalizePerTrade } from "../../../config/shared/wfmOrders";
 import type { Translator } from "../../lib/i18n";
 import { openItemBy } from "../../stores/modals";
 import type { MyOrder } from "../../lib/ipc";
+import { orderAge } from "../../lib/market/orderAge";
 import { listingWarning, type ListingInventoryMatch } from "../../lib/marketListing";
 import { GameIcon } from "../icons";
-import { Badge, Button, IconButton, Switch } from "../ui";
+import { Badge, Button, Checkbox, IconButton, Switch } from "../ui";
 import ItemThumb from "./ItemThumb";
 import OrderStepper from "./OrderStepper";
+import { shiftOf } from "../../lib/useRangeSelect";
 
 interface Props {
   order: MyOrder;
@@ -23,11 +25,14 @@ interface Props {
   inventoryMatch?: ListingInventoryMatch | null;
   /** Public item art for the thumb (the item DB's), ahead of the wfmimg cache. */
   art?: string | null;
+  selected: boolean;
+  onSelect: (id: string, shift: boolean) => void;
+  locale: string;
   tr: Translator;
 }
 
 /** One order as a table row (MarketView wraps it in a stacking ui Table). */
-export default function MarketOrderRow({ order, busy, onEdit, onDelete, onCloseOne, onToggleVisible, onInlineSave, inventoryMatch = null, art = null, tr }: Props) {
+export default function MarketOrderRow({ order, busy, onEdit, onDelete, onCloseOne, onToggleVisible, onInlineSave, inventoryMatch = null, art = null, selected, onSelect, locale, tr }: Props) {
   // Drafts reset when the server value changes (a close patches the quantity) via the key on the row.
   const [platinum, setPlatinum] = useState(order.platinum);
   const [quantity, setQuantity] = useState(order.quantity);
@@ -42,7 +47,10 @@ export default function MarketOrderRow({ order, busy, onEdit, onDelete, onCloseO
       : tr(buy ? "market.orderBoughtTitle" : "market.orderSoldTitle");
 
   return (
-    <tr data-market-order={order.id}>
+    <tr data-market-order={order.id} data-selected={selected || undefined}>
+      <td>
+        <Checkbox checked={selected} onChange={(e) => onSelect(order.id, shiftOf(e))} aria-label={tr("market.selectOrder", { name: order.itemName })} />
+      </td>
       <td data-primary>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Badge tone={buy ? "info" : "warning"}>{buy ? "WTB" : "WTS"}</Badge>
@@ -67,6 +75,9 @@ export default function MarketOrderRow({ order, busy, onEdit, onDelete, onCloseO
       </td>
       <td data-label={tr("market.col.quantity")}>
         <OrderStepper value={quantity} label={tr("market.quantity")} onChange={setQuantity} tr={tr} />
+      </td>
+      <td data-label={tr("market.col.listed")} title={order.createdAt ?? undefined}>
+        {orderAge(order.createdAt, Date.now(), locale)}
       </td>
       <td data-label={tr(order.visible ? "market.liveLower" : "market.hiddenLower")}>
         <Switch checked={order.visible} disabled={busy} aria-label={tr(order.visible ? "market.setHidden" : "market.setVisible")} data-tip={tr(order.visible ? "market.setHidden" : "market.setVisible")} onChange={() => onToggleVisible(order)} />

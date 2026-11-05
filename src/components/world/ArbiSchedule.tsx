@@ -11,6 +11,7 @@ import {
   type ArbiSelectionPreset,
 } from "../../lib/world/arbiScheduleData";
 import { useClock } from "../../stores/world";
+import { applyIds, shiftOf, useRangeSelect } from "../../lib/useRangeSelect";
 
 const DAY_OPTIONS = [7, 14, 30, 60].map((d) => [d, String(d)] as const);
 const MAX_COPY_ROWS = 80;
@@ -75,7 +76,13 @@ export default function ArbiSchedule({ tr, locale }: { tr: Translator; locale: s
     const next = await call;
     if (next) setAlerts(next);
   };
-  const toggleCopyRow = (key: string) => setCopySelection((cur) => new Set(cur.has(key) ? [...cur].filter((k) => k !== key) : [...cur, key]));
+  const range = useRangeSelect(dayGroups.flatMap((g) => g.entries.map(scheduleEntryKey)));
+  // Shift+click takes every listed row between the last click and this one.
+  const toggleCopyRow = (key: string, shift: boolean) => {
+    const on = !copySelection.has(key);
+    const ids = range(key, shift);
+    setCopySelection((cur) => applyIds(cur, ids, on));
+  };
 
   const flashCopy = (state: CopyState) => {
     setCopyState(state);
@@ -267,7 +274,7 @@ export default function ArbiSchedule({ tr, locale }: { tr: Translator; locale: s
                       return (
                         <tr key={key} data-arbi-row>
                           <td data-actions>
-                            <Checkbox aria-label={tr("arbisched.copyRowLabel", { node: en.node })} title={tr("arbisched.copyRowLabel", { node: en.node })} checked={copySelection.has(key)} onChange={() => toggleCopyRow(key)} />
+                            <Checkbox aria-label={tr("arbisched.copyRowLabel", { node: en.node })} title={tr("arbisched.copyRowLabel", { node: en.node })} checked={copySelection.has(key)} onChange={(e) => toggleCopyRow(key, shiftOf(e))} />
                           </td>
                           <td data-label={tr("foundry.sort.time")} className="whitespace-nowrap tabular-nums text-text-secondary">{formatEntryTime(en.epochMs, locale)}</td>
                           <td data-primary>

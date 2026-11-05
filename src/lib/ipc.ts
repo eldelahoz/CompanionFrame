@@ -897,6 +897,8 @@ export const wfmOrderCreate = async (order: CreateOrder): Promise<MyOrder> => {
     itemName: item?.name ?? "(unknown)",
     itemSlug: item?.slug ?? null,
     itemThumb: item?.thumb ?? null,
+    createdAt: new Date().toISOString(),
+    updatedAt: null,
   };
   mockOrders = [...mockOrders, created];
   return created;

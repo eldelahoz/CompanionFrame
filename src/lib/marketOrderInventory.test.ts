@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { MyOrder } from "./ipc";
 import type { ParsedItem } from "../types/inventory";
 import type { WfmItemsLookup } from "../types/stats";
 import { contractInventoryMatch } from "./contractInventoryMatch";
-import { orderInventoryMatch, type ListedOrder } from "./marketOrderInventory";
+import { onSaleByItem, orderInventoryMatch, type ListedOrder } from "./marketOrderInventory";
 
 const item = (over: Partial<ParsedItem>): ParsedItem =>
   ({ name: "Serration", internalName: "/Lotus/Upgrades/Mods/Rifle/Serration", category: "Mods", categoryLabel: "Mod", rank: 0, maxRank: 10, tradable: true, amount: 1, inventoryGroup: "mods", ...over }) as ParsedItem;
@@ -47,5 +48,22 @@ describe("contractInventoryMatch", () => {
   });
   it("has no opinion without a full identity", () => {
     expect(contractInventoryMatch({ ...contract, rivenSuffix: null }, [])).toEqual({ state: "match" });
+  });
+});
+
+describe("onSaleByItem", () => {
+  const sell = (id: string, platinum: number, visible: boolean, over: Partial<MyOrder> = {}) =>
+    ({ id, orderType: "sell", platinum, quantity: 1, visible, modRank: null, subtype: null, itemName: "Serration", itemSlug: "serration", ...over }) as MyOrder;
+  const row = item({});
+
+  it("maps an owned item to its order and ignores buy orders and unowned items", () => {
+    expect(onSaleByItem([sell("a", 30, true)], [row], wfmItems).get(row)?.id).toBe("a");
+    expect(onSaleByItem([sell("b", 30, true, { orderType: "buy" })], [row], wfmItems).size).toBe(0);
+    expect(onSaleByItem([sell("a", 30, true)], [], wfmItems).size).toBe(0);
+  });
+  it("prefers the cheapest visible order, and a hidden one only when none is visible", () => {
+    const picked = (orders: MyOrder[]) => onSaleByItem(orders, [row], wfmItems).get(row)?.id;
+    expect(picked([sell("hidden", 5, false), sell("dear", 40, true), sell("cheap", 20, true)])).toBe("cheap");
+    expect(picked([sell("h2", 9, false), sell("h1", 7, false)])).toBe("h1");
   });
 });

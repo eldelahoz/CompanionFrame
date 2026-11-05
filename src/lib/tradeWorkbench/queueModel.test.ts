@@ -83,6 +83,8 @@ function makeOrder(overrides: Partial<WfmOrder> = {}): WfmOrder {
     itemName: "Lex Prime Barrel",
     itemSlug: "lex_prime_barrel",
     itemThumb: null,
+    createdAt: null,
+    updatedAt: null,
     ...overrides,
   };
 }
