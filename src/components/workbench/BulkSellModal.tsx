@@ -55,6 +55,7 @@ import { useWorkbenchState } from "../../stores/workbench";
 import type { ItemDbEntry, ParsedItem, RawInventoryData } from "../../types/inventory";
 import WorkbenchQueueRow from "./WorkbenchQueueRow";
 import WorkbenchReview from "./WorkbenchReview";
+import { useRangeSelect } from "../../lib/useRangeSelect";
 
 interface Props {
   items: readonly ParsedItem[];
@@ -238,6 +239,12 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
     if (queueBuilt) writeCachedQueueRows(rows);
   }, [rows, queueBuilt]);
 
+  const range = useRangeSelect(visible.map((r) => r.rowId));
+  // Shift+click takes every listed row between the last click and this one.
+  const pickRow = (row: QueueRow, shift: boolean) => {
+    const ids = new Set(range(row.rowId, shift));
+    setRows((prev) => prev.map((r) => (ids.has(r.rowId) ? { ...r, selected: !row.selected } : r)));
+  };
   const patchRow = (next: QueueRow) => setRows((prev) => prev.map((r) => (r.rowId === next.rowId ? next : r)));
 
   /** Recompute verdicts against the live safety settings, keeping edits. */
@@ -604,7 +611,7 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
                       isSetKept={safety.settings.setKeep.includes(root)}
                       spareOverride={safety.settings.spares[key] ?? null}
                       tr={tr}
-                      onToggleSelect={(r) => patchRow({ ...r, selected: !r.selected })}
+                      onToggleSelect={pickRow}
                       onQuantity={(r, q) => patchRow(setRowQuantity(r, q))}
                       onManualPrice={(r, p) => patchRow({ ...r, manualPrice: p != null && p >= 1 ? Math.round(p) : null })}
                       onOverride={acknowledge}

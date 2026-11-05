@@ -1,6 +1,7 @@
 import type { MessageKey, Translator } from "../../lib/i18n";
 import type { WorkbenchDampingReason } from "../../lib/tradeWorkbench/pricingStrategies";
 import { effectivePrice, rowNeedsOverride, rowWarnings, type WorkbenchQueueRow as QueueRow, type WorkbenchQueueWarning } from "../../lib/tradeWorkbench/queueModel";
+import { shiftOf } from "../../lib/useRangeSelect";
 
 interface Props {
   row: QueueRow;
@@ -10,7 +11,7 @@ interface Props {
   isSetKept: boolean;
   spareOverride: number | null;
   tr: Translator;
-  onToggleSelect: (row: QueueRow) => void;
+  onToggleSelect: (row: QueueRow, shift: boolean) => void;
   onQuantity: (row: QueueRow, quantity: number) => void;
   onManualPrice: (row: QueueRow, price: number | null) => void;
   onOverride: (row: QueueRow) => void;
@@ -54,7 +55,7 @@ export default function WorkbenchQueueRow({ row, canSetKeep, isLocked, isSetKept
 
   return (
     <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-md border border-border/60 bg-surface-card px-3 py-2 text-sm" data-workbench-row={row.rowId}>
-      <input type="checkbox" checked={row.selected} data-workbench-select aria-label={row.itemName} onChange={() => onToggleSelect(row)} />
+      <input type="checkbox" checked={row.selected} data-workbench-select aria-label={row.itemName} onChange={(e) => onToggleSelect(row, shiftOf(e))} />
 
       <div className="min-w-0">
         <span className="truncate font-medium">{row.item.displayName ?? row.itemName}</span>

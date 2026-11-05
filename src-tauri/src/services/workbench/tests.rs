@@ -38,6 +38,8 @@ fn order(id: &str, platinum: u32, quantity: u32, name: &str, slug: &str) -> MyOr
         item_name: name.into(),
         item_slug: Some(slug.into()),
         item_thumb: None,
+        created_at: None,
+        updated_at: None,
     }
 }
 

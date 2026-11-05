@@ -89,6 +89,21 @@ test("selection mode picks cards, totals them and clears", async () => {
   expect(document.querySelector("[data-inventory-select-count]")?.textContent).toBe("0 selected");
 });
 
+test("shift-click in selection mode picks every card between two clicks", async () => {
+  render(<InventoryView items={items} tr={tr} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Select" }));
+  const mains = await waitFor(() => {
+    const els = [...document.querySelectorAll<HTMLElement>("[data-inventory-card] .inv-card-main")];
+    expect(els.length).toBeGreaterThan(3);
+    return els;
+  });
+  fireEvent.click(mains[1]);
+  fireEvent.click(mains[3], { shiftKey: true });
+  expect(document.querySelector("[data-inventory-select-count]")?.textContent).toBe("3 selected");
+  fireEvent.click(mains[0], { shiftKey: true });
+  expect(document.querySelector("[data-inventory-select-count]")?.textContent).toBe("4 selected");
+});
+
 test("the market button opens the item's order book", async () => {
   render(<InventoryView items={items} tr={tr} />);
   const book = await waitFor(() => {

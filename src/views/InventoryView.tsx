@@ -27,13 +27,15 @@ import { usePersisted } from "../lib/usePersisted";
 import { useInventory, useParsedInventory, useResources } from "../stores/inventory";
 import NoInventoryState from "../components/inventory/NoInventoryState";
 import ProfileGear from "../components/inventory/ProfileGear";
-import { clearSelection, selectKeys, setSelectionMode, toggleSelected, useSelection, useSelectionMode } from "../stores/inventorySelection";
+import { clearSelection, selectKeys, setSelectionMode, useSelection, useSelectionMode } from "../stores/inventorySelection";
+import { useOnSale } from "../lib/inventory/useOnSale";
 import { useWfmCatalog } from "../stores/market";
 import { useMasteryProgress } from "../stores/mastery";
 import { setActiveItem } from "../stores/modals";
 import { useWorkbenchState } from "../stores/workbench";
 import type { InventoryGroup, ItemDbEntry } from "../types/inventory";
 import ResourcesView from "./ResourcesView";
+import { applyIds, useRangeSelect } from "../lib/useRangeSelect";
 
 type Tab = InventoryGroup | "everything" | "resources" | "pets";
 
@@ -69,12 +71,15 @@ interface Props {
   items: ItemDatabase;
   tr: Translator;
   locale?: Language;
+  /** Signed in to warframe.market: only then are my sell orders fetched for the on-sale tags. */
+  wfmLoggedIn?: boolean;
 }
 
-export default function InventoryView({ items, tr, locale = "en" }: Props) {
+export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = false }: Props) {
   const { data, status, loaded } = useInventory();
   const parsed = useParsedInventory(data, items);
   const resources = useResources(data, items);
+  const onSale = useOnSale(wfmLoggedIn, parsed);
   const { catalog } = useWfmCatalog();
   const { data: masteryData } = useMasteryProgress();
   const [tab, setTab] = useState<Tab>("everything");
@@ -87,6 +92,7 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   const [goal, setGoal] = useState<Goal>("all");
   const [tradableOnly, setTradableOnly] = useState(false);
   const [ducatsOnly, setDucatsOnly] = useState(false);
+  const [saleWant, setSaleWant] = useState<"all" | "listed" | "unlisted">("all");
   const [primeWant, setPrimeWant] = useState<"all" | "prime" | "non">("all");
   const [masteryWant, setMasteryWant] = useState<"all" | "mastered" | "missing">("all");
   const [modWant, setModWant] = useState<ModFilters>(NO_MOD_FILTERS);
@@ -163,6 +169,8 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
     return seen.size === 2;
   }, [rows, tab]);
   const primeFilter = canFilterPrime ? primeWant : "all";
+  // Needs a signed-in market account.
+  const saleFilter = wfmLoggedIn ? saleWant : "all";
   const ducatsFilter = ducatsOnly && canFilterDucats;
   // The mod chips show only where mods or arcanes are listed; a copy count spans every rank row, whatever the search hides.
   const canFilterMods = useMemo(() => (tab === "everything" || tab === "mods" || tab === "arcanes") && rows.some((r) => isUpgrade(r.item) && (tab === "everything" || r.item.inventoryGroup === tab)), [rows, tab]);
@@ -182,12 +190,12 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   }, [showSellable, parsed, inTab, safety.context, copies]);
   const sellableOf = (row: InvRow) => sellable?.get(row.key);
   const filtered = useMemo(
-    () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (!surplusOnly || (sellable?.get(r.key)?.count ?? 0) > 0) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
+    () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (!surplusOnly || (sellable?.get(r.key)?.count ?? 0) > 0) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (saleFilter === "all" || onSale.has(r.item) === (saleFilter === "listed")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
     // masteryOf only reads masteryIndex and items.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [inTab, tradableOnly, ducatsFilter, copies, modFilter, surplusOnly, sellable, primeFilter, masteryFilter, masteryIndex, items],
+    [inTab, tradableOnly, ducatsFilter, copies, modFilter, surplusOnly, sellable, primeFilter, saleFilter, onSale, masteryFilter, masteryIndex, items],
   );
-  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${modFilter.duplicates}|${modFilter.notMax}|${modFilter.notEquipped}|${surplusOnly}|${primeFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
+  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${modFilter.duplicates}|${modFilter.notMax}|${modFilter.notEquipped}|${surplusOnly}|${primeFilter}|${saleFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
 
   // Prices: the rows on screen first, then the rest of the tab and every row the value strip counts, in the background.
   // Missing parts of incomplete sets are priced like any row: through the same queue.
@@ -224,6 +232,9 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
     [filtered, livePrices, sortKey, desc, range],
   );
   const shown = useMemo(() => visible.slice(0, limit), [visible, limit]);
+  const pickRange = useRangeSelect(shown.map((r) => r.key));
+  // Shift+click takes every shown row between the last click and this one.
+  const pickRow = (key: string, shift: boolean) => selectKeys(applyIds(selection, pickRange(key, shift), !selection.has(key)));
   // Relic sources only for the sets on screen: each one walks the whole relic database.
   const relicDb = useRelicDb(showIncomplete);
   const relicIndex = useMemo(() => (relicDb ? buildRelicRewardIndex(relicDb) : null), [relicDb]);
@@ -362,6 +373,16 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                     </Chip>
                   </>
                 )}
+                {wfmLoggedIn && (
+                  <>
+                    <Chip pressed={saleWant === "listed"} title={tr("inventory.onSale.hint")} data-inventory-on-sale onClick={manual(() => setSaleWant(saleWant === "listed" ? "all" : "listed"))}>
+                      {tr("inventory.onSale")}
+                    </Chip>
+                    <Chip pressed={saleWant === "unlisted"} title={tr("inventory.notOnSale.hint")} data-inventory-not-on-sale onClick={manual(() => setSaleWant(saleWant === "unlisted" ? "all" : "unlisted"))}>
+                      {tr("inventory.notOnSale")}
+                    </Chip>
+                  </>
+                )}
                 {canFilterMastery && (
                   <>
                     <Chip pressed={masteryWant === "mastered"} data-inventory-mastered onClick={manual(() => setMasteryWant(masteryWant === "mastered" ? "all" : "mastered"))}>
@@ -485,18 +506,19 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                     selecting={selecting}
                     selected={selection.has(row.key)}
                     onOpen={() => open(row)}
-                    onToggle={() => toggleSelected(row.key)}
+                    onToggle={(shift) => pickRow(row.key, shift)}
                     onBook={() => setBook(row)}
                     extra={extraOf(row)}
                     mastery={masteryOf(row)}
                     sellable={sellableOf(row)}
                     showEquipped={showEquipped}
+                    onSale={onSale.get(row.item)}
                     tr={tr}
                   />
                 ))}
               </div>
             ) : (
-              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} tr={tr} />
+              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r, shift) => pickRow(r.key, shift)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} onSaleOf={(r) => onSale.get(r.item)} tr={tr} />
             )}
             <ShowMore shown={shown.length} total={visible.length} onMore={more} tr={tr} />
           </div>

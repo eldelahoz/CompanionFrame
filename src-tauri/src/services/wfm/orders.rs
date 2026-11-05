@@ -43,6 +43,9 @@ pub struct MyOrder {
     pub item_name: String,
     pub item_slug: Option<String>,
     pub item_thumb: Option<String>,
+    /// ISO timestamps from the v2 order; absent on older replies.
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, specta::Type)]
@@ -119,6 +122,10 @@ fn u32_of(v: Option<&Value>) -> Option<u32> {
         .and_then(|n| u32::try_from(n).ok())
 }
 
+fn str_of(raw: &Value, key: &str) -> Option<String> {
+    raw.get(key).and_then(Value::as_str).map(str::to_owned)
+}
+
 /// Raw v2 order -> `MyOrder`. Item details come from the catalog (the compact order carries `itemId`).
 fn normalise(raw: &Value, catalog: &HashMap<&str, &CatalogItem>) -> Option<MyOrder> {
     let id = raw.get("id")?.as_str()?.to_owned();
@@ -150,6 +157,8 @@ fn normalise(raw: &Value, catalog: &HashMap<&str, &CatalogItem>) -> Option<MyOrd
         item_name: item.map_or_else(|| "(unknown)".into(), |i| i.name.clone()),
         item_slug: item.map(|i| i.slug.clone()),
         item_thumb: item.and_then(|i| i.thumb.as_deref()).and_then(asset_url),
+        created_at: str_of(raw, "createdAt"),
+        updated_at: str_of(raw, "updatedAt"),
     })
 }
 
@@ -547,7 +556,7 @@ mod tests {
     async fn my_orders_split_by_side_and_resolve_items() {
         let orders = format!(
             r#"{{"data":[
-                {{"id":"{ID}","type":"sell","platinum":50,"quantity":6,"perTrade":9,"rank":3,"itemId":"{ITEM}"}},
+                {{"id":"{ID}","type":"sell","platinum":50,"quantity":6,"perTrade":9,"rank":3,"itemId":"{ITEM}","createdAt":"2026-03-04T10:00:00.000Z"}},
                 {{"id":"{ITEM}","type":"buy","platinum":5,"quantity":0,"visible":false,"subtype":"unrevealed","itemId":"zz"}},
                 {{"type":"sell"}}
             ]}}"#
@@ -572,7 +581,9 @@ mod tests {
         );
         assert_eq!((s.per_trade, s.mod_rank, s.quantity), (6, Some(3), 6));
         assert!(s.item_thumb.as_deref().unwrap().ends_with("items/a.png"));
+        assert_eq!(s.created_at.as_deref(), Some("2026-03-04T10:00:00.000Z"));
         let b = &got.buy[0];
+        assert_eq!(b.created_at, None);
         assert_eq!(b.item_name, "(unknown)");
         // quantity 0 is read as 1; the veiled riven keeps its subtype and no rank.
         assert_eq!(

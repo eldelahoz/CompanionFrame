@@ -11,7 +11,10 @@ import MasteryMark from "./MasteryMark";
 import { SellableRow } from "./SellableTag";
 import EquippedPopover from "./EquippedOn";
 import type { Sellable } from "../../lib/inventory/sellable";
+import type { MyOrder } from "../../lib/ipc";
+import SaleTag from "./SaleTag";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
+import { shiftOf } from "../../lib/useRangeSelect";
 
 interface Props {
   row: InvRow;
@@ -21,7 +24,7 @@ interface Props {
   selecting: boolean;
   selected: boolean;
   onOpen: () => void;
-  onToggle: () => void;
+  onToggle: (shift: boolean) => void;
   onBook: () => void;
   /** Extra block under the values (an incomplete set's missing parts). */
   extra?: ReactNode;
@@ -30,11 +33,13 @@ interface Props {
   sellable?: Sellable;
   /** The Equipped toggle is on: show where a mod or arcane is fitted. */
   showEquipped?: boolean;
+  /** My warframe.market sell order backing this item. */
+  onSale?: MyOrder;
   tr: Translator;
 }
 
 /** One owned item: art, name, stack and its value chips. In selection mode the whole card toggles. */
-export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, showEquipped, tr }: Props) {
+export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, showEquipped, onSale, tr }: Props) {
   const { item } = row;
   const { bind, node } = useItemPreview({ name: row.label, slug: row.artSlug, src: item.imageUrl, fallback: item.fallbackImageUrl, tr });
   return (
@@ -42,7 +47,8 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
       <button
         type="button"
         className="inv-card-main"
-        onClick={selecting ? onToggle : onOpen}
+        onClick={(e) => (selecting ? onToggle(e.shiftKey) : onOpen())}
+        onMouseDown={(e) => selecting && e.shiftKey && e.preventDefault()}
         aria-label={selecting ? tr("inventory.selectItem", { name: row.label }) : row.label}
         aria-pressed={selecting ? selected : undefined}
         {...bind}
@@ -54,7 +60,7 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
         <span className="inv-card-type">{item.categoryLabel}</span>
       </button>
       <div className="inv-card-badges">
-        {selecting ? <Checkbox checked={selected} onChange={onToggle} aria-label={tr("inventory.selectItem", { name: row.label })} /> : <OwnedBadge item={item} tr={tr} />}
+        {selecting ? <Checkbox checked={selected} onChange={(e) => onToggle(shiftOf(e))} aria-label={tr("inventory.selectItem", { name: row.label })} /> : <OwnedBadge item={item} tr={tr} />}
         {item.vaulted && (
           <Badge tone="warning" title={tr("common.vaulted")}>
             V
@@ -71,6 +77,11 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
         <IconButton label={tr("inventory.openMarket")} className="inv-card-book" onClick={onBook}>
           <Scale />
         </IconButton>
+      )}
+      {onSale && (
+        <div className="inv-card-sale">
+          <SaleTag order={onSale} tr={tr} />
+        </div>
       )}
       <div className="inv-card-values">
         <RankIndicator row={row} tr={tr} />

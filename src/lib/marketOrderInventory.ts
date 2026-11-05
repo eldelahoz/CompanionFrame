@@ -173,3 +173,17 @@ export function orderInventoryMatch(order: ListedOrder, parsedItems: ParsedItem[
   const total = backing.rows.reduce((sum, item) => sum + ownedCountForOrder(item), 0);
   return total < listed ? { state: "partial", owned: total, listed } : { state: "match" };
 }
+
+/** The sell order that puts each inventory row on sale: the cheapest visible one, else the cheapest hidden one. */
+export function onSaleByItem(orders: readonly MyOrder[], parsedItems: ParsedItem[], wfmItems: WfmItemsLookup): Map<ParsedItem, MyOrder> {
+  const better = (a: MyOrder, b: MyOrder) => (a.visible !== b.visible ? a.visible : a.platinum < b.platinum);
+  const out = new Map<ParsedItem, MyOrder>();
+  for (const order of orders) {
+    if (order.orderType !== "sell") continue;
+    for (const row of orderBacking({ ...order, itemUrlName: order.itemSlug }, parsedItems, wfmItems).rows) {
+      const cur = out.get(row);
+      if (!cur || better(order, cur)) out.set(row, order);
+    }
+  }
+  return out;
+}
