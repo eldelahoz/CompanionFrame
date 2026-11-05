@@ -242,8 +242,9 @@
   }
   .inv-card-sale {
     position: absolute;
-    top: calc(var(--space-3) + 2.25rem);
-    right: var(--space-3);
+    /* bottom-right of the image box: card padding + art height, minus the tag height and an inset */
+    top: calc(var(--space-3) + 5.5rem - 1.5rem - var(--space-1));
+    right: var(--space-4);
   }
   .inv-sale-tag {
     display: inline-flex;
