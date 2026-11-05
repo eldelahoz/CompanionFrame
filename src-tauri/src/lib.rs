@@ -180,6 +180,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::wfm::riven_search::wfm_riven_auction_update,
             services::wfm::riven_search::wfm_riven_auction_close,
             services::wfm::reviews::wfm_send_plus_rep,
+            services::wfm::reviews::wfm_my_reputation,
             services::workbench::commands::workbench_get_state,
             services::workbench::commands::workbench_preview_plan,
             services::workbench::commands::workbench_execute_plan,

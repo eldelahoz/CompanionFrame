@@ -1,4 +1,4 @@
-import { LogOut, Plus, RefreshCw, ShoppingCart, WandSparkles } from "lucide-react";
+import { LogOut, Plus, RefreshCw, ShoppingCart, Star, WandSparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { normalizePerTrade } from "../../config/shared/wfmOrders";
 import HeaderTabs from "../components/HeaderTabs";
@@ -15,7 +15,7 @@ import { Button, Card, EmptyState, IconButton, PageHeader, Skeleton, Table } fro
 import { askConfirm } from "../stores/confirm";
 import { addToast } from "../stores/toasts";
 import type { Translator } from "../lib/i18n";
-import { onWfmOrderClosed, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, type ItemDatabase, type MyOrder, type MyOrders } from "../lib/ipc";
+import { onWfmOrderClosed, wfmMyReputation, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, type ItemDatabase, type MyOrder, type MyOrders } from "../lib/ipc";
 import type { WfmPresenceState, PresenceOptions, WfmStatus, WfmSession } from "../lib/ipc";
 import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
@@ -76,6 +76,17 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     const t = setInterval(() => !document.hidden && void fetchOrders(true), POLL_MS);
     return () => clearInterval(t);
   }, [loggedIn, fetchOrders]);
+
+  // Once per sign-in, not on the poll; a failed lookup just hides the figure.
+  const [reputation, setReputation] = useState<number | null>(null);
+  useEffect(() => {
+    if (!loggedIn) return setReputation(null);
+    let dead = false;
+    wfmMyReputation().then((r) => !dead && setReputation(r), () => !dead && setReputation(null));
+    return () => {
+      dead = true;
+    };
+  }, [loggedIn]);
 
   // A trade match closed units elsewhere: patch just that row; the poll reconciles the rest.
   useEffect(() => {
@@ -152,8 +163,14 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
         title={tr("common.market")}
         sub={
           loggedIn && session?.user_name ? (
-            <span className="titlebar-pill">
+            <span className="titlebar-pill" data-market-user>
               <span className={`status-dot ${DOT[presence.state.status ?? "invisible"]}`} />@{session.user_name}
+              {reputation !== null && (
+                <span className="inline-flex items-center gap-0.5 tabular-nums text-text-secondary" title={tr("market.reputation")} aria-label={tr("market.reputation")} data-market-reputation>
+                  · <Star className="size-3" aria-hidden />
+                  {reputation}
+                </span>
+              )}
             </span>
           ) : undefined
         }

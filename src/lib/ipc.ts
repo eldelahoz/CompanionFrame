@@ -1014,6 +1014,9 @@ export const wfmRivenAuctionClose = async (auctionId: string): Promise<void> => 
 export const wfmSendPlusRep = async (username: string): Promise<SendRepResult> =>
   inTauri() ? unwrapWfm(await commands.wfmSendPlusRep(username)) : "sent";
 
+/** The signed-in user's warframe.market reputation, or null when unknown. */
+export const wfmMyReputation = async (): Promise<number | null> => (inTauri() ? unwrapWfm(await commands.wfmMyReputation()) : null);
+
 export type ArbiScheduleEntry = Finite<ArbiScheduleEntryBinding>;
 export type ArbiScheduleAlerts = ArbiScheduleAlertsBinding;
 export type ArbiSchedulePayload = { entries: ArbiScheduleEntry[]; fetchedAt: number | null; alerts: ArbiScheduleAlerts };
