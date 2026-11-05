@@ -118,3 +118,12 @@ test("metric cards show a delta sign and the unit only for second values", () =>
   expect(document.querySelector('[data-pt-delta="total"]')?.textContent).toContain("-1.500s (-1.3%)");
   expect(document.querySelector('[data-pt-stat-value="flight"]')?.textContent).not.toBe("");
 });
+
+test("shift-click on a run checkbox selects the runs in between", async () => {
+  renderView();
+  await waitFor(() => expect(arbiRows()).toHaveLength(4));
+  const boxes = () => screen.getAllByLabelText(tr("arbi.selectRun")) as HTMLInputElement[];
+  fireEvent.click(boxes()[0]);
+  fireEvent.click(boxes()[2], { shiftKey: true });
+  expect(boxes().map((b) => b.checked)).toEqual([true, true, true, false]);
+});

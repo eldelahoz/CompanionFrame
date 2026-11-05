@@ -226,3 +226,18 @@ test("a bulk hide shows its progress and a busy button while it runs", async () 
   await waitFor(() => expect(screen.queryByText(/Hiding/)).toBeNull());
   expect(screen.getByText("2 of 2 selected")).toBeTruthy();
 });
+
+test("shift-click on an order checkbox selects the whole range in the shown order", async () => {
+  for (const platinum of [5, 6, 7, 8]) await wfmOrderCreate({ itemId: "mock_serration", orderType: "SELL", platinum, quantity: 1 } as never);
+  render(<Harness />);
+  await signIn();
+  await waitFor(() => expect(document.querySelectorAll("[data-market-order]")).toHaveLength(4));
+  const boxes = () => screen.getAllByLabelText(/^Select Serration/) as HTMLInputElement[];
+  const checked = () => boxes().map((b) => b.checked);
+  fireEvent.click(boxes()[0]);
+  fireEvent.click(boxes()[2], { shiftKey: true });
+  expect(checked()).toEqual([true, true, true, false]);
+  // shift-click on a selected row unselects the range back to the last click
+  fireEvent.click(boxes()[0], { shiftKey: true });
+  expect(checked()).toEqual([false, false, false, false]);
+});

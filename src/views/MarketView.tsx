@@ -11,6 +11,7 @@ import MarketBulkBar, { type BulkRun } from "../components/market/MarketBulkBar"
 import { sortOrders, type OrderSortDir, type OrderSortKey } from "../lib/market/sortOrders";
 import { wfmLookup } from "../lib/market/wfmLookup";
 import { usePersisted } from "../lib/usePersisted";
+import { applyIds, useRangeSelect } from "../lib/useRangeSelect";
 import { useMarketArt } from "../lib/useMarketArt";
 import OrderModal from "../components/market/OrderModal";
 import SignInForm from "../components/market/SignInForm";
@@ -183,12 +184,12 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     await bulk("delete", targets, async (o) => void (await wfmOrderDelete(o.id)));
     setSelected(new Set());
   };
-  const toggleSelected = (id: string) =>
-    setSelected((cur) => {
-      const n = new Set(cur);
-      if (!n.delete(id)) n.add(id);
-      return n;
-    });
+  // Shift+click takes every row between the last click and this one, in the sorted order.
+  const toggleSelected = (id: string, shift: boolean) => {
+    const on = !selected.has(id);
+    const ids = range(id, shift);
+    setSelected((cur) => applyIds(cur, ids, on));
+  };
 
   const tabs = [
     { key: "sell", label: tr("market.tab.sell"), count: loggedIn ? orders.sell.length : undefined },
@@ -199,6 +200,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   ];
   const isOrders = tab === "sell" || tab === "buy";
   const list = useMemo(() => (isOrders ? sortOrders(orders[tab], sortKey, sortDir) : []), [isOrders, orders, tab, sortKey, sortDir]);
+  const range = useRangeSelect(list.map((o) => o.id));
   const pickedCount = list.filter((o) => selected.has(o.id)).length;
   const sortHead = (key: OrderSortKey, label: string) => (
     <th aria-sort={sortKey === key ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>

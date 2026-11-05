@@ -27,7 +27,7 @@ import { usePersisted } from "../lib/usePersisted";
 import { useInventory, useParsedInventory, useResources } from "../stores/inventory";
 import NoInventoryState from "../components/inventory/NoInventoryState";
 import ProfileGear from "../components/inventory/ProfileGear";
-import { clearSelection, selectKeys, setSelectionMode, toggleSelected, useSelection, useSelectionMode } from "../stores/inventorySelection";
+import { clearSelection, selectKeys, setSelectionMode, useSelection, useSelectionMode } from "../stores/inventorySelection";
 import { useOnSale } from "../lib/inventory/useOnSale";
 import { useWfmCatalog } from "../stores/market";
 import { useMasteryProgress } from "../stores/mastery";
@@ -35,6 +35,7 @@ import { setActiveItem } from "../stores/modals";
 import { useWorkbenchState } from "../stores/workbench";
 import type { InventoryGroup, ItemDbEntry } from "../types/inventory";
 import ResourcesView from "./ResourcesView";
+import { applyIds, useRangeSelect } from "../lib/useRangeSelect";
 
 type Tab = InventoryGroup | "everything" | "resources" | "pets";
 
@@ -231,6 +232,9 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
     [filtered, livePrices, sortKey, desc, range],
   );
   const shown = useMemo(() => visible.slice(0, limit), [visible, limit]);
+  const pickRange = useRangeSelect(shown.map((r) => r.key));
+  // Shift+click takes every shown row between the last click and this one.
+  const pickRow = (key: string, shift: boolean) => selectKeys(applyIds(selection, pickRange(key, shift), !selection.has(key)));
   // Relic sources only for the sets on screen: each one walks the whole relic database.
   const relicDb = useRelicDb(showIncomplete);
   const relicIndex = useMemo(() => (relicDb ? buildRelicRewardIndex(relicDb) : null), [relicDb]);
@@ -502,7 +506,7 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
                     selecting={selecting}
                     selected={selection.has(row.key)}
                     onOpen={() => open(row)}
-                    onToggle={() => toggleSelected(row.key)}
+                    onToggle={(shift) => pickRow(row.key, shift)}
                     onBook={() => setBook(row)}
                     extra={extraOf(row)}
                     mastery={masteryOf(row)}
@@ -514,7 +518,7 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
                 ))}
               </div>
             ) : (
-              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} onSaleOf={(r) => onSale.get(r.item)} tr={tr} />
+              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r, shift) => pickRow(r.key, shift)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} onSaleOf={(r) => onSale.get(r.item)} tr={tr} />
             )}
             <ShowMore shown={shown.length} total={visible.length} onMore={more} tr={tr} />
           </div>

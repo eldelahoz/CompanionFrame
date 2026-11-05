@@ -4,6 +4,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { formatBytes, formatRunDate } from "../lib/arbi/arbiChartData";
 import type { Translator } from "../lib/i18n";
 import { Checkbox, IconButton, Table } from "./ui";
+import { shiftOf } from "../lib/useRangeSelect";
 
 interface BaseRun {
   id: string;
@@ -24,7 +25,7 @@ interface Props<T extends BaseRun> {
   rowAttrs?: (run: T) => Record<string, string>;
   /** Present: a checkbox column driven by these. */
   selected?: ReadonlySet<string>;
-  onToggleSelect?: (id: string) => void;
+  onToggleSelect?: (id: string, shift: boolean) => void;
   onToggleSelectAll?: () => void;
 }
 
@@ -52,7 +53,7 @@ export default function RunList<T extends BaseRun>({ runs, onSelect, headers, ce
             <tr key={run.id} className="cursor-pointer" onClick={() => onSelect(run.id)} {...rowAttrs?.(run)}>
               {selected && (
                 <td>
-                  <Checkbox checked={selected.has(run.id)} aria-label={tr("arbi.selectRun")} onClick={(e) => e.stopPropagation()} onChange={() => onToggleSelect?.(run.id)} />
+                  <Checkbox checked={selected.has(run.id)} aria-label={tr("arbi.selectRun")} onClick={(e) => e.stopPropagation()} onChange={(e) => onToggleSelect?.(run.id, shiftOf(e))} />
                 </td>
               )}
               <td data-primary className="whitespace-nowrap text-text-secondary">{formatRunDate(run.startedAt)}</td>

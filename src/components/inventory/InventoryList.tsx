@@ -13,6 +13,7 @@ import SellableTag from "./SellableTag";
 import EquippedPopover from "./EquippedOn";
 import type { Sellable } from "../../lib/inventory/sellable";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
+import { shiftOf } from "../../lib/useRangeSelect";
 
 interface Props {
   rows: readonly InvRow[];
@@ -22,7 +23,7 @@ interface Props {
   selecting: boolean;
   selection: ReadonlySet<string>;
   onOpen: (row: InvRow) => void;
-  onToggle: (row: InvRow) => void;
+  onToggle: (row: InvRow, shift: boolean) => void;
   onBook: (row: InvRow) => void;
   extraOf?: (row: InvRow) => ReactNode;
   masteryOf?: (row: InvRow) => Mark | null;
@@ -59,9 +60,10 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
             <tr key={row.key} data-inventory-card={row.item.internalName} data-selected={picked || undefined}>
               <td data-primary>
                 <div className="ui-item">
-                  {selecting && <Checkbox checked={picked} onChange={() => onToggle(row)} aria-label={tr("inventory.selectItem", { name: row.label })} />}
+                  {selecting && <Checkbox checked={picked} onChange={(e) => onToggle(row, shiftOf(e))} aria-label={tr("inventory.selectItem", { name: row.label })} />}
                   <ItemThumb name={row.label} src={row.item.imageUrl} fallback={row.item.fallbackImageUrl} slug={row.artSlug} tr={tr} focusable={false} />
-                  <button type="button" className="inv-link" onClick={() => (selecting ? onToggle(row) : onOpen(row))}>
+                  <button type="button" className="inv-link" onClick={(e) => (selecting ? onToggle(row, e.shiftKey) : onOpen(row))}
+                    onMouseDown={(e) => selecting && e.shiftKey && e.preventDefault()}>
                     {row.label}
                   </button>
                   {row.item.vaulted && (

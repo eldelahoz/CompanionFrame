@@ -63,3 +63,17 @@ test("a median strategy prices from the 48h reference plus the offset, inside th
   const cell = () => document.querySelector("[data-reprice-row] td:last-child")!.textContent;
   await waitFor(() => expect(cell()).toBe(`${Math.round(reference! + 60)}p`));
 });
+
+test("shift-click on a row checkbox unticks the rows between two clicks", async () => {
+  await wfmSignIn("tenno@example.com", "pw");
+  for (const platinum of [90, 91, 92]) await wfmOrderCreate({ itemId: "mock_serration", orderType: "SELL", platinum, quantity: 1 } as never);
+  const orders = (await wfmOrdersMy()).sell;
+  render(<RepriceOrdersModal orders={orders} ownUserName={null} tr={tr} onClose={() => {}} onApplied={() => {}} />);
+  fireEvent.click(screen.getByText("Load prices"));
+  await waitFor(() => expect(screen.queryByText("No market data")).toBeNull());
+  const boxes = () => screen.getAllByLabelText("Serration") as HTMLInputElement[];
+  expect(boxes().map((b) => b.checked)).toEqual([true, true, true]);
+  fireEvent.click(boxes()[0]);
+  fireEvent.click(boxes()[2], { shiftKey: true });
+  expect(boxes().map((b) => b.checked)).toEqual([false, false, false]);
+});

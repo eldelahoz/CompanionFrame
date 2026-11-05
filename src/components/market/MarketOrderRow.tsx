@@ -10,6 +10,7 @@ import { GameIcon } from "../icons";
 import { Badge, Button, Checkbox, IconButton, Switch } from "../ui";
 import ItemThumb from "./ItemThumb";
 import OrderStepper from "./OrderStepper";
+import { shiftOf } from "../../lib/useRangeSelect";
 
 interface Props {
   order: MyOrder;
@@ -25,7 +26,7 @@ interface Props {
   /** Public item art for the thumb (the item DB's), ahead of the wfmimg cache. */
   art?: string | null;
   selected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, shift: boolean) => void;
   locale: string;
   tr: Translator;
 }
@@ -48,7 +49,7 @@ export default function MarketOrderRow({ order, busy, onEdit, onDelete, onCloseO
   return (
     <tr data-market-order={order.id} data-selected={selected || undefined}>
       <td>
-        <Checkbox checked={selected} onChange={() => onSelect(order.id)} aria-label={tr("market.selectOrder", { name: order.itemName })} />
+        <Checkbox checked={selected} onChange={(e) => onSelect(order.id, shiftOf(e))} aria-label={tr("market.selectOrder", { name: order.itemName })} />
       </td>
       <td data-primary>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">

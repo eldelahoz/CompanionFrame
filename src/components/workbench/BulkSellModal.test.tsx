@@ -161,3 +161,13 @@ test("a mod and an arcane keep one copy at item level, so two copies queue one",
   const qty = [...document.querySelectorAll<HTMLInputElement>("[data-workbench-qty]")].map((i) => i.value);
   expect(qty).toEqual(["1", "2"]);
 });
+
+test("shift-click on a queue checkbox ticks the rows between two clicks", async () => {
+  open();
+  await screen.findByText("Lex Prime Barrel", { selector: "span" });
+  const boxes = () => [...document.querySelectorAll<HTMLInputElement>("[data-workbench-select]")];
+  expect(boxes().length).toBeGreaterThan(1);
+  fireEvent.click(boxes()[0]);
+  fireEvent.click(boxes()[boxes().length - 1], { shiftKey: true });
+  expect(new Set(boxes().map((b) => b.checked)).size).toBe(1); // the range takes one state
+});
