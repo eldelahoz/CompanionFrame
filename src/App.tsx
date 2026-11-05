@@ -171,7 +171,7 @@ export default function App() {
             ) : view === "relics" ? (
               <RelicsView tr={tr} locale={settings.language} items={items} inventory={inventory} />
             ) : view === "inventory" ? (
-              <InventoryView items={items} tr={tr} locale={settings.language} />
+              <InventoryView items={items} tr={tr} locale={settings.language} wfmLoggedIn={wfm.session?.logged_in === true} />
             ) : view === "dashboard" ? (
               <DashboardView items={items} tr={tr} locale={settings.language} />
             ) : view === "world" ? (

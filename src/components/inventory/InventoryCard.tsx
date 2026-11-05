@@ -11,6 +11,8 @@ import MasteryMark from "./MasteryMark";
 import { SellableRow } from "./SellableTag";
 import EquippedPopover from "./EquippedOn";
 import type { Sellable } from "../../lib/inventory/sellable";
+import type { MyOrder } from "../../lib/ipc";
+import SaleTag from "./SaleTag";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
 
 interface Props {
@@ -30,11 +32,13 @@ interface Props {
   sellable?: Sellable;
   /** The Equipped toggle is on: show where a mod or arcane is fitted. */
   showEquipped?: boolean;
+  /** My warframe.market sell order backing this item. */
+  onSale?: MyOrder;
   tr: Translator;
 }
 
 /** One owned item: art, name, stack and its value chips. In selection mode the whole card toggles. */
-export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, showEquipped, tr }: Props) {
+export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, showEquipped, onSale, tr }: Props) {
   const { item } = row;
   const { bind, node } = useItemPreview({ name: row.label, slug: row.artSlug, src: item.imageUrl, fallback: item.fallbackImageUrl, tr });
   return (
@@ -71,6 +75,11 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
         <IconButton label={tr("inventory.openMarket")} className="inv-card-book" onClick={onBook}>
           <Scale />
         </IconButton>
+      )}
+      {onSale && (
+        <div className="inv-card-sale">
+          <SaleTag order={onSale} tr={tr} />
+        </div>
       )}
       <div className="inv-card-values">
         <RankIndicator row={row} tr={tr} />

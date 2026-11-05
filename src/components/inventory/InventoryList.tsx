@@ -4,6 +4,7 @@ import ItemThumb from "../market/ItemThumb";
 import { Badge, Checkbox, IconButton, Table } from "../ui";
 import { formatNumber } from "../../lib/format";
 import type { Translator } from "../../lib/i18n";
+import type { MyOrder } from "../../lib/ipc";
 import type { PriceInfo } from "../../lib/inventory/itemPrices";
 import type { InvRow } from "../../lib/inventory/inventoryRows";
 import type { MasteryMark as Mark } from "../../lib/inventory/masteryMark";
@@ -27,11 +28,14 @@ interface Props {
   masteryOf?: (row: InvRow) => Mark | null;
   sellableOf?: (row: InvRow) => Sellable | undefined;
   showEquipped?: boolean;
+  /** My sell order backing a row; the column shows only when some row has one. */
+  onSaleOf?: (row: InvRow) => MyOrder | undefined;
   tr: Translator;
 }
 
 /** Rows turn into labelled cards in a narrow container (Table mode="stack"). */
-export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, sellableOf, showEquipped, tr }: Props) {
+export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, sellableOf, showEquipped, onSaleOf, tr }: Props) {
+  const anySale = !!onSaleOf && rows.some((r) => onSaleOf(r));
   return (
     <Table mode="stack" label={tr("inventory.viewList")} className="inv-list">
       <thead>
@@ -42,6 +46,7 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
           <th className="ui-num">{tr("inventory.col.platinum")}</th>
           <th className="ui-num">{tr("inventory.col.average")}</th>
           <th className="ui-num">{tr("inventory.col.ducats")}</th>
+          {anySale && <th>{tr("inventory.col.onSale")}</th>}
           {showEquipped && <th>{tr("inventory.equipped")}</th>}
           <th aria-hidden="true" />
         </tr>
@@ -88,6 +93,14 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
               <td className="ui-num" data-label={tr("inventory.col.ducats")}>
                 <DucatValue row={row} />
               </td>
+              {anySale && (
+                <td data-label={tr("inventory.col.onSale")}>
+                  {(() => {
+                    const o = onSaleOf!(row);
+                    return o ? <span className={o.visible ? undefined : "text-text-muted"}>{tr(o.visible ? "inventory.onSaleCell" : "inventory.onSaleCellHidden", { quantity: o.quantity, price: o.platinum })}</span> : null;
+                  })()}
+                </td>
+              )}
               {showEquipped && (
                 <td data-label={tr("inventory.equipped")}>
                   {row.item.equippedOn?.length ? <EquippedPopover list={row.item.equippedOn} variant="link" tr={tr} /> : <span className="text-text-muted">{tr("inventory.equipped.no")}</span>}

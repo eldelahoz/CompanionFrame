@@ -28,6 +28,7 @@ import { useInventory, useParsedInventory, useResources } from "../stores/invent
 import NoInventoryState from "../components/inventory/NoInventoryState";
 import ProfileGear from "../components/inventory/ProfileGear";
 import { clearSelection, selectKeys, setSelectionMode, toggleSelected, useSelection, useSelectionMode } from "../stores/inventorySelection";
+import { useOnSale } from "../lib/inventory/useOnSale";
 import { useWfmCatalog } from "../stores/market";
 import { useMasteryProgress } from "../stores/mastery";
 import { setActiveItem } from "../stores/modals";
@@ -69,12 +70,15 @@ interface Props {
   items: ItemDatabase;
   tr: Translator;
   locale?: Language;
+  /** Signed in to warframe.market: only then are my sell orders fetched for the on-sale tags. */
+  wfmLoggedIn?: boolean;
 }
 
-export default function InventoryView({ items, tr, locale = "en" }: Props) {
+export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = false }: Props) {
   const { data, status, loaded } = useInventory();
   const parsed = useParsedInventory(data, items);
   const resources = useResources(data, items);
+  const onSale = useOnSale(wfmLoggedIn, parsed);
   const { catalog } = useWfmCatalog();
   const { data: masteryData } = useMasteryProgress();
   const [tab, setTab] = useState<Tab>("everything");
@@ -491,12 +495,13 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                     mastery={masteryOf(row)}
                     sellable={sellableOf(row)}
                     showEquipped={showEquipped}
+                    onSale={onSale.get(row.item)}
                     tr={tr}
                   />
                 ))}
               </div>
             ) : (
-              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} tr={tr} />
+              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} onSaleOf={(r) => onSale.get(r.item)} tr={tr} />
             )}
             <ShowMore shown={shown.length} total={visible.length} onMore={more} tr={tr} />
           </div>
