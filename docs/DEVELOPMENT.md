@@ -97,6 +97,10 @@ Add the key to **all five** of `src/i18n/en.json`, `es.json`, `fr.json`, `de.jso
 5. Settings: enabled/opacity are keyed by kind name and validated against the known kinds (`overlay/settings.rs`); add i18n labels and the toggle in `OverlaySettings.tsx`.
 6. Add a `docs/manual-tests/` checklist.
 
+## Timing lines
+
+The backend logs `timing:` lines to the daily log file and the terminal (`pnpm tauri dev`), for before/after comparisons: `my_orders` (`http_ms`, `catalog_ms`: near 0 once the catalog is in memory), `wfm_prices_bulk`, `wfm_prices_refresh worker` (one line per drained queue), and at debug level `wfm_request priority= path_kind= wait_ms= ms=` per request (path kind is the first path segment, never an id) and `my_orders_fetch`. Set `RUST_LOG=debug` to see the debug ones.
+
 ## README screenshots
 
 `node scripts/screenshots.mjs [outDir]` rewrites the PNGs in `docs/img/`. It starts Vite on port 14330, drives the installed Edge through `playwright-core` (no browser download) at 1440x900, dark theme, English, on the in-browser mocks of `src/lib/ipc.ts`, and stops the server when done. The relic reward overlay runs on a stub Tauri bridge over a neutral backdrop. Change the mock data, not the script, if a shot shows something wrong; the data must stay fictional (no real names, paths or tokens). Icons load from the wiki at runtime, so run it online and check each PNG before committing.
