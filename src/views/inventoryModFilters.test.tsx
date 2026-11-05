@@ -110,21 +110,18 @@ test("no chip, no sellable count", async () => {
 });
 
 test("Hornet Strike R0 x2 with nothing else sells one", async () => {
-  items[HS].masterable = true;
   await openMods();
   press("data-inventory-mod-duplicates");
   expect(sellableOf(HS)).toEqual(["Sellable 1"]);
 });
 
 test("Continuity R0 x4 beside an equipped R5 sells all four, and the R5 none", async () => {
-  items[CON].masterable = true;
   await openMods();
   press("data-inventory-mod-duplicates");
   await waitFor(() => expect(sellableOf(CON)).toEqual(["Sellable 4", "Sellable 0"]));
 });
 
 test("the sellable count follows the list view too", async () => {
-  items[HS].masterable = true;
   await openMods();
   fireEvent.click(screen.getByRole("button", { name: "List" }));
   press("data-inventory-mod-duplicates");

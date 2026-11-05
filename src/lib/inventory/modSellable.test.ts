@@ -6,7 +6,7 @@ import { modSellable } from "./modSellable";
 import { buildSafetyContext } from "./safetyRules";
 
 const U = "/Lotus/Upgrades/Mods/Test/";
-const db = { [`${U}A`]: { name: "A", masterable: true }, [`${U}B`]: { name: "B", masterable: true } } as unknown as Record<string, ItemDbEntry>;
+const db = { [`${U}A`]: { name: "A" }, [`${U}B`]: { name: "B" } } as unknown as Record<string, ItemDbEntry>;
 const ctx = (locks: string[] = []) =>
   buildSafetyContext({ itemDb: db, masteredUniqueNames: new Set(), pinnedRequirements: new Map(), settings: { spareDefault: 0, spares: {}, locks, setKeep: [] } });
 
@@ -21,6 +21,16 @@ test("two copies of a lone mod keep one", () => {
   expect(modSellable([r], ctx()).get(r.key)).toBe(1);
 });
 
+test("a lone R3 copy is kept", () => {
+  const r = row("A", 3, 1);
+  expect(modSellable([r], ctx()).get(r.key)).toBe(0);
+});
+
+test("an equipped row of three sells two, since one copy is fitted", () => {
+  const r = row("A", 0, 3, { equipped: true });
+  expect(modSellable([r], ctx()).get(r.key)).toBe(2);
+});
+
 test("an equipped higher rank is the kept copy, so the whole unranked stack sells", () => {
   const r0 = row("A", 0, 4);
   const r5 = row("A", 5, 1, { equipped: true });
@@ -28,7 +38,7 @@ test("an equipped higher rank is the kept copy, so the whole unranked stack sell
   expect([out.get(r0.key), out.get(r5.key)]).toEqual([4, 0]);
 });
 
-test("with no other kept copy, the last copy sits on the highest rank only", () => {
+test("with no other kept copy, the kept copy sits on the highest rank only", () => {
   const r0 = row("A", 0, 2);
   const r5 = row("A", 5, 1);
   const out = modSellable([r0, r5], ctx());
