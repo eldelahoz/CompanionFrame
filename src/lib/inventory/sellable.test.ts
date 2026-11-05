@@ -2,7 +2,8 @@ import { expect, test } from "vitest";
 import type { ParsedItem } from "../../types/inventory";
 import type { ItemDbEntry } from "../../types/inventory";
 import type { InvRow } from "./inventoryRows";
-import { toSellable, upgradeVerdicts, verdictResolver } from "./sellable";
+import { modCopies } from "./modFilters";
+import { isUpgrade, toSellable, upgradeVerdicts, verdictResolver } from "./sellable";
 import { buildSafetyContext } from "./safetyRules";
 
 const U = "/Lotus/Upgrades/Mods/Test/";
@@ -77,6 +78,16 @@ test("the resolver judges other rows with safeToList and names the kept reason",
   const verdictOf = verdictResolver([part.item, mod.item], ctx([part.item.internalName]));
   expect(toSellable(verdictOf(part.item))).toMatchObject({ count: 0, reasonKey: "inventory.safety.reason.locked" });
   expect(toSellable(verdictOf(mod.item))).toMatchObject({ count: 1, reasonKey: "inventory.safety.reason.lastCopy" });
+});
+
+test("a mod's denominator is every copy across its rank rows; other items keep their own", () => {
+  const r0 = row("A", 0, 4);
+  const r5 = row("A", 5, 1, { equipped: true });
+  const part = row("B", 0, 2, { inventoryGroup: "all_parts" });
+  const copies = modCopies([r0, r5, part]);
+  const verdictOf = verdictResolver([r0.item, r5.item, part.item], ctx());
+  const of = (r: InvRow) => toSellable(verdictOf(r.item), isUpgrade(r.item) ? copies.get(r.item.internalName) : undefined);
+  expect([of(r0), of(r5), of(part)].map((s) => [s.count, s.of])).toEqual([[4, 5], [0, 5], [2, 2]]);
 });
 
 test("a lock is per mod, so it holds every rank row", () => {

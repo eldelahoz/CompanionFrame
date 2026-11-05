@@ -178,8 +178,8 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
     if (!showSellable) return null;
     // Mods and arcanes are judged over every rank row, so the resolver reads the whole inventory, not the tab.
     const verdictOf = verdictResolver(parsed, safety.context);
-    return new Map(inTab.filter((r) => r.item.inventoryGroup !== "incomplete_sets").map((r) => [r.key, toSellable(verdictOf(r.item))] as const));
-  }, [showSellable, parsed, inTab, safety.context]);
+    return new Map(inTab.filter((r) => r.item.inventoryGroup !== "incomplete_sets").map((r) => [r.key, toSellable(verdictOf(r.item), isUpgrade(r.item) ? copies.get(r.item.internalName) : undefined)] as const));
+  }, [showSellable, parsed, inTab, safety.context, copies]);
   const sellableOf = (row: InvRow) => sellable?.get(row.key);
   const filtered = useMemo(
     () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (!surplusOnly || (sellable?.get(r.key)?.count ?? 0) > 0) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),

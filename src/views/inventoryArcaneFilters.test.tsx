@@ -62,6 +62,6 @@ test("an arcane keeps one copy on its highest rank, so the unranked stack sells"
   await openArcanes();
   fireEvent.click(chip("data-inventory-mod-duplicates")!);
   await waitFor(() => expect(sellableOf(ARC_A)).toHaveLength(2));
-  expect(sellableOf(ARC_A).sort()).toEqual(["0 of 1", "2 of 2"]);
+  expect(sellableOf(ARC_A).sort()).toEqual(["0 of 3", "2 of 3"]);
   expect(sellableOf(ARC_C)).toEqual(["2 of 3"]);
 });

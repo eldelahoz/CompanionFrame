@@ -128,7 +128,7 @@ test("the card shows Sellable as a value row with its label, never in the badges
 test("Continuity R0 x4 beside an equipped R5 sells all four, and the R5 none", async () => {
   await openMods();
   press("data-inventory-mod-duplicates");
-  await waitFor(() => expect(sellableOf(CON)).toEqual(["4 of 4", "0 of 1"]));
+  await waitFor(() => expect(sellableOf(CON)).toEqual(["4 of 5", "0 of 5"]));
 });
 
 test("the sellable count follows the list view too", async () => {

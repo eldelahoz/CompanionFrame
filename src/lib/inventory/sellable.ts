@@ -63,7 +63,8 @@ export interface Sellable {
   params?: Readonly<Record<string, string | number>>;
 }
 
-export function toSellable(verdict: SafetyVerdict): Sellable {
+/** `of` overrides the denominator: a mod or arcane counts every copy across its rank rows. */
+export function toSellable(verdict: SafetyVerdict, of: number = verdict.total): Sellable {
   const why = verdict.reserved > 0 ? verdict.reservations.find((r) => r.binding && r.quantity > 0) : undefined;
-  return { count: verdict.safe, of: verdict.total, reasonKey: why?.reasonKey, params: why?.params ?? { count: verdict.reserved } };
+  return { count: verdict.safe, of, reasonKey: why?.reasonKey, params: why?.params ?? { count: verdict.reserved } };
 }
