@@ -102,6 +102,35 @@ test("each chip also combines with Tradable only alone", async () => {
   expect(shown()).toEqual([2, 1, 1, 0, 0]);
 });
 
+const sellableOf = (path: string) => [...document.querySelectorAll(`[data-inventory-card='${path}'] [data-inventory-sellable]`)].map((n) => n.textContent);
+
+test("no chip, no sellable count", async () => {
+  await openMods();
+  expect(document.querySelector("[data-inventory-sellable]")).toBeNull();
+});
+
+test("Hornet Strike R0 x2 with nothing else sells one", async () => {
+  items[HS].masterable = true;
+  await openMods();
+  press("data-inventory-mod-duplicates");
+  expect(sellableOf(HS)).toEqual(["Sellable 1"]);
+});
+
+test("Continuity R0 x4 beside an equipped R5 sells all four, and the R5 none", async () => {
+  items[CON].masterable = true;
+  await openMods();
+  press("data-inventory-mod-duplicates");
+  await waitFor(() => expect(sellableOf(CON)).toEqual(["Sellable 4", "Sellable 0"]));
+});
+
+test("the sellable count follows the list view too", async () => {
+  items[HS].masterable = true;
+  await openMods();
+  fireEvent.click(screen.getByRole("button", { name: "List" }));
+  press("data-inventory-mod-duplicates");
+  expect(document.querySelector(`[data-inventory-card='${HS}'] [data-inventory-sellable]`)?.textContent).toBe("Sellable 1");
+});
+
 test("the chips are hidden on a tab with no mods and do not filter it", async () => {
   render(<InventoryView items={items} tr={tr} />);
   fireEvent.click(await screen.findByRole("tab", { name: /Equipment/ }));

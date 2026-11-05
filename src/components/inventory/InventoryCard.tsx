@@ -23,11 +23,13 @@ interface Props {
   /** Extra block under the values (an incomplete set's missing parts). */
   extra?: ReactNode;
   mastery?: Mark | null;
+  /** Copies safe to sell; set only while a mod chip is on. */
+  sellable?: number;
   tr: Translator;
 }
 
 /** One owned item: art, name, stack and its value chips. In selection mode the whole card toggles. */
-export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, tr }: Props) {
+export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, tr }: Props) {
   const { item } = row;
   const { bind, node } = useItemPreview({ name: row.label, slug: row.artSlug, src: item.imageUrl, fallback: item.fallbackImageUrl, tr });
   return (
@@ -54,6 +56,7 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
           </Badge>
         )}
         <MasteryMark mark={mastery} tr={tr} />
+        {sellable !== undefined && <span className="inv-sellable" data-inventory-sellable>{tr("inventory.mods.sellable", { count: sellable })}</span>}
       </div>
       {row.slug && (
         <IconButton label={tr("inventory.openMarket")} className="inv-card-book" onClick={onBook}>

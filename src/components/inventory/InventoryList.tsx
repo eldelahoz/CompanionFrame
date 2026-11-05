@@ -22,11 +22,12 @@ interface Props {
   onBook: (row: InvRow) => void;
   extraOf?: (row: InvRow) => ReactNode;
   masteryOf?: (row: InvRow) => Mark | null;
+  sellableOf?: (row: InvRow) => number | undefined;
   tr: Translator;
 }
 
 /** Rows turn into labelled cards in a narrow container (Table mode="stack"). */
-export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, tr }: Props) {
+export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, sellableOf, tr }: Props) {
   return (
     <Table mode="stack" label={tr("inventory.viewList")} className="inv-list">
       <thead>
@@ -68,6 +69,7 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
               </td>
               <td className="ui-num" data-label={tr("inventory.col.owned")}>
                 {row.item.inventoryGroup === "incomplete_sets" ? <OwnedBadge item={row.item} tr={tr} /> : `x${formatNumber(row.item.amount ?? 0)}`}
+                {sellableOf?.(row) !== undefined && <span className="inv-sellable" data-inventory-sellable>{tr("inventory.mods.sellable", { count: sellableOf(row)! })}</span>}
               </td>
               <td className="ui-num" data-label={tr("inventory.col.platinum")}>
                 <span className="inv-price-fig">

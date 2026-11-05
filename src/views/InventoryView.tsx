@@ -20,7 +20,9 @@ import { parseOwnedRelics } from "../lib/relic/relicInventory";
 import { SORT_KEYS, buildRows, hasDucats, sortRows, valueEntries, type InvRow, type SortKey } from "../lib/inventory/inventoryRows";
 import { GOALS, GOAL_FILTERS, PLAT_PRESETS, parseBound, passesPlatRange, presetKey, usePersistedRange, type Goal } from "../lib/inventory/invFilters";
 import { computeInventoryValueTotals } from "../lib/inventory/valueTotals";
-import { NO_MOD_FILTERS, modCopies, passesModFilters, type ModFilters } from "../lib/inventory/modFilters";
+import { NO_MOD_FILTERS, modCopies, modFiltersOn, passesModFilters, type ModFilters } from "../lib/inventory/modFilters";
+import { modSellable } from "../lib/inventory/modSellable";
+import { useInventorySafety } from "../stores/inventorySafety";
 import { usePersisted } from "../lib/usePersisted";
 import { useInventory, useParsedInventory, useResources } from "../stores/inventory";
 import NoInventoryState from "../components/inventory/NoInventoryState";
@@ -163,6 +165,11 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
   const canFilterMods = useMemo(() => (tab === "everything" || tab === "mods") && rows.some((r) => r.item.inventoryGroup === "mods"), [rows, tab]);
   const modFilter = canFilterMods ? modWant : NO_MOD_FILTERS;
   const copies = useMemo(() => modCopies(rows), [rows]);
+  // The safety context (mastery, foundry walk) is only worth building while a mod chip asks for the sellable count.
+  const showSellable = modFiltersOn(modFilter);
+  const safety = useInventorySafety(showSellable ? data : null, items as unknown as Record<string, ItemDbEntry>);
+  const sellable = useMemo(() => (showSellable ? modSellable(rows, safety.context) : null), [showSellable, rows, safety.context]);
+  const sellableOf = (row: InvRow) => sellable?.get(row.key);
   const filtered = useMemo(
     () => inTab.filter((r) => (!tradableOnly || r.canTrade) && (!ducatsFilter || hasDucats(r)) && passesModFilters(r, copies, modFilter) && (primeFilter === "all" || !!r.item.isPrime === (primeFilter === "prime")) && (masteryFilter === "all" || (masteryFilter === "mastered" ? masteryOf(r)?.status === "mastered" : isNotMastered(masteryOf(r))))),
     // masteryOf only reads masteryIndex and items.
@@ -463,12 +470,13 @@ export default function InventoryView({ items, tr, locale = "en" }: Props) {
                     onBook={() => setBook(row)}
                     extra={extraOf(row)}
                     mastery={masteryOf(row)}
+                    sellable={sellableOf(row)}
                     tr={tr}
                   />
                 ))}
               </div>
             ) : (
-              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} tr={tr} />
+              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r) => toggleSelected(r.key)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} tr={tr} />
             )}
             <ShowMore shown={shown.length} total={visible.length} onMore={more} tr={tr} />
           </div>

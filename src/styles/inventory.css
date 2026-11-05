@@ -581,6 +581,12 @@
   .inv-pricing {
     margin-bottom: var(--space-3);
   }
+  .inv-sellable {
+    margin-inline-start: var(--space-2);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
   .inv-more {
     justify-content: center;
     padding: var(--space-4) 0;
