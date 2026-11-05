@@ -276,6 +276,10 @@ export const onItemDbUpdated = async (cb: () => void): Promise<UnlistenFn> => {
 export const onPricesRefreshed = async (cb: (entries: PriceEntry[]) => void): Promise<UnlistenFn> =>
   inTauri() ? listen<PriceEntry[]>("wfm-prices-refreshed", (e) => cb(e.payload)) : () => {};
 
+/** A listing lost `quantity` units because a trade match closed it (popup or Workbench). */
+export const onWfmOrderClosed = async (cb: (e: { order_id: string; quantity: number }) => void): Promise<UnlistenFn> =>
+  inTauri() ? listen<{ order_id: string; quantity: number }>("wfm-order-closed", (e) => cb(e.payload)) : () => {};
+
 /** Mastery progress from the inventory snapshot, else from the public profile (`fromProfile`), else null. */
 export const getMasteryProgress = async (): Promise<MasteryProgress | null> => {
   if (inTauri()) return unwrap(await commands.getMasteryProgress());
@@ -1009,6 +1013,9 @@ export const wfmRivenAuctionClose = async (auctionId: string): Promise<void> => 
 
 export const wfmSendPlusRep = async (username: string): Promise<SendRepResult> =>
   inTauri() ? unwrapWfm(await commands.wfmSendPlusRep(username)) : "sent";
+
+/** The signed-in user's warframe.market reputation, or null when unknown. */
+export const wfmMyReputation = async (): Promise<number | null> => (inTauri() ? unwrapWfm(await commands.wfmMyReputation()) : null);
 
 export type ArbiScheduleEntry = Finite<ArbiScheduleEntryBinding>;
 export type ArbiScheduleAlerts = ArbiScheduleAlertsBinding;

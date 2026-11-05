@@ -1,4 +1,4 @@
-import { LogOut, Plus, RefreshCw, ShoppingCart, WandSparkles } from "lucide-react";
+import { LogOut, Plus, RefreshCw, ShoppingCart, Star, WandSparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { normalizePerTrade } from "../../config/shared/wfmOrders";
 import HeaderTabs from "../components/HeaderTabs";
@@ -10,12 +10,12 @@ import MarketOrderRow from "../components/market/MarketOrderRow";
 import { useMarketArt } from "../lib/useMarketArt";
 import OrderModal from "../components/market/OrderModal";
 import SignInForm from "../components/market/SignInForm";
-import WfmPresenceBar from "../components/market/WfmPresenceBar";
+import WfmPresenceBar, { DOT } from "../components/market/WfmPresenceBar";
 import { Button, Card, EmptyState, IconButton, PageHeader, Skeleton, Table } from "../components/ui";
 import { askConfirm } from "../stores/confirm";
 import { addToast } from "../stores/toasts";
 import type { Translator } from "../lib/i18n";
-import { wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, type ItemDatabase, type MyOrder, type MyOrders } from "../lib/ipc";
+import { onWfmOrderClosed, wfmMyReputation, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, type ItemDatabase, type MyOrder, type MyOrders } from "../lib/ipc";
 import type { WfmPresenceState, PresenceOptions, WfmStatus, WfmSession } from "../lib/ipc";
 import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
@@ -77,6 +77,33 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     return () => clearInterval(t);
   }, [loggedIn, fetchOrders]);
 
+  // Once per sign-in, not on the poll; a failed lookup just hides the figure.
+  const [reputation, setReputation] = useState<number | null>(null);
+  useEffect(() => {
+    if (!loggedIn) return setReputation(null);
+    let dead = false;
+    wfmMyReputation().then((r) => !dead && setReputation(r), () => !dead && setReputation(null));
+    return () => {
+      dead = true;
+    };
+  }, [loggedIn]);
+
+  // A trade match closed units elsewhere: patch just that row; the poll reconciles the rest.
+  useEffect(() => {
+    if (!loggedIn) return;
+    let off: (() => void) | undefined;
+    let dead = false;
+    void onWfmOrderClosed(({ order_id, quantity }) => {
+      const lower = (list: MyOrder[]) =>
+        list.flatMap((o) => (o.id !== order_id ? [o] : o.quantity - quantity > 0 ? [{ ...o, quantity: o.quantity - quantity }] : []));
+      setOrders((cur) => ({ sell: lower(cur.sell), buy: lower(cur.buy) }));
+    }).then((u) => (dead ? u() : (off = u)));
+    return () => {
+      dead = true;
+      off?.();
+    };
+  }, [loggedIn]);
+
   // One write per order at a time; the lock also covers the refetch that follows.
   const guarded = async (id: string, run: () => Promise<void>) => {
     if (busy.has(id)) return;
@@ -136,8 +163,14 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
         title={tr("common.market")}
         sub={
           loggedIn && session?.user_name ? (
-            <span className="titlebar-pill">
-              <span className="status-dot bg-success" />@{session.user_name}
+            <span className="titlebar-pill" data-market-user>
+              <span className={`status-dot ${DOT[presence.state.status ?? "invisible"]}`} />@{session.user_name}
+              {reputation !== null && (
+                <span className="inline-flex items-center gap-0.5 tabular-nums text-text-secondary" title={tr("market.reputation")} aria-label={tr("market.reputation")} data-market-reputation>
+                  · <Star className="size-3" aria-hidden />
+                  {reputation}
+                </span>
+              )}
             </span>
           ) : undefined
         }

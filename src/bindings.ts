@@ -160,6 +160,7 @@ export const commands = {
 	wfmRivenAuctionUpdate: (auctionId: string, update: RivenAuctionUpdate_Deserialize) => typedError<RivenAuctionAck_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_riven_auction_update", { auctionId, update })),
 	wfmRivenAuctionClose: (auctionId: string) => typedError<null, WfmError_Serialize>(__TAURI_INVOKE("wfm_riven_auction_close", { auctionId })),
 	wfmSendPlusRep: (username: string) => typedError<SendRepResult, WfmError_Serialize>(__TAURI_INVOKE("wfm_send_plus_rep", { username })),
+	wfmMyReputation: () => typedError<number | null, WfmError_Serialize>(__TAURI_INVOKE("wfm_my_reputation")),
 	workbenchGetState: () => __TAURI_INVOKE<WorkbenchState_Serialize>("workbench_get_state"),
 	workbenchPreviewPlan: (plan: WorkbenchPlan_Deserialize, safety: WorkbenchSafetySnapshot) => typedError<WorkbenchPlanValidation_Serialize, string>(__TAURI_INVOKE("workbench_preview_plan", { plan, safety })),
 	workbenchExecutePlan: (plan: WorkbenchPlan_Deserialize, safety: WorkbenchSafetySnapshot) => __TAURI_INVOKE<WorkbenchExecuteResult_Serialize>("workbench_execute_plan", { plan, safety }),

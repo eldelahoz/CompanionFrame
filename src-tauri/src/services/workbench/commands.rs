@@ -7,7 +7,8 @@ use rusqlite::Connection;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use super::matcher::{
-    ItemRankInfo, MatchContract, MatchHost, Matcher, WorkbenchTrade, WorkbenchTradeMatch,
+    ItemRankInfo, MatchContract, MatchHost, Matcher, WorkbenchMatchKind, WorkbenchTrade,
+    WorkbenchTradeMatch,
 };
 use super::types::*;
 use super::{INTER_ROW_DELAY, NewSellOrder, Workbench, WorkbenchHost};
@@ -21,6 +22,7 @@ use crate::services::wfm::session::Session;
 use crate::services::wfm::validators::{CreateOrder, OrderUpdates};
 
 pub const STATE_EVENT: &str = "workbench-updated";
+pub const ORDER_CLOSED_EVENT: &str = "wfm-order-closed";
 
 /// Reads the session and database from managed state on every call, so it needs only the handle.
 #[derive(Clone)]
@@ -258,17 +260,36 @@ pub async fn workbench_match_trade(
     Ok(matcher.match_trade(&trade).await)
 }
 
+/// Tells the Market view a listing lost `quantity` units (the amount sent to WFM's close call).
+/// Contracts are not in the Market table, so only orders are announced.
+pub fn announce_order_closed(app: &AppHandle, m: &WorkbenchTradeMatch) {
+    if !matches!(m.kind, WorkbenchMatchKind::Order) {
+        return;
+    }
+    let payload = serde_json::json!({ "order_id": m.order_id, "quantity": m.quantity });
+    if let Err(e) = app.emit(ORDER_CLOSED_EVENT, payload) {
+        tracing::warn!(
+            "[Workbench] could not announce closed order {}: {e}",
+            m.order_id
+        );
+    }
+}
+
 /// Closes one matched listing. Only called after the user confirms the match. With the ledger
 /// row's id, a successful close is remembered on that row (`wfmClosed`).
 #[tauri::command]
 #[specta::specta]
 pub async fn workbench_close_match(
+    app: AppHandle,
     matcher: State<'_, Matcher<WfmHost>>,
     db: State<'_, Db>,
     trade_match: WorkbenchTradeMatch,
     event_id: Option<String>,
 ) -> Result<bool, String> {
     let closed = matcher.close_match(&trade_match).await;
+    if closed {
+        announce_order_closed(&app, &trade_match);
+    }
     if let (true, Some(id)) = (closed, event_id)
         && let Err(e) = crate::services::ledger::mark_wfm_closed(&db.0.lock().unwrap(), &id)
     {

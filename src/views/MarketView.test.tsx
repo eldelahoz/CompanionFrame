@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../lib/i18n";
 import { resetMock, wfmOrderCreate, wfmOrdersMy } from "../lib/ipc";
@@ -9,6 +9,18 @@ import ConfirmHost from "../components/shell/ConfirmHost";
 import ToastHost from "../components/shell/ToastHost";
 import { clearToasts } from "../stores/toasts";
 import MarketView from "./MarketView";
+
+// Captures the closed-order listener so a test can fire the backend event by hand.
+let closedCb: ((e: { order_id: string; quantity: number }) => void) | undefined;
+let reputation: number | null = null;
+vi.mock("../lib/ipc", async (orig) => ({
+  ...(await orig<typeof import("../lib/ipc")>()),
+  wfmMyReputation: async () => reputation,
+  onWfmOrderClosed: async (cb: typeof closedCb) => {
+    closedCb = cb;
+    return () => {};
+  },
+}));
 
 const tr = translator("en");
 function Harness() {
@@ -24,6 +36,7 @@ function Harness() {
 }
 
 beforeEach(() => {
+  reputation = null;
   resetMock();
   localStorage.clear();
 });
@@ -142,4 +155,50 @@ test("each order row has an item thumbnail whose larger preview opens on hover a
   expect(document.querySelector("[data-item-preview]")).toBeTruthy();
   fireEvent.blur(thumb);
   expect(document.querySelector("[data-item-preview]")).toBeNull();
+});
+
+test("a listing closed from a trade match lowers its row, and a full close removes it", async () => {
+  await wfmOrderCreate({ itemId: "mock_serration", orderType: "SELL", platinum: 5, quantity: 3 } as never);
+  render(<Harness />);
+  await signIn();
+  await waitFor(() => expect(document.querySelector("[data-market-order]")).toBeTruthy());
+  await waitFor(() => expect(closedCb).toBeTruthy());
+  const { id } = (await wfmOrdersMy()).sell[0];
+  // price then quantity steppers: the last number input is the quantity
+  const qty = () => [...document.querySelectorAll<HTMLInputElement>("[data-market-order] input[type=number]")].pop()?.value;
+
+  act(() => closedCb!({ order_id: "someone-else", quantity: 1 }));
+  expect(document.querySelectorAll("[data-market-order]")).toHaveLength(1);
+
+  act(() => closedCb!({ order_id: id, quantity: 1 }));
+  await waitFor(() => expect(qty()).toBe("2"));
+
+  act(() => closedCb!({ order_id: id, quantity: 2 }));
+  await waitFor(() => expect(document.querySelector("[data-market-order]")).toBeNull());
+});
+
+test("the header dot follows the wfm status and the reputation shows only when known", async () => {
+  reputation = 42;
+  const { container, unmount } = render(<Harness />);
+  await signIn();
+  const user = await waitFor(() => {
+    const el = container.querySelector("[data-market-user]");
+    expect(el).toBeTruthy();
+    return el as HTMLElement;
+  });
+  const dot = () => user.querySelector(".status-dot")!;
+  fireEvent.click(await waitFor(() => container.querySelector('[data-wfm-status-option="ingame"]')!));
+  await waitFor(() => expect(dot().className).toContain("bg-info"));
+  fireEvent.click(container.querySelector('[data-wfm-status-option="online"]')!);
+  await waitFor(() => expect(dot().className).toContain("bg-success"));
+  fireEvent.click(container.querySelector('[data-wfm-status-option="invisible"]')!);
+  await waitFor(() => expect(dot().className).toContain("bg-text-muted"));
+  expect(user.querySelector("[data-market-reputation]")?.textContent).toContain("42");
+  expect(screen.getByLabelText("Reputation")).toBeTruthy();
+  unmount();
+
+  reputation = null;
+  const again = render(<Harness />);
+  await waitFor(() => expect(again.container.querySelector("[data-market-user]")).toBeTruthy());
+  expect(again.container.querySelector("[data-market-reputation]")).toBeNull();
 });

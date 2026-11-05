@@ -2,7 +2,9 @@
 //! only. A review is outward-facing, so an unconfirmed name is never written to: the names WFM
 //! reshapes are exactly the ones that collide with another user.
 
+use reqwest::Method;
 use serde::Serialize;
+use serde_json::Value;
 use tauri::State;
 
 use super::client::{Api, Sent, WfmClient};
@@ -74,10 +76,53 @@ pub async fn wfm_send_plus_rep(
     Ok(send_plus_rep(session.client(), &username).await)
 }
 
+/// The signed-in user's reputation from `GET /v2/me`. `None` when signed out, when the call fails
+/// or when the field is missing: the header just hides it.
+pub async fn my_reputation(client: &WfmClient) -> Option<u32> {
+    client.token()?;
+    match client.request(Api::V2, Method::GET, "/me", None).await {
+        Ok(v) => v
+            .pointer("/data/reputation")
+            .and_then(Value::as_u64)
+            .and_then(|n| u32::try_from(n).ok()),
+        Err(e) => {
+            tracing::warn!(error = %e, "wfm reputation lookup failed");
+            None
+        }
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn wfm_my_reputation(session: State<'_, Session>) -> Result<Option<u32>, WfmError> {
+    Ok(my_reputation(session.client()).await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::mock::{Mock, Reply, reply, spawn};
     use super::*;
+
+    #[tokio::test]
+    async fn reads_the_reputation_from_me() {
+        let ok = |body: &str| my_reputation_of(vec![reply(200, body)]);
+        assert_eq!(ok(r#"{"data":{"reputation":42}}"#).await, Some(42));
+        assert_eq!(ok(r#"{"data":{"slug":"x"}}"#).await, None);
+        assert_eq!(ok(r#"{"data":{"reputation":"many"}}"#).await, None);
+        assert_eq!(my_reputation_of(vec![reply(500, "{}")]).await, None);
+        let m = spawn(vec![]);
+        let c = client(&m);
+        c.set_token(None);
+        assert_eq!(my_reputation(&c).await, None);
+        assert!(m.requests().is_empty(), "signed out never calls WFM");
+    }
+
+    async fn my_reputation_of(script: Vec<Reply>) -> Option<u32> {
+        let m = spawn(script);
+        let r = my_reputation(&client(&m)).await;
+        assert!(m.requests()[0].starts_with("get /v2/me "));
+        r
+    }
 
     fn client(m: &Mock) -> WfmClient {
         let c = WfmClient::new(
