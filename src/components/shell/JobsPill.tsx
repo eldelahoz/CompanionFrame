@@ -2,7 +2,7 @@ import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { MessageKey, Translator } from "../../lib/i18n";
 import { jobsContinue, jobsDismiss, jobsRetryFailed, jobsStop, type Job } from "../../lib/ipc";
-import { isBackground, useJobs } from "../../stores/jobs";
+import { isActive, isBackground, useJobs } from "../../stores/jobs";
 import { addToast } from "../../stores/toasts";
 import { Button, Progress } from "../ui";
 
@@ -24,7 +24,7 @@ const NAME: Record<Job["kind"]["type"], MessageKey> = {
 };
 const MAX_REASONS = 5;
 
-const active = (j: Job) => j.state === "running" || j.state === "stopping";
+const active = isActive;
 const attention = (j: Job) => j.state === "interrupted" || j.failed > 0;
 /** Items that went through, failed ones included: what "12 of 40" counts. */
 const processed = (j: Job) => j.done + j.failed;
@@ -34,6 +34,7 @@ const failedSoFar = (j: Job, tr: Translator) => (j.failed > 0 ? tr("jobs.failedS
 
 /** The one line a job gets: its progress while it runs, its outcome after. */
 function summary(job: Job, tr: Translator): string {
+  if (job.state === "offline") return tr("jobs.offline", { done: processed(job), total: job.total });
   if (active(job)) {
     const key = job.kind.type === "ordersVisibility" && job.kind.visible ? "market.bulkShowing" : RUNNING[job.kind.type];
     const text = tr(key, { done: processed(job), total: job.total });
@@ -120,10 +121,11 @@ export default function JobsPill({ tr }: { tr: Translator }) {
   if (!lead) return null;
   const text = summary(lead, tr);
   const quiet = isBackground(lead);
-  const Icon = quiet ? null : active(lead) ? LoaderCircle : attention(lead) ? TriangleAlert : Check;
+  const paused = lead.state === "offline";
+  const Icon = quiet ? null : paused ? TriangleAlert : active(lead) ? LoaderCircle : attention(lead) ? TriangleAlert : Check;
   return (
     <div ref={box} className="relative">
-      <button type="button" className={`titlebar-pill ${quiet ? "text-text-muted" : ""}`} aria-label={tr("jobs.pillLabel", { text })} aria-expanded={open} aria-haspopup="dialog" data-jobs-pill={quiet ? "background" : lead.state} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`titlebar-pill ${quiet ? "text-text-muted" : paused ? "text-warning" : ""}`} aria-label={tr("jobs.pillLabel", { text })} aria-expanded={open} aria-haspopup="dialog" data-jobs-pill={quiet ? "background" : lead.state} onClick={() => setOpen((o) => !o)}>
         {Icon && <Icon className={`size-3.5 ${active(lead) ? "animate-spin" : ""}`} aria-hidden />}
         <span className="titlebar-pill-text">{text}</span>
       </button>

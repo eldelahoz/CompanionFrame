@@ -22,6 +22,9 @@ export function applyUpdate(jobs: Job[], u: JobUpdate): Job[] {
   });
 }
 
+/** Still going: running, stopping, or paused for lack of a connection. */
+export const isActive = (j: Job) => j.state === "running" || j.state === "stopping" || j.state === "offline";
+
 const cleanFinish = (j: Job) => j.state === "done" && j.failed === 0;
 
 /** Running jobs, those that need the user (failures, interrupted) and, for a few seconds, a clean finish. */

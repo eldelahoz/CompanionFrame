@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 
 use rusqlite::Connection;
@@ -22,6 +22,9 @@ struct Fake {
     slow: Vec<String>,
     release: Notify,
     flying: AtomicU32,
+    /// The connection is down: every item answers with a network error.
+    down: AtomicBool,
+    tries: AtomicU32,
 }
 
 fn fake(fail: &[(&str, &str, bool)], slow: &[&str]) -> Fake {
@@ -35,6 +38,7 @@ fn fake(fail: &[(&str, &str, bool)], slow: &[&str]) -> Fake {
                     ItemError {
                         reason: reason.to_string(),
                         halt: *halt,
+                        offline: false,
                     },
                 )
             })
@@ -45,11 +49,21 @@ fn fake(fail: &[(&str, &str, bool)], slow: &[&str]) -> Fake {
         slow: slow.iter().map(|s| s.to_string()).collect(),
         release: Notify::new(),
         flying: AtomicU32::new(0),
+        down: AtomicBool::new(false),
+        tries: AtomicU32::new(0),
     }
 }
 
 impl JobHost for std::sync::Arc<Fake> {
     async fn run_item(&self, _: &JobKind, item: &JobItem) -> Result<(), ItemError> {
+        if self.down.load(Ordering::SeqCst) {
+            self.tries.fetch_add(1, Ordering::SeqCst);
+            return Err(ItemError {
+                reason: "network error".into(),
+                halt: false,
+                offline: true,
+            });
+        }
         self.ran.lock().unwrap().push(item.id.clone());
         if self.slow.contains(&item.id) {
             self.flying.fetch_add(1, Ordering::SeqCst);
@@ -59,6 +73,7 @@ impl JobHost for std::sync::Arc<Fake> {
             Some(e) => Err(ItemError {
                 reason: e.reason.clone(),
                 halt: e.halt,
+                offline: false,
             }),
             None => Ok(()),
         }
@@ -94,6 +109,12 @@ fn items(ids: &[&str]) -> Vec<JobItem> {
 fn engine(f: Fake) -> (std::sync::Arc<Fake>, Arc<Jobs<std::sync::Arc<Fake>>>) {
     let f = std::sync::Arc::new(f);
     (f.clone(), Arc::new(Jobs::new(f, Duration::ZERO)))
+}
+
+fn engine_offline(f: Fake) -> (std::sync::Arc<Fake>, Arc<Jobs<std::sync::Arc<Fake>>>) {
+    let f = std::sync::Arc::new(f);
+    let jobs = Jobs::new(f.clone(), Duration::ZERO).with_offline_wait(Duration::from_millis(10));
+    (f, Arc::new(jobs))
 }
 
 async fn until(what: &str, mut ok: impl FnMut() -> bool) {
@@ -472,4 +493,80 @@ async fn a_market_load_stops_after_the_item_in_flight() {
     assert_eq!(*f.ran.lock().unwrap(), ["a"]);
     assert_eq!((job.done, job.state), (1, JobState::Done));
     assert_eq!(job.items[2].status, ItemStatus::Skipped);
+}
+
+#[tokio::test]
+async fn a_lost_connection_pauses_the_job_without_failing_the_item_and_resumes_by_itself() {
+    let (f, jobs) = engine_offline(fake(&[], &[]));
+    f.down.store(true, Ordering::SeqCst);
+    let id = jobs.start(HIDE, items(&["a", "b"])).unwrap();
+    until("the job to pause", || {
+        job_of(&jobs, &id).is_some_and(|j| j.state == JobState::Offline)
+            && f.tries.load(Ordering::SeqCst) >= 2
+    })
+    .await;
+    let paused = job_of(&jobs, &id).unwrap();
+    assert_eq!((paused.done, paused.failed), (0, 0), "nothing failed");
+    assert_eq!(
+        paused.items[0].status,
+        ItemStatus::Pending,
+        "the item waits at the front"
+    );
+    assert!(f.ran.lock().unwrap().is_empty());
+
+    // The connection is back: it goes on without a click, in order, and ends clean.
+    f.down.store(false, Ordering::SeqCst);
+    let job = finished(&jobs, &id).await;
+    assert_eq!((job.state, job.done, job.failed), (JobState::Done, 2, 0));
+    assert_eq!(*f.ran.lock().unwrap(), ["a", "b"]);
+    assert!(
+        f.updates
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|u| u.state == JobState::Offline),
+        "the pause was announced"
+    );
+}
+
+#[tokio::test]
+async fn stop_while_offline_ends_the_job_at_once() {
+    // A long wait: only the wake-up from Stop can end it in time.
+    let f = std::sync::Arc::new(fake(&[], &[]));
+    let jobs =
+        Arc::new(Jobs::new(f.clone(), Duration::ZERO).with_offline_wait(Duration::from_secs(30)));
+    f.down.store(true, Ordering::SeqCst);
+    let id = jobs.start(HIDE, items(&["a", "b"])).unwrap();
+    until("the job to pause", || {
+        job_of(&jobs, &id).is_some_and(|j| j.state == JobState::Offline)
+    })
+    .await;
+    jobs.stop(&id).unwrap();
+    let job = finished(&jobs, &id).await;
+    assert_eq!(job.failed, 0);
+    assert!(f.ran.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn startup_turns_an_offline_job_into_an_interrupted_one() {
+    let conn = mem_conn();
+    let job = Job {
+        id: "j1".into(),
+        kind: HIDE,
+        state: JobState::Offline,
+        total: 2,
+        done: 0,
+        failed: 0,
+        items: items(&["a", "b"]),
+        created_at: 1.0,
+        finished_at: None,
+    };
+    store::insert(&conn, &job).unwrap();
+    store::set_state(&conn, "j1", JobState::Offline, None).unwrap();
+    let f = std::sync::Arc::new(Fake {
+        conn: Mutex::new(conn),
+        ..fake(&[], &[])
+    });
+    let jobs = Jobs::new(f.clone(), Duration::ZERO);
+    assert_eq!(jobs.list()[0].state, JobState::Interrupted);
 }

@@ -79,7 +79,7 @@ pub fn interrupt_unfinished(c: &Connection) -> rusqlite::Result<()> {
         [],
     )?;
     c.execute(
-        "UPDATE jobs SET state = 'interrupted' WHERE state IN ('running', 'stopping')",
+        "UPDATE jobs SET state = 'interrupted' WHERE state IN ('running', 'stopping', 'offline')",
         [],
     )
     .map(|_| ())

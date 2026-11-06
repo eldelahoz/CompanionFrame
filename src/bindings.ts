@@ -1613,7 +1613,9 @@ export type JobKind = { type: "ordersVisibility"; visible: boolean } | { type: "
 
 export type JobState = "running" | 
 /**  Stop asked: the item in flight finishes, none starts. */
-"stopping" | "done" | 
+"stopping" | 
+/**  No connection: paused on the item that hit the wall, retried by itself until the network is back. */
+"offline" | "done" | 
 /**  The app closed mid-run (or the session died): the pending items wait for the user. */
 "interrupted";
 

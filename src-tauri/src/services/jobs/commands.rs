@@ -100,6 +100,8 @@ impl JobHost for AppHost {
         };
         sent.map_err(|e| ItemError {
             halt: matches!(e, WfmError::Unauthorized { .. }),
+            // A lost connection, not an answer from the server.
+            offline: matches!(e, WfmError::Network { .. }),
             reason: e.to_string(),
         })
     }

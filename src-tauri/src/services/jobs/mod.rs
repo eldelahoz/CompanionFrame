@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::services::clock::now_ms_f64;
 
+/// Seconds between tries while the connection is down (doubling, capped at six times this).
+const OFFLINE_WAIT: Duration = Duration::from_secs(5);
+
 pub const UPDATED_EVENT: &str = "job-updated";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -66,6 +69,8 @@ pub enum JobState {
     Running,
     /// Stop asked: the item in flight finishes, none starts.
     Stopping,
+    /// No connection: paused on the item that hit the wall, retried by itself until the network is back.
+    Offline,
     Done,
     /// The app closed mid-run (or the session died): the pending items wait for the user.
     Interrupted,
@@ -107,7 +112,10 @@ impl Job {
     }
 
     fn active(&self) -> bool {
-        matches!(self.state, JobState::Running | JobState::Stopping)
+        matches!(
+            self.state,
+            JobState::Running | JobState::Stopping | JobState::Offline
+        )
     }
 
     /// Worth showing after a restart: not a clean finish.
@@ -158,6 +166,8 @@ fn update(job: &Job, item: Option<&JobItem>) -> JobUpdate {
 pub struct ItemError {
     pub reason: String,
     pub halt: bool,
+    /// The connection is down (not an HTTP error): the item is not failed, the job pauses and tries again.
+    pub offline: bool,
 }
 
 /// What the engine needs from the outside world; tests inject fakes so nothing touches the network.
@@ -177,6 +187,10 @@ pub struct Jobs<H> {
     host: H,
     /// Pause between two items, on top of the scheduler's budget.
     delay: Duration,
+    /// First wait before trying an item again after a lost connection; it doubles up to six times this.
+    offline_wait: Duration,
+    /// Wakes a paused job early (Stop).
+    wake: tokio::sync::Notify,
     jobs: Mutex<Vec<Job>>,
 }
 
@@ -195,8 +209,16 @@ impl<H: JobHost> Jobs<H> {
         Self {
             host,
             delay,
+            offline_wait: OFFLINE_WAIT,
+            wake: tokio::sync::Notify::new(),
             jobs: Mutex::new(jobs),
         }
+    }
+
+    #[cfg(test)]
+    fn with_offline_wait(mut self, wait: Duration) -> Self {
+        self.offline_wait = wait;
+        self
     }
 
     /// The jobs the panel shows at startup: running, interrupted or with failures.
@@ -271,12 +293,13 @@ impl<H: JobHost> Jobs<H> {
             self.host.hold(true);
         }
         let mut halted = false;
+        let mut wait = self.offline_wait;
         loop {
             // Take the next pending item, unless a stop was asked.
             let next = {
                 let jobs = self.jobs.lock().unwrap();
                 jobs.iter().find(|j| j.id == id).and_then(|j| {
-                    (j.state == JobState::Running)
+                    matches!(j.state, JobState::Running | JobState::Offline)
                         .then(|| j.items.iter().position(|i| i.status == ItemStatus::Pending))
                         .flatten()
                         .map(|idx| (idx, j.kind.clone(), j.items[idx].clone()))
@@ -295,6 +318,26 @@ impl<H: JobHost> Jobs<H> {
             }
             self.set_item(&id, idx, ItemStatus::Running, None);
             let outcome = self.host.run_item(&kind, &item).await;
+            if outcome.as_ref().is_err_and(|e| e.offline) {
+                // Not a failure: the item goes back to the front and the job waits for the network.
+                if let Err(e) = self
+                    .host
+                    .with_db(|c| store::set_item(c, &id, idx, ItemStatus::Pending, None))
+                {
+                    tracing::error!("[Jobs] failed to persist a paused item: {e}");
+                }
+                self.set_item(&id, idx, ItemStatus::Pending, None);
+                if self.pause(&id) {
+                    tokio::select! {
+                        () = tokio::time::sleep(wait) => {}
+                        () = self.wake.notified() => {}
+                    }
+                    wait = (wait * 2).min(self.offline_wait * 6);
+                }
+                continue;
+            }
+            wait = self.offline_wait;
+            self.resume(&id);
             let (status, reason) = match &outcome {
                 Ok(()) => (ItemStatus::Done, None),
                 Err(e) => (ItemStatus::Failed, Some(e.reason.clone())),
@@ -317,6 +360,33 @@ impl<H: JobHost> Jobs<H> {
         }
         self.finish(&id, halted);
         tracing::info!("[Jobs] job finished");
+    }
+
+    /// Running -> Offline. False when a stop was asked meanwhile (no waiting then).
+    fn pause(&self, id: &str) -> bool {
+        self.switch(id, JobState::Running, JobState::Offline)
+    }
+
+    /// Offline -> Running once an item went through again.
+    fn resume(&self, id: &str) {
+        self.switch(id, JobState::Offline, JobState::Running);
+    }
+
+    fn switch(&self, id: &str, from: JobState, to: JobState) -> bool {
+        let job = {
+            let mut jobs = self.jobs.lock().unwrap();
+            match jobs.iter_mut().find(|j| j.id == id) {
+                Some(j) if j.state == from => {
+                    j.state = to;
+                    j.clone()
+                }
+                Some(j) => return j.state == to,
+                None => return false,
+            }
+        };
+        self.save_state(&job);
+        self.host.emit(&update(&job, None));
+        true
     }
 
     /// Sets an item's status, keeps the counts and announces it.
@@ -376,13 +446,14 @@ impl<H: JobHost> Jobs<H> {
         let job = {
             let mut jobs = self.jobs.lock().unwrap();
             let job = jobs.iter_mut().find(|j| j.id == id).ok_or("No such job.")?;
-            if job.state != JobState::Running {
+            if !matches!(job.state, JobState::Running | JobState::Offline) {
                 return Err("The job is not running.".into());
             }
             job.state = JobState::Stopping;
             job.clone()
         };
         self.host.emit(&update(&job, None));
+        self.wake.notify_one();
         Ok(job.kind)
     }
 

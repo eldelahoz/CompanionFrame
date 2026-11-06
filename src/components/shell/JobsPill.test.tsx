@@ -180,3 +180,16 @@ test("a running job shows its failures so far in the pill and the panel row", as
   open();
   expect(screen.getByText("169 of 436, 51 failed")).toBeTruthy();
 });
+
+test("a job paused for lack of a connection shows amber with its count and can still be stopped", async () => {
+  render(<JobsPill tr={tr} />);
+  await act(async () => {});
+  const j = job({ kind: { type: "marketLoad" }, state: "offline", total: 436, done: 169, items: [] });
+  act(() => send(update(j, { job: j })));
+  const pill = screen.getByRole("button", { name: /No connection, paused: 169 of 436/ });
+  expect(pill.getAttribute("data-jobs-pill")).toBe("offline");
+  expect(pill.className).toContain("text-warning");
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+  expect(actions.stop).toHaveBeenCalledWith("j1");
+});

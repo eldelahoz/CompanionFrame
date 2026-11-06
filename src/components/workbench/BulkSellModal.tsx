@@ -53,7 +53,7 @@ import { rowBookOf } from "../../lib/tradeWorkbench/rowBook";
 import { STRATEGY_KEYS } from "../../lib/tradeWorkbench/strategyLabels";
 import type { CatalogIndex } from "../../lib/wfm/catalog";
 import { useInventorySafety } from "../../stores/inventorySafety";
-import { useJobs } from "../../stores/jobs";
+import { isActive, useJobs } from "../../stores/jobs";
 import { loadMyOrders } from "../../stores/myOrders";
 import { useWorkbenchState } from "../../stores/workbench";
 import type { ItemDbEntry, ParsedItem, RawInventoryData } from "../../types/inventory";
@@ -143,7 +143,7 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
   // The market load is a background job: it goes on when this modal closes, and its state is read from the jobs store.
   const marketJobs = useJobs().jobs.filter((j) => j.kind.type === "marketLoad");
   const marketJob = marketJobs[marketJobs.length - 1] ?? null;
-  const marketBusy = marketJob?.state === "running" || marketJob?.state === "stopping";
+  const marketBusy = marketJob != null && isActive(marketJob);
   const marketProgress: [number, number] = marketJob ? [marketJob.done + marketJob.failed, marketJob.total] : [0, 0];
   const marketFailed = new Set(marketJob?.items.filter((i) => i.status === "failed").map((i) => i.id));
   const medianAfterLoad = useRef(false);
@@ -331,7 +331,7 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
     if (targets.length === 0) return;
     setError(null);
     // An earlier load that ended with failures is replaced by this one, not left beside it.
-    for (const old of marketJobs) if (!marketBusy && old.state !== "running" && old.state !== "stopping") void jobsDismiss(old.id).catch(() => {});
+    for (const old of marketJobs) if (!marketBusy && !isActive(old)) void jobsDismiss(old.id).catch(() => {});
     // The job takes 500 items; whatever is left stays without a book for the next click.
     const unique = [...new Map(targets.map((t) => [t.slug, { slug: t.slug, name: t.itemName }])).values()].slice(0, 500);
     try {

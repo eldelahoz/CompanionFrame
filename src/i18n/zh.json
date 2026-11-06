@@ -2166,6 +2166,7 @@
   "jobs.ofTotal": "{done}/{total}",
   "jobs.failedSoFar": "，{failed} 个失败",
   "jobs.stopping": "正在停止...",
+  "jobs.offline": "无网络连接，已暂停：{done}/{total}",
   "jobs.interrupted": "已中断：{done}/{total}",
   "jobs.left": "还剩 {count} 个。不会自动继续。",
   "jobs.doneFailed": "{done} 个完成，{failed} 个失败",

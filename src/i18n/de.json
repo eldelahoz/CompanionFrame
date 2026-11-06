@@ -2166,6 +2166,7 @@
   "jobs.ofTotal": "{done} von {total}",
   "jobs.failedSoFar": ", {failed} fehlgeschlagen",
   "jobs.stopping": "Stoppe...",
+  "jobs.offline": "Keine Verbindung, pausiert: {done} von {total}",
   "jobs.interrupted": "Unterbrochen: {done} von {total}",
   "jobs.left": "{count} übrig. Nichts läuft von selbst weiter.",
   "jobs.doneFailed": "{done} fertig, {failed} fehlgeschlagen",
