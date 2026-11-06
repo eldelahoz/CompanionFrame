@@ -607,6 +607,13 @@ export const wfmPrice = async (slug: string): Promise<PriceEntry> =>
 export const wfmPricesBulk = async (slugs: string[]): Promise<PriceEntry[]> =>
   inTauri() ? unwrap(await commands.wfmPricesBulk(slugs)) : [...new Set(slugs)].map(mockPrice);
 
+/**
+ * Every slug the inventory wants, in one request, the ones on screen first: the cached prices come back at once, the rest
+ * are loaded by the backend (the Prices job in the titlebar pill) and arrive through `onPricesRefreshed`.
+ */
+export const wfmPricesLoad = async (slugs: string[]): Promise<PriceEntry[]> =>
+  inTauri() ? unwrap(await commands.wfmPricesLoad(slugs)) : [...new Set(slugs)].map(mockPrice);
+
 /** Daily closed-sales history (up to a year) for the Browse chart. */
 export const wfmStatsHistory = async (slug: string): Promise<MarketStatPoint[]> =>
   inTauri() ? unwrap(await commands.wfmStatsHistory(slug)) : mockHistory(slug);
@@ -834,6 +841,9 @@ export const resetMock = (): void => {
   mockPresence = IDLE_PRESENCE;
   mockPresenceListeners.clear();
   mockOrders = [];
+  mockJobs = [];
+  mockBooks.clear();
+  mockMarketDown.clear();
   mockSession = LOGGED_OUT;
   mockWorkbench = IDLE_WORKBENCH;
 
@@ -887,11 +897,6 @@ export const wfmOrdersMyCached = async (): Promise<{ orders: MyOrders | null; re
 
 /** The Refresh button: always asks warframe.market. */
 export const wfmOrdersRefresh = async (): Promise<MyOrders> => (inTauri() ? unwrapWfm(await commands.wfmOrdersRefresh()) : mockOrderSplit());
-
-/** A bulk run started (`true`) or ended (`false`): the backend pauses its 30 s poll meanwhile. */
-export const wfmOrdersHold = async (hold: boolean): Promise<void> => {
-  if (inTauri()) await commands.wfmOrdersHold(hold);
-};
 
 /** Hides or shows every order of one side in a single request; the new state arrives through `onWfmOrdersUpdated`. Returns how many changed. */
 export const wfmOrdersSetAllVisible = async (orderType: "sell" | "buy", visible: boolean): Promise<number> => {
@@ -971,17 +976,108 @@ export const wfmOrderClose = async (orderId: string, quantity: number, perTrade:
   return { id: orderId };
 };
 
-export const wfmOrdersSetVisible = async (orderIds: string[], visible: boolean) => {
-  if (inTauri()) return unwrapWfm(await commands.wfmOrdersSetVisible(orderIds, visible));
-  return Promise.all(
-    orderIds.map(async (id) => {
+// --- Background jobs ---
+import type { Job_Serialize as Job, JobItem_Serialize as JobItem, JobKind, JobUpdate_Serialize as JobUpdate } from "../bindings";
+export type { Job, JobItem, JobKind, JobUpdate };
+
+let mockJobs: Job[] = [];
+/** Books a mock market load fetched. */
+const mockBooks = new Map<string, BookOrder[]>();
+/** Test seam: these slugs fail to load, like a dead network. */
+export const mockMarketDown = new Set<string>();
+let mockJobSeq = 0;
+const mockJobListeners = new Set<(u: JobUpdate) => void>();
+const jobUpdate = (j: Job, item: JobItem | null, withJob = false): JobUpdate => ({
+  id: j.id,
+  state: j.state,
+  total: j.total,
+  done: j.done,
+  failed: j.failed,
+  item: item && { id: item.id, status: item.status, reason: item.reason },
+  job: withJob ? j : null,
+});
+const sendJob = (u: JobUpdate) => mockJobListeners.forEach((cb) => cb(u));
+
+/** Browser and test stand-in for the backend runner: one item at a time through the mock order functions. */
+const mockStartJob = (kind: JobKind, items: JobItem[]): string => {
+  const job: Job = { id: `job-${++mockJobSeq}`, kind, state: "running", total: items.length, done: 0, failed: 0, items, createdAt: Date.now(), finishedAt: null };
+  mockJobs.push(job);
+  sendJob(jobUpdate(job, null, true));
+  void (async () => {
+    for (const item of job.items) {
+      if (job.state === "stopping") break;
+      item.status = "running";
+      sendJob(jobUpdate(job, item));
       try {
-        return { id, order: await wfmOrderUpdate(id, { visible }), error: null };
+        if (kind.type === "marketLoad") {
+          if (mockMarketDown.has(item.id)) throw new Error("network error: error sending request");
+          mockBooks.set(item.id, mockBook(item.id));
+        }
+        else if (kind.type === "ordersDelete") await wfmOrderDelete(item.id);
+        else await wfmOrderUpdate(item.id, (kind.type === "reprice" ? { platinum: item.platinum } : { visible: kind.type === "ordersVisibility" && kind.visible }) as never);
+        item.status = "done";
+        job.done++;
       } catch (e) {
-        return { id, order: null, error: String((e as Error).message) };
+        item.status = "failed";
+        item.reason = (e as Error).message;
+        job.failed++;
       }
-    }),
-  );
+      sendJob(jobUpdate(job, item));
+    }
+    // A stop with items left ends interrupted, like an app close; Continue runs the rest.
+    job.state = job.state === "stopping" && job.items.some((i) => i.status === "pending") ? "interrupted" : "done";
+    job.finishedAt = Date.now();
+    sendJob(jobUpdate(job, null));
+  })();
+  return job.id;
+};
+const mockJobItems = (ids: string[], price?: Map<string, number>): JobItem[] =>
+  ids.map((id) => ({ id, name: mockOrderById(id).itemName, platinum: price?.get(id) ?? null, status: "pending", reason: null }));
+const mockRedo = (id: string, status: JobItem["status"]): string => {
+  const job = mockJobs.find((j) => j.id === id);
+  if (!job) throw new Error("No such job.");
+  mockJobs = mockJobs.filter((j) => j !== job);
+  return mockStartJob(job.kind, job.items.filter((i) => i.status === status).map((i) => ({ ...i, status: "pending", reason: null })));
+};
+
+/** Hide or show these orders as one background job; progress arrives through `onJobUpdated`. */
+export const jobsStartOrdersVisibility = async (ids: string[], visible: boolean): Promise<string> =>
+  inTauri() ? unwrap(await commands.jobsStartOrdersVisibility(ids, visible)) : mockStartJob({ type: "ordersVisibility", visible }, mockJobItems(ids));
+export const jobsStartOrdersDelete = async (ids: string[]): Promise<string> =>
+  inTauri() ? unwrap(await commands.jobsStartOrdersDelete(ids)) : mockStartJob({ type: "ordersDelete" }, mockJobItems(ids));
+export const jobsStartReprice = async (items: { id: string; platinum: number }[]): Promise<string> =>
+  inTauri() ? unwrap(await commands.jobsStartReprice(items)) : mockStartJob({ type: "reprice" }, mockJobItems(items.map((i) => i.id), new Map(items.map((i) => [i.id, i.platinum]))));
+/** Reads the order book of each item in the background (read only); the books wait for `jobsMarketBooks`. */
+export const jobsStartMarketLoad = async (rows: { slug: string; name: string }[]): Promise<string> =>
+  inTauri()
+    ? unwrap(await commands.jobsStartMarketLoad(rows))
+    : mockStartJob({ type: "marketLoad" }, rows.map((r) => ({ id: r.slug, name: r.name, platinum: null, status: "pending", reason: null })));
+/** The raw books already loaded among `slugs` (fresh ones only). */
+export const jobsMarketBooks = async (slugs: string[]): Promise<{ slug: string; orders: BookOrder[] }[]> =>
+  inTauri() ? commands.jobsMarketBooks(slugs) : slugs.flatMap((slug) => (mockBooks.has(slug) ? [{ slug, orders: mockBooks.get(slug)! }] : []));
+/** The item in flight finishes, no further one starts. */
+export const jobsStop = async (id: string): Promise<void> => {
+  if (inTauri()) return void unwrap(await commands.jobsStop(id));
+  const job = mockJobs.find((j) => j.id === id);
+  if (job?.state === "running") {
+    job.state = "stopping";
+    sendJob(jobUpdate(job, null));
+  }
+};
+/** A new job with only the failed items. */
+export const jobsRetryFailed = async (id: string): Promise<string> => (inTauri() ? unwrap(await commands.jobsRetryFailed(id)) : mockRedo(id, "failed"));
+/** A new job with the items an interrupted one never ran. */
+export const jobsContinue = async (id: string): Promise<string> => (inTauri() ? unwrap(await commands.jobsContinue(id)) : mockRedo(id, "pending"));
+export const jobsDismiss = async (id: string): Promise<void> => {
+  if (inTauri()) return void unwrap(await commands.jobsDismiss(id));
+  mockJobs = mockJobs.filter((j) => j.id !== id);
+};
+/** Jobs running or needing attention (failures, interrupted). */
+export const jobsList = async (): Promise<Job[]> => (inTauri() ? commands.jobsList() : mockJobs.filter((j) => j.state !== "done" || j.failed > 0));
+export const onJobUpdated = async (cb: (u: JobUpdate) => void): Promise<UnlistenFn> => {
+  if (inTauri()) return listen<JobUpdate>("job-updated", (e) => cb(e.payload));
+  mockJobListeners.add(cb);
+  return () => void mockJobListeners.delete(cb);
 };
 
 /** Public orders of an item, both sides in one list (each row has `type`); pass them to `normalizeWfmOrderBookSide`.

@@ -3,17 +3,19 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../../lib/i18n";
 import * as ipc from "../../lib/ipc";
-import { resetMock, wfmSignIn, type CatalogItem } from "../../lib/ipc";
+import { mockMarketDown, resetMock, wfmSignIn, type CatalogItem } from "../../lib/ipc";
+import { resetJobs } from "../../stores/jobs";
 import { writeCachedQueueRows } from "../../lib/tradeWorkbench/queueCache";
 import { selectionKeyFor } from "../../lib/tradeWorkbench/queueModel";
 import { buildCatalogIndex } from "../../lib/wfm/catalog";
 import type { ParsedItem } from "../../types/inventory";
 import ConfirmHost from "../shell/ConfirmHost";
+import JobsPill from "../shell/JobsPill";
 import BulkSellModal from "./BulkSellModal";
 
 vi.mock("../../lib/ipc", async (orig) => {
   const actual = await orig<typeof import("../../lib/ipc")>();
-  return { ...actual, wfmOrdersMy: vi.fn(actual.wfmOrdersMy), getMasteryProgress: vi.fn(actual.getMasteryProgress) };
+  return { ...actual, wfmOrdersMy: vi.fn(actual.wfmOrdersMy), getMasteryProgress: vi.fn(actual.getMasteryProgress), jobsStartMarketLoad: vi.fn(actual.jobsStartMarketLoad) };
 });
 
 const tr = translator("en");
@@ -57,7 +59,9 @@ const open = (items: ParsedItem[] = ITEMS) =>
 beforeEach(() => {
   vi.mocked(ipc.wfmOrdersMy).mockReset();
   vi.mocked(ipc.getMasteryProgress).mockReset();
+  vi.mocked(ipc.jobsStartMarketLoad).mockClear();
   resetMock();
+  resetJobs();
   writeCachedQueueRows([]);
   localStorage.clear();
 });
@@ -170,4 +174,70 @@ test("shift-click on a queue checkbox ticks the rows between two clicks", async 
   fireEvent.click(boxes()[0]);
   fireEvent.click(boxes()[boxes().length - 1], { shiftKey: true });
   expect(new Set(boxes().map((b) => b.checked)).size).toBe(1); // the range takes one state
+});
+
+test("the load button starts one market-load job with the selected slugs, once each", async () => {
+  await wfmSignIn("tenno@example.com", "pw");
+  open();
+  await screen.findByText("Lex Prime Barrel", { selector: "span" });
+  fireEvent.click(document.querySelector("[data-workbench-select-all]")!);
+  fireEvent.click(document.querySelector("[data-workbench-load-market]")!);
+  await waitFor(() => expect(ipc.jobsStartMarketLoad).toHaveBeenCalledTimes(1));
+  const rows = vi.mocked(ipc.jobsStartMarketLoad).mock.calls[0][0];
+  expect(rows.map((r) => r.slug).sort()).toEqual(["boltor_prime_receiver", "lex_prime_barrel"]);
+});
+
+test("closing the modal does not stop the load, and reopening applies the books that landed meanwhile", async () => {
+  await wfmSignIn("tenno@example.com", "pw");
+  open();
+  await screen.findByText("Lex Prime Barrel", { selector: "span" });
+  fireEvent.click(document.querySelector("[data-workbench-select-all]")!);
+  fireEvent.click(document.querySelector("[data-workbench-load-market]")!);
+  await waitFor(() => expect(ipc.jobsStartMarketLoad).toHaveBeenCalled());
+  cleanup();
+  // The job went on without the modal.
+  await waitFor(async () => expect(await ipc.jobsMarketBooks(["lex_prime_barrel", "boltor_prime_receiver"])).toHaveLength(2), { timeout: 5000 });
+
+  open();
+  await screen.findByText("Lex Prime Barrel", { selector: "span" });
+  await waitFor(() => {
+    const prices = [...document.querySelectorAll<HTMLInputElement>("[data-workbench-price]")];
+    expect(prices.length).toBeGreaterThan(0);
+    expect(prices.every((p) => p.placeholder !== "")).toBe(true);
+  });
+  expect(ipc.jobsStartMarketLoad).toHaveBeenCalledTimes(1);
+});
+
+test("a dead network mid-load: the pill shows the failed job with its reasons and Retry, and the modal says the rows failed to load, not that they have no orders", async () => {
+  await wfmSignIn("tenno@example.com", "pw");
+  mockMarketDown.add("boltor_prime_receiver");
+  render(
+    <>
+      <JobsPill tr={tr} />
+      <BulkSellModal items={ITEMS} selection={new Set(ITEMS.map(selectionKeyFor))} inventory={null} itemDb={{}} catalog={catalog} locale="en" tr={tr} onClose={() => {}} />
+    </>,
+  );
+  await screen.findByText("Lex Prime Barrel", { selector: "span" });
+  fireEvent.click(document.querySelector("[data-workbench-select-all]")!);
+  fireEvent.click(document.querySelector("[data-workbench-load-market]")!);
+
+  const failed = await waitFor(() => {
+    const el = document.querySelector("[data-workbench-price-failed]");
+    expect(el).toBeTruthy();
+    return el!;
+  }, { timeout: 5000 });
+  expect(failed.textContent).toContain("failed to load");
+  expect(failed.textContent).toContain("Boltor Prime Receiver");
+  expect(document.querySelector("[data-workbench-no-orders]")).toBeNull();
+
+  const pill = await screen.findByRole("button", { name: /Background jobs/ });
+  expect(pill.getAttribute("data-jobs-pill")).toBe("done");
+  fireEvent.click(pill);
+  expect(screen.getByText(/Boltor Prime Receiver: network error/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Retry the 1" })).toBeTruthy();
+
+  // The network is back: the modal's Retry reads only the row without a book.
+  mockMarketDown.clear();
+  fireEvent.click(document.querySelector("[data-workbench-price-retry]")!);
+  await waitFor(() => expect(document.querySelector("[data-workbench-price-failed]")).toBeNull(), { timeout: 5000 });
 });

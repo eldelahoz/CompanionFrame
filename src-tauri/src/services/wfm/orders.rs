@@ -19,7 +19,7 @@ use zeroize::Zeroizing;
 use super::catalog::{self, path_slug};
 use super::client::{Api, WfmClient};
 use super::errors::{Class, WfmError};
-use super::scheduler::{self, Priority};
+
 use super::session::Session;
 use super::types::{CatalogItem, asset_url};
 use super::validators::{self, CreateOrder, OrderUpdates};
@@ -59,13 +59,6 @@ pub struct MyOrders {
 #[derive(Clone, Debug, PartialEq, Serialize, specta::Type)]
 pub struct OrderAck {
     pub id: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, specta::Type)]
-pub struct VisibilityResult {
-    pub id: String,
-    pub order: Option<MyOrder>,
-    pub error: Option<String>,
 }
 
 /// A public order-book row, shaped like the v2 `Order` so the shared TS normaliser reads it as is.
@@ -346,37 +339,6 @@ pub async fn close(
         )
         .await?;
     Ok(OrderAck { id })
-}
-
-/// One PATCH per order, in order; a failure is reported on its row and does not stop the rest.
-pub async fn set_visible(
-    client: &WfmClient,
-    ids: &[String],
-    visible: bool,
-) -> Result<Vec<VisibilityResult>, WfmError> {
-    let ids = validators::bulk_ids(ids)?;
-    let mut out = Vec::with_capacity(ids.len());
-    for id in ids {
-        let updates = OrderUpdates {
-            visible: Some(visible),
-            ..Default::default()
-        };
-        out.push(
-            match scheduler::scoped(Priority::Job, update(client, &id, updates)).await {
-                Ok(order) => VisibilityResult {
-                    id,
-                    order: Some(order),
-                    error: None,
-                },
-                Err(e) => VisibilityResult {
-                    id,
-                    order: None,
-                    error: Some(e.to_string()),
-                },
-            },
-        );
-    }
-    Ok(out)
 }
 
 /// Hides or shows every order of one side with a single `PATCH /v2/orders/group/all`; returns how many
@@ -827,28 +789,6 @@ mod tests {
         let (c, _) = client(&m);
         let err = close(&c, ID, 1, None).await.unwrap_err();
         assert!(matches!(err, WfmError::Api { status: 404, .. }));
-    }
-
-    #[tokio::test]
-    async fn set_visible_reports_each_order() {
-        let m = spawn(vec![
-            reply(200, &order_json(r#","visible":false"#)),
-            reply(404, r#"{"error":"app.order.notFound"}"#),
-        ]);
-        let (c, _) = client(&m);
-        let other = "cccccccccccccccccccccccc".to_owned();
-        let got = set_visible(&c, &[ID.into(), other.clone(), "bad".into()], false)
-            .await
-            .unwrap();
-        assert_eq!(got.len(), 2);
-        assert!(got[0].order.is_some() && got[0].error.is_none());
-        assert_eq!(
-            (got[1].id.as_str(), got[1].order.is_none()),
-            (other.as_str(), true)
-        );
-        assert!(got[1].error.is_some());
-        assert!(m.requests()[0].contains(r#""visible":false"#));
-        assert!(set_visible(&c, &["bad".into()], true).await.is_err());
     }
 
     const BOOK: &str = r#"{"data":[

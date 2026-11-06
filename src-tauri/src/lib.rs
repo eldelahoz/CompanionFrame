@@ -61,6 +61,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<services::reward_scan::payload::RewardOverlayView>()
         .typ::<services::wfm::catalog::SetLookup>()
         .typ::<services::wfm::my_orders::CachedOrders>()
+        .typ::<services::jobs::JobUpdate>()
         .typ::<services::overlay::riven::RivenOverlayView>()
         .typ::<services::relic_planner::RelicPlannerEvent>()
         .commands(collect_commands![
@@ -116,6 +117,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::wfm::riven_items::wfm_riven_weapons,
             services::wfm::prices::wfm_price,
             services::wfm::prices::wfm_prices_bulk,
+            services::wfm::prices::wfm_prices_load,
             services::wfm::prices::wfm_stats_history,
             services::wfm::live::wfm_presence_get,
             services::wfm::live::wfm_presence_set,
@@ -124,13 +126,11 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::wfm::my_orders::wfm_orders_my,
             services::wfm::my_orders::wfm_orders_my_cached,
             services::wfm::my_orders::wfm_orders_refresh,
-            services::wfm::my_orders::wfm_orders_hold,
             services::wfm::my_orders::wfm_orders_set_all_visible,
             services::wfm::my_orders::wfm_order_create,
             services::wfm::my_orders::wfm_order_update,
             services::wfm::my_orders::wfm_order_delete,
             services::wfm::my_orders::wfm_order_close,
-            services::wfm::my_orders::wfm_orders_set_visible,
             services::wfm::orders::wfm_orders_item,
             services::notify::notif_get_state,
             services::notify::notif_set_webhook,
@@ -186,6 +186,16 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::wfm::riven_search::wfm_riven_auction_close,
             services::wfm::reviews::wfm_send_plus_rep,
             services::wfm::reviews::wfm_my_reputation,
+            services::jobs::commands::jobs_start_orders_visibility,
+            services::jobs::commands::jobs_start_orders_delete,
+            services::jobs::commands::jobs_start_reprice,
+            services::jobs::commands::jobs_start_market_load,
+            services::jobs::commands::jobs_market_books,
+            services::jobs::commands::jobs_stop,
+            services::jobs::commands::jobs_retry_failed,
+            services::jobs::commands::jobs_continue,
+            services::jobs::commands::jobs_dismiss,
+            services::jobs::commands::jobs_list,
             services::workbench::commands::workbench_get_state,
             services::workbench::commands::workbench_preview_plan,
             services::workbench::commands::workbench_execute_plan,
@@ -318,6 +328,7 @@ pub fn run() {
             app.manage(services::wfm::riven_search::SearchCache::default());
             services::rivens::setup(app);
             services::arbi_schedule::setup(app);
+            services::jobs::commands::setup(app);
             services::workbench::commands::setup(app);
             services::stats::setup(app);
             app.manage(window_state::WindowState::new(&data));

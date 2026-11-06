@@ -76,6 +76,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
      "CREATE TABLE IF NOT EXISTS mission_rewards (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, ended_at REAL NOT NULL, read_at REAL NOT NULL, mission_count INTEGER NOT NULL, mission_type TEXT, node TEXT, credits REAL NOT NULL, endo REAL NOT NULL, baseline_at REAL);
      CREATE TABLE IF NOT EXISTS mission_reward_items (mission_id TEXT NOT NULL, unique_name TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY (mission_id, unique_name)) WITHOUT ROWID;
      CREATE INDEX IF NOT EXISTS mission_reward_items_name ON mission_reward_items (unique_name)"),
+    // Background jobs: one row per job and per item, written before each request leaves.
+    ("jobs",
+     "CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, state TEXT NOT NULL, created_at REAL NOT NULL, finished_at REAL);
+     CREATE TABLE IF NOT EXISTS job_items (job_id TEXT NOT NULL, seq INTEGER NOT NULL, item_id TEXT NOT NULL, name TEXT NOT NULL, platinum INTEGER, status TEXT NOT NULL, reason TEXT, PRIMARY KEY (job_id, seq)) WITHOUT ROWID"),
 ];
 
 /// Readers beside the writer: WAL lets them run while a write is in flight.
@@ -84,6 +88,8 @@ const BACKUPS_KEPT: usize = 3;
 /// `kv_cache` price entries and `http_cache` rows older than this go at startup.
 const PRUNE_AFTER_SECS: i64 = 30 * 86_400;
 const PRUNE_EVERY_SECS: i64 = 86_400;
+/// Finished jobs older than this go with the daily prune.
+const JOBS_KEPT_SECS: i64 = 7 * 86_400;
 
 /// One writer connection plus a few read-only ones. Without readers (in-memory test DBs, whose
 /// connections cannot share data) `read` hands out the writer.
@@ -279,8 +285,9 @@ pub(crate) fn prune(conn: &Connection, now: i64) -> rusqlite::Result<()> {
         "INSERT OR REPLACE INTO meta (key, value) VALUES ('last_prune', ?1)",
         [now.to_string()],
     )?;
+    let jobs = crate::services::jobs::prune(conn, (now - JOBS_KEPT_SECS) as f64 * 1000.0)?;
     conn.execute_batch("PRAGMA optimize")?;
-    tracing::info!(prices, http, "db pruned");
+    tracing::info!(prices, http, jobs, "db pruned");
     Ok(())
 }
 
@@ -543,7 +550,23 @@ mod tests {
         )
         .unwrap();
         conn.execute("INSERT INTO trade_events VALUES ('e', '2020-01-01', '2020-01-01', 'k', 'sell', NULL, 1, NULL, NULL, '{}')", []).unwrap();
+        for (id, state, at) in [
+            ("old", "done", old),
+            ("new", "done", now - 10),
+            ("wait", "interrupted", old),
+        ] {
+            conn.execute(
+                "INSERT INTO jobs VALUES (?1, '{}', ?2, 0, ?3)",
+                rusqlite::params![id, state, at as f64 * 1000.0],
+            )
+            .unwrap();
+        }
         prune(&conn, now).unwrap();
+        assert_eq!(
+            count(&conn, "jobs"),
+            2,
+            "a finished job past 7 days goes, one waiting for the user stays"
+        );
         let keys: Vec<String> = conn
             .prepare("SELECT key FROM kv_cache ORDER BY key")
             .unwrap()

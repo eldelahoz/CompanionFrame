@@ -1,30 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { BookOrder } from "../ipc";
+import { rowBookOf } from "./rowBook";
 
-const fetchItemOrderBookBySlug = vi.hoisted(() => vi.fn());
-vi.mock("../wfm/orderBook", () => ({ fetchItemOrderBookBySlug }));
+const order = (type: string, platinum: number, rank: number | null, subtype: string | null = null): BookOrder =>
+  ({ id: `${type}${platinum}`, type, platinum, quantity: 1, rank, subtype, visible: true, user: { ingameName: "Tenno", status: "ingame" } }) as unknown as BookOrder;
 
-import { fetchRowBook } from "./rowBook";
-
-describe("fetchRowBook", () => {
-  beforeEach(() => fetchItemOrderBookBySlug.mockReset());
-
-  it("asks for the row's own relic refinement and rank", async () => {
-    fetchItemOrderBookBySlug.mockResolvedValue({ status: "ok", data: { sell: [], buy: [] } });
-    await fetchRowBook({ slug: "axi_a1_relic", rank: null, subtype: "radiant" });
-    expect(fetchItemOrderBookBySlug).toHaveBeenCalledWith("axi_a1_relic", {
-      rank: null,
-      subtype: "radiant",
-    });
+describe("rowBookOf", () => {
+  it("splits one item's raw orders into the row's two sides", () => {
+    const raw = [order("sell", 10, null), order("sell", 8, null), order("buy", 5, null)];
+    const book = rowBookOf(raw, { rank: null, subtype: null });
+    expect(book.sell.map((o) => o.platinum).sort((a, b) => a - b)).toEqual([8, 10]);
+    expect(book.buy.map((o) => o.platinum)).toEqual([5]);
   });
 
-  it("returns both books, or null when the load failed", async () => {
-    const sell = [{ platinum: 10 }];
-    fetchItemOrderBookBySlug.mockResolvedValueOnce({ status: "ok", data: { sell, buy: null } });
-    await expect(fetchRowBook({ slug: "serration", rank: 10, subtype: null })).resolves.toEqual({
-      sell,
-      buy: null,
-    });
-    fetchItemOrderBookBySlug.mockResolvedValueOnce({ status: "error", slug: "serration" });
-    await expect(fetchRowBook({ slug: "serration", rank: 10, subtype: null })).resolves.toBeNull();
+  it("keeps a relic row to its own refinement", () => {
+    const raw = [order("sell", 10, null, "radiant"), order("sell", 3, null, "intact")];
+    const book = rowBookOf(raw, { rank: null, subtype: "radiant" });
+    expect(book.sell.map((o) => o.platinum)).toEqual([10]);
   });
 });
