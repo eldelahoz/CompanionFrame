@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Eye, EyeOff, LogOut, Plus, RefreshCw, ShoppingCart, Star, WandSparkles } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { normalizePerTrade } from "../../config/shared/wfmOrders";
 import HeaderTabs from "../components/HeaderTabs";
 import MarketAlerts from "../components/market/alerts/MarketAlerts";
@@ -7,7 +7,7 @@ import MarketContracts from "../components/market/MarketContracts";
 import RepriceOrdersModal from "../components/market/RepriceOrdersModal";
 import MarketBrowseView, { type OrderDraft } from "../components/market/MarketBrowseView";
 import MarketOrderRow from "../components/market/MarketOrderRow";
-import MarketBulkBar, { type BulkRun } from "../components/market/MarketBulkBar";
+import MarketBulkBar from "../components/market/MarketBulkBar";
 import { sortOrders, type OrderSortDir, type OrderSortKey } from "../lib/market/sortOrders";
 import { wfmLookup } from "../lib/market/wfmLookup";
 import { usePersisted } from "../lib/usePersisted";
@@ -20,7 +20,7 @@ import { Button, Card, EmptyState, IconButton, PageHeader, Skeleton, Table } fro
 import { askConfirm } from "../stores/confirm";
 import { addToast } from "../stores/toasts";
 import type { Translator } from "../lib/i18n";
-import { wfmMyReputation, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersHold, wfmOrdersSetAllVisible, type ItemDatabase, type MyOrder } from "../lib/ipc";
+import { wfmMyReputation, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersSetAllVisible, jobsStartOrdersDelete, jobsStartOrdersVisibility, type ItemDatabase, type MyOrder } from "../lib/ipc";
 import type { WfmPresenceState, PresenceOptions, WfmStatus, WfmSession } from "../lib/ipc";
 import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
@@ -54,7 +54,6 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const [repricing, setRepricing] = useState<MyOrder[] | null>(null);
   const [sort, setSort] = usePersisted("wf_market_orders_sort", SORTS, "date:desc");
   const [sortKey, sortDir] = sort.split(":") as [OrderSortKey, OrderSortDir];
-  const [bulkRun, setBulkRun] = useState<BulkRun | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const { catalog } = useWfmCatalog();
   const art = useMarketArt();
@@ -129,38 +128,18 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
       await wfmOrderUpdate(o.id, updates as never);
     });
 
-  // Stop (or leaving the view) ends a bulk run before its next order; the one in flight finishes.
-  const stopBulk = useRef(false);
-  useEffect(() => {
-    stopBulk.current = false;
-    return () => {
-      stopBulk.current = true;
-    };
-  }, []);
-  // Each confirmed write reaches the rows through the backend's update event: a bulk run asks for nothing else.
-  const bulk = async (action: BulkRun["action"], targets: MyOrder[], run: (o: MyOrder) => Promise<void>) => {
-    stopBulk.current = false;
-    setBulkRun({ action, done: 0, total: targets.length });
-    // the backend's 30 s poll waits while this runs
-    void wfmOrdersHold(true);
+  // Bulk actions are background jobs: the backend writes one order at a time, the rows follow its updates and the jobs pill shows progress and Stop.
+  const startJob = async (start: () => Promise<string>) => {
     try {
-      // one at a time: warframe.market rate limits
-      for (const [i, o] of targets.entries()) {
-        if (stopBulk.current) break;
-        await guarded(o.id, () => run(o));
-        setBulkRun({ action, done: i + 1, total: targets.length });
-      }
-    } finally {
-      setBulkRun(null);
-      void wfmOrdersHold(false);
+      await start();
+    } catch (e) {
+      addToast({ level: "error", message: (e as Error).message });
     }
   };
-  const setAllVisible = (visible: boolean) =>
-    bulk(
-      visible ? "show" : "hide",
-      list.filter((o) => selected.has(o.id) && o.visible !== visible),
-      async (o) => void (await wfmOrderUpdate(o.id, { visible } as never)),
-    );
+  const setAllVisible = (visible: boolean) => {
+    const ids = list.filter((o) => selected.has(o.id) && o.visible !== visible).map((o) => o.id);
+    if (ids.length > 0) void startJob(() => jobsStartOrdersVisibility(ids, visible));
+  };
   // One request for the whole side of the book (the sell or buy tab being shown).
   const setSideVisible = async (visible: boolean) => {
     try {
@@ -170,12 +149,10 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     }
   };
   const delSelected = async () => {
-    const targets = list.filter((o) => selected.has(o.id));
-    if (!(await askConfirm(tr("market.confirmDeleteOrders", { count: targets.length })))) return;
-    await bulk("delete", targets, async (o) => {
-      await wfmOrderDelete(o.id);
-      setSelected((cur) => applyIds(cur, [o.id], false));
-    });
+    const ids = list.filter((o) => selected.has(o.id)).map((o) => o.id);
+    if (!(await askConfirm(tr("market.confirmDeleteOrders", { count: ids.length })))) return;
+    setSelected(new Set());
+    await startJob(() => jobsStartOrdersDelete(ids));
   };
   // Shift+click takes every row between the last click and this one, in the sorted order.
   const toggleSelected = (id: string, shift: boolean) => {
@@ -263,7 +240,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
               </Button>
             )}
             {list.length > 0 && (
-              <Button size="sm" icon={list.some((o) => o.visible) ? <EyeOff /> : <Eye />} data-market-side-visibility disabled={busy.size > 0 || bulkRun !== null} onClick={() => void setSideVisible(!list.some((o) => o.visible))}>
+              <Button size="sm" icon={list.some((o) => o.visible) ? <EyeOff /> : <Eye />} data-market-side-visibility disabled={busy.size > 0} onClick={() => void setSideVisible(!list.some((o) => o.visible))}>
                 {tr(list.some((o) => o.visible) ? "market.hideAll" : "market.showAll")}
               </Button>
             )}
@@ -348,19 +325,18 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
           )}
         </>
       )}
-      {(pickedCount > 0 || bulkRun) && (
+      {pickedCount > 0 && (
         <MarketBulkBar
           count={pickedCount}
           total={list.length}
           canReprice={tab === "sell"}
           busy={busy.size > 0}
-          run={bulkRun}
           onAll={() => setSelected(new Set(list.map((o) => o.id)))}
-          onHide={() => void setAllVisible(false)}
-          onShow={() => void setAllVisible(true)}
+          onHide={() => setAllVisible(false)}
+          onShow={() => setAllVisible(true)}
           onReprice={() => setRepricing(list.filter((o) => selected.has(o.id)))}
           onDelete={() => void delSelected()}
-          onCancel={() => (bulkRun ? (stopBulk.current = true) : setSelected(new Set()))}
+          onCancel={() => setSelected(new Set())}
           tr={tr}
         />
       )}

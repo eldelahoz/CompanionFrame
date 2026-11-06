@@ -93,15 +93,12 @@ export const commands = {
 	wfmOrdersMyCached: () => typedError<CachedOrders_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_my_cached")),
 	/**  The Refresh button: always asks WFM. */
 	wfmOrdersRefresh: () => typedError<MyOrders_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_refresh")),
-	/**  A bulk run started (`true`) or ended (`false`): the poll waits meanwhile. */
-	wfmOrdersHold: (hold: boolean) => __TAURI_INVOKE<void>("wfm_orders_hold", { hold }),
 	/**  Hides or shows all sell (or all buy) orders in one request, then refreshes the copy. */
 	wfmOrdersSetAllVisible: (orderType: string, visible: boolean) => typedError<number, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_set_all_visible", { orderType, visible })),
 	wfmOrderCreate: (order: CreateOrder_Deserialize) => typedError<MyOrder_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_create", { order })),
 	wfmOrderUpdate: (orderId: string, updates: OrderUpdates_Deserialize) => typedError<MyOrder_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_update", { orderId, updates })),
 	wfmOrderDelete: (orderId: string) => typedError<OrderAck, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_delete", { orderId })),
 	wfmOrderClose: (orderId: string, quantity: number, perTrade: number | null) => typedError<OrderAck, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_close", { orderId, quantity, perTrade })),
-	wfmOrdersSetVisible: (orderIds: string[], visible: boolean) => typedError<VisibilityResult_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_set_visible", { orderIds, visible })),
 	wfmOrdersItem: (slug: string, top: boolean, rank: number | null, subtype: string | null) => typedError<BookOrder_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_item", { slug, top, rank, subtype })),
 	notifGetState: () => __TAURI_INVOKE<ChannelState>("notif_get_state"),
 	notifSetWebhook: (channel: WebhookChannel, url: string) => typedError<ChannelState, WebhookUrlError>(__TAURI_INVOKE("notif_set_webhook", { channel, url })),
@@ -4205,20 +4202,6 @@ export type VeiledRivenGroup = {
 };
 
 export type VerdictKind = "keep" | "take" | "close";
-
-export type VisibilityResult = VisibilityResult_Serialize | VisibilityResult_Deserialize;
-
-export type VisibilityResult_Deserialize = {
-	id: string,
-	order?: MyOrder_Deserialize | null,
-	error?: string | null,
-};
-
-export type VisibilityResult_Serialize = {
-	id: string,
-	order: MyOrder_Serialize | null,
-	error: string | null,
-};
 
 export type WebhookChannel = "discord" | "generic";
 

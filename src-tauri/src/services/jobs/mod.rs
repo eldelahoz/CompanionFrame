@@ -295,8 +295,8 @@ impl<H: JobHost> Jobs<H> {
             }
             tokio::time::sleep(self.delay).await;
         }
-        self.finish(&id, halted);
         self.host.hold(false);
+        self.finish(&id, halted);
         tracing::info!("[Jobs] job finished");
     }
 

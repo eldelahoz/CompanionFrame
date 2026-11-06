@@ -9,7 +9,6 @@ use super::errors::WfmError;
 pub const MAX_PLATINUM: u32 = 900_000;
 pub const MAX_QUANTITY: u32 = 9_999;
 pub const MAX_RANK: u32 = 20;
-pub const MAX_BULK_IDS: usize = 200;
 
 pub const ORDER_SUBTYPES: [&str; 4] = ["intact", "exceptional", "flawless", "radiant"];
 pub const MOD_VARIANTS: [&str; 2] = ["regular", "atragraph"];
@@ -145,20 +144,6 @@ pub fn close_quantity(quantity: u32, per_trade: Option<u32>) -> Result<u32, WfmE
     match per_trade {
         Some(p) if p == 0 || q % p != 0 => Err(bad("quantity must be a multiple of perTrade")),
         _ => Ok(q),
-    }
-}
-
-/// Bulk visibility: valid ids only, at most `MAX_BULK_IDS`; none left is an error.
-pub fn bulk_ids(ids: &[String]) -> Result<Vec<String>, WfmError> {
-    let ids: Vec<String> = ids
-        .iter()
-        .filter_map(|i| id(i, "orderIds").ok())
-        .take(MAX_BULK_IDS)
-        .collect();
-    if ids.is_empty() {
-        Err(bad("orderIds"))
-    } else {
-        Ok(ids)
     }
 }
 
@@ -452,16 +437,5 @@ mod tests {
         assert_eq!(close_quantity(6, Some(3)).unwrap(), 6);
         assert!(close_quantity(5, Some(3)).is_err());
         assert!(close_quantity(5, Some(0)).is_err());
-    }
-
-    #[test]
-    fn bulk_ids_drop_invalid_and_cap() {
-        assert_eq!(bulk_ids(&[ID.into(), "nope".into()]).unwrap(), [ID]);
-        assert!(bulk_ids(&["nope".into()]).is_err());
-        assert!(bulk_ids(&[]).is_err());
-        assert_eq!(
-            bulk_ids(&vec![ID.to_owned(); 300]).unwrap().len(),
-            MAX_BULK_IDS
-        );
     }
 }

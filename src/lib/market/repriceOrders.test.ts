@@ -5,8 +5,6 @@ import {
   priceRepriceRow,
   repriceRowsToSend,
   repriceTotals,
-  runReprice,
-  type RepriceRow,
 } from "./repriceOrders";
 import {
   DEFAULT_DAMPING_RULE,
@@ -129,124 +127,6 @@ describe("priceRepriceRow", () => {
     expect(priced.nextPrice).toBe(59);
     expect(priced.skipReason).toBeNull();
     expect(priceRepriceRow(row, config, null).skipReason).toBe("no-price");
-  });
-});
-
-describe("runReprice", () => {
-  function sendable(count: number): RepriceRow[] {
-    return Array.from({ length: count }, (_, index) => {
-      const row = buildRepriceRows([
-        order({ id: `id-${index}`, itemName: `Item ${index}` }),
-      ])[0] as RepriceRow;
-      return { ...row, nextPrice: row.currentPrice - 5, skipReason: null };
-    });
-  }
-
-  it("sends nothing more once cancelled, the in-flight row included", async () => {
-    const rows = sendable(3);
-    const sent: string[] = [];
-    let cancelled = false;
-    const result = await runReprice(rows, {
-      updateOrder: async (row) => {
-        sent.push(row.rowId);
-        cancelled = true;
-        return {};
-      },
-      isCancelled: () => cancelled,
-    });
-
-    expect(sent).toEqual(["id-0"]);
-    expect(result.cancelled).toBe(true);
-    expect(result.applied).toEqual([{ id: "id-0", platinum: 45 }]);
-  });
-
-  it("stops on a lost session instead of failing every remaining row", async () => {
-    const rows = sendable(3);
-    let calls = 0;
-    const result = await runReprice(rows, {
-      updateOrder: async () => {
-        calls += 1;
-        return { error: "Warframe.market session expired or invalid." };
-      },
-      isSignedOut: async () => true,
-    });
-
-    expect(calls).toBe(1);
-    expect(result.stopReason).toBe("auth");
-    expect(result.failed).toEqual(["Item 0"]);
-    expect(result.applied).toHaveLength(0);
-  });
-
-  it("works through a transient failure that left the session alive", async () => {
-    const rows = sendable(3);
-    let calls = 0;
-    const result = await runReprice(rows, {
-      updateOrder: async () => {
-        calls += 1;
-        return calls === 1 ? { error: "HTTP 503" } : {};
-      },
-      isSignedOut: async () => false,
-    });
-
-    expect(calls).toBe(3);
-    expect(result.stopReason).toBeNull();
-    expect(result.failed).toEqual(["Item 0"]);
-    expect(result.applied).toHaveLength(2);
-  });
-
-  it("does not abandon the run when the session probe itself fails", async () => {
-    const rows = sendable(2);
-    const result = await runReprice(rows, {
-      updateOrder: async () => ({ error: "HTTP 503" }),
-      isSignedOut: async () => {
-        throw new Error("ipc gone");
-      },
-    });
-
-    expect(result.stopReason).toBeNull();
-    expect(result.failed).toHaveLength(2);
-  });
-
-  it("counts a rejected call as a failed row and keeps the sent ones", async () => {
-    const rows = sendable(2);
-    let calls = 0;
-    const result = await runReprice(rows, {
-      updateOrder: async () => {
-        calls += 1;
-        if (calls === 1) throw new Error("channel closed");
-        return {};
-      },
-    });
-
-    expect(result.failed).toEqual(["Item 0"]);
-    expect(result.applied).toEqual([{ id: "id-1", platinum: 45 }]);
-  });
-
-  it("treats a payload whose error field is not a string as a success", async () => {
-    const result = await runReprice(sendable(1), {
-      updateOrder: async () => ({ id: "id-0", platinum: 45, error: 0 }),
-    });
-
-    expect(result.failed).toHaveLength(0);
-    expect(result.applied).toHaveLength(1);
-  });
-
-  it("reports progress after every row so a run can be watched", async () => {
-    const seen: Array<[number, number]> = [];
-    let calls = 0;
-    await runReprice(sendable(3), {
-      updateOrder: async () => {
-        calls += 1;
-        return calls === 2 ? { error: "HTTP 500" } : {};
-      },
-      onProgress: (applied, failed) => seen.push([applied, failed.length]),
-    });
-
-    expect(seen).toEqual([
-      [1, 0],
-      [1, 1],
-      [2, 1],
-    ]);
   });
 });
 

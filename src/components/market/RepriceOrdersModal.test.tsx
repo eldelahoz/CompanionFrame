@@ -18,8 +18,8 @@ const makeOrders = async (): Promise<MyOrder[]> => {
 
 test("previews nothing until prices load, then sends only what the user applies", async () => {
   const orders = await makeOrders();
-  const onApplied = vi.fn();
-  render(<RepriceOrdersModal orders={orders} ownUserName="tenno" tr={tr} onClose={() => {}} onApplied={onApplied} />);
+  const onClose = vi.fn();
+  render(<RepriceOrdersModal orders={orders} ownUserName="tenno" tr={tr} onClose={onClose} />);
   expect(screen.getByText("No market data")).toBeTruthy();
   expect((screen.getByText(/^Update 0$/) as HTMLButtonElement).disabled).toBe(true);
 
@@ -31,12 +31,12 @@ test("previews nothing until prices load, then sends only what the user applies"
 
   fireEvent.click(apply);
   await waitFor(async () => expect((await wfmOrdersMy()).sell[0].platinum).toBe(next));
-  expect(onApplied).toHaveBeenCalled();
+  expect(onClose).toHaveBeenCalled();
 });
 
 test("an unticked row is not sent", async () => {
   const orders = await makeOrders();
-  render(<RepriceOrdersModal orders={orders} ownUserName={null} tr={tr} onClose={() => {}} onApplied={() => {}} />);
+  render(<RepriceOrdersModal orders={orders} ownUserName={null} tr={tr} onClose={() => {}} />);
   fireEvent.click(screen.getByText("Load prices"));
   await waitFor(() => expect(screen.queryByText("No market data")).toBeNull());
   fireEvent.click(screen.getByLabelText("Serration"));
@@ -47,7 +47,7 @@ test("an unticked row is not sent", async () => {
 test("buy orders never enter the list", async () => {
   const orders = await makeOrders();
   const all = (await wfmOrdersMy()).buy.concat(orders);
-  render(<RepriceOrdersModal orders={all} ownUserName={null} tr={tr} onClose={() => {}} onApplied={() => {}} />);
+  render(<RepriceOrdersModal orders={all} ownUserName={null} tr={tr} onClose={() => {}} />);
   expect(document.querySelectorAll("[data-reprice-row]")).toHaveLength(1);
 });
 
@@ -56,7 +56,7 @@ test("a median strategy prices from the 48h reference plus the offset, inside th
   const ref = await wfmPrice(orders[0].itemSlug!);
   const reference = ref.status === "ok" ? ref.price : null;
   expect(reference).toBeGreaterThan(0);
-  render(<RepriceOrdersModal orders={orders} ownUserName={null} tr={tr} onClose={() => {}} onApplied={() => {}} />);
+  render(<RepriceOrdersModal orders={orders} ownUserName={null} tr={tr} onClose={() => {}} />);
   fireEvent.change(screen.getByLabelText("Strategy"), { target: { value: "median-48h" } });
   fireEvent.change(screen.getByLabelText("Offset (p)"), { target: { value: "60" } });
   fireEvent.click(screen.getByText("Load prices"));
@@ -68,7 +68,7 @@ test("shift-click on a row checkbox unticks the rows between two clicks", async 
   await wfmSignIn("tenno@example.com", "pw");
   for (const platinum of [90, 91, 92]) await wfmOrderCreate({ itemId: "mock_serration", orderType: "SELL", platinum, quantity: 1 } as never);
   const orders = (await wfmOrdersMy()).sell;
-  render(<RepriceOrdersModal orders={orders} ownUserName={null} tr={tr} onClose={() => {}} onApplied={() => {}} />);
+  render(<RepriceOrdersModal orders={orders} ownUserName={null} tr={tr} onClose={() => {}} />);
   fireEvent.click(screen.getByText("Load prices"));
   await waitFor(() => expect(screen.queryByText("No market data")).toBeNull());
   const boxes = () => screen.getAllByLabelText("Serration") as HTMLInputElement[];

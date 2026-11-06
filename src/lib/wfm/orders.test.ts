@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { subtypeChoicesOf } from "../../../config/shared/wfmOrders";
-import { resetMock, wfmErrorOf, wfmOrderClose, wfmOrderCreate, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, wfmOrdersSetVisible } from "../ipc";
+import { resetMock, wfmErrorOf, wfmOrderClose, wfmOrderCreate, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, jobsStartOrdersVisibility, onJobUpdated, type JobUpdate } from "../ipc";
 
 const order = { itemId: "mock_serration", orderType: "SELL", platinum: 10, quantity: 6 };
 
@@ -23,11 +23,21 @@ describe("orders ipc (mock backend)", () => {
     await expect(wfmOrderDelete(again.id)).rejects.toThrow("Order not found.");
   });
 
-  it("reports each order of a bulk visibility change", async () => {
+  it("runs a hide as a job that reports each order and keeps the failed ones for a retry", async () => {
     const a = await wfmOrderCreate(order as never);
-    const got = await wfmOrdersSetVisible([a.id, "f".repeat(24)], false);
-    expect(got[0]).toMatchObject({ id: a.id, error: null, order: { visible: false } });
-    expect(got[1].error).toBe("Order not found.");
+    const b = await wfmOrderCreate(order as never);
+    const seen: JobUpdate[] = [];
+    const off = await onJobUpdated((u) => seen.push(u));
+    await jobsStartOrdersVisibility([a.id, b.id], false);
+    await vi.waitFor(() => expect(seen[seen.length - 1]).toMatchObject({ state: "done", done: 2, failed: 0 }));
+    expect((await wfmOrdersMy()).sell.map((o) => o.visible)).toEqual([false, false]);
+    expect(seen[0].job?.items).toHaveLength(2);
+
+    await wfmOrderDelete(a.id);
+    const second = await jobsStartOrdersVisibility([b.id], true);
+    await vi.waitFor(async () => expect((await wfmOrdersMy()).sell[0].visible).toBe(true));
+    expect(second).not.toBe(seen[0].id);
+    off();
   });
 });
 

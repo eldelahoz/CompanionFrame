@@ -130,6 +130,15 @@ async fn runs_items_in_order_and_emits_a_small_update_per_change() {
     let (f, jobs) = engine(fake(&[], &[]));
     let id = jobs.start(HIDE, items(&["a", "b", "c"])).unwrap();
     let job = finished(&jobs, &id).await;
+    // The state flips before the last announcement goes out.
+    until("the last announcement", || {
+        f.updates
+            .lock()
+            .unwrap()
+            .last()
+            .is_some_and(|u| u.state == JobState::Done)
+    })
+    .await;
     assert_eq!(
         (job.state, job.done, job.failed, job.total),
         (JobState::Done, 3, 0, 3)

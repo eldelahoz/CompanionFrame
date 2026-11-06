@@ -14,7 +14,7 @@ use tokio::time::MissedTickBehavior;
 
 use super::client::WfmClient;
 use super::errors::WfmError;
-use super::orders::{self, MyOrder, MyOrders, OrderAck, SEND_PER_TRADE, VisibilityResult};
+use super::orders::{self, MyOrder, MyOrders, OrderAck, SEND_PER_TRADE};
 use super::session::Session;
 use super::validators::{self, CreateOrder, OrderUpdates};
 use crate::db::Db;
@@ -297,13 +297,6 @@ pub async fn wfm_orders_refresh(
         .await
 }
 
-/// A bulk run started (`true`) or ended (`false`): the poll waits meanwhile.
-#[tauri::command]
-#[specta::specta]
-pub fn wfm_orders_hold(cache: State<'_, MyOrdersCache>, hold: bool) {
-    cache.set_held(hold);
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn wfm_order_create(
@@ -362,23 +355,6 @@ pub async fn wfm_order_close(
     let closed = validators::close_quantity(quantity, per_trade)?;
     cache.lower(&ack.id, closed, announce(&app));
     Ok(ack)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn wfm_orders_set_visible(
-    app: AppHandle,
-    session: State<'_, Session>,
-    cache: State<'_, MyOrdersCache>,
-    order_ids: Vec<String>,
-    visible: bool,
-) -> Result<Vec<VisibilityResult>, WfmError> {
-    let _hold = cache.hold();
-    let out = orders::set_visible(session.client(), &order_ids, visible).await?;
-    for order in out.iter().filter_map(|r| r.order.clone()) {
-        cache.upsert(order, announce(&app));
-    }
-    Ok(out)
 }
 
 /// Hides or shows all sell (or all buy) orders in one request, then refreshes the copy.
