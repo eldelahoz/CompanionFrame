@@ -70,7 +70,7 @@ test("prices are asked in one request for the whole inventory, rows on screen fi
   await waitFor(() => expect(bulk.calls.length).toBeGreaterThan(0));
   const first = bulk.calls[0].filter((s) => s.startsWith("bulk_mod_")).slice(0, onScreen.size);
   expect(first.every((s) => onScreen.has(s.replace("bulk_mod_", "")))).toBe(true);
-  // Everything is priced in the end: the "pricing n/m" line goes away.
+  // Everything is priced in the end: no price failure row shows.
   await waitFor(() => expect(document.querySelector("[data-inventory-pricing]")).toBeNull(), { timeout: 30000 });
   // The backend chunks and queues: the frontend sends everything at once.
   expect(bulk.calls[0].length).toBeGreaterThan(40);

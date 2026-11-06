@@ -2438,7 +2438,6 @@
   "overlay.riven.sessionTally": "Sitzung {count} Würfe, {value} Kuva",
   "inventory.showing": "{shown} von {total} angezeigt",
   "inventory.showMore": "{count} weitere anzeigen",
-  "inventory.pricing": "Preise {done}/{total}…",
   "inventory.pricingFailed": "{count} Preise nicht geladen",
   "inventory.pricingRetry": "Erneut versuchen",
   "settings.group.diagnostics": "Diagnose",

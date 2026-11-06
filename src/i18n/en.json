@@ -2438,7 +2438,6 @@
   "overlay.riven.sessionTally": "Session {count} rolls, {value} Kuva",
   "inventory.showing": "Showing {shown} of {total}",
   "inventory.showMore": "Show {count} more",
-  "inventory.pricing": "Pricing {done}/{total}…",
   "inventory.pricingFailed": "{count} prices didn't load",
   "inventory.pricingRetry": "Retry",
   "settings.group.diagnostics": "Diagnostics",

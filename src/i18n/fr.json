@@ -2438,7 +2438,6 @@
   "overlay.riven.sessionTally": "Session {count} tirages, {value} Kuva",
   "inventory.showing": "{shown} sur {total} affichés",
   "inventory.showMore": "Afficher {count} de plus",
-  "inventory.pricing": "Prix {done}/{total}…",
   "inventory.pricingFailed": "{count} prix non chargés",
   "inventory.pricingRetry": "Réessayer",
   "settings.group.diagnostics": "Diagnostic",

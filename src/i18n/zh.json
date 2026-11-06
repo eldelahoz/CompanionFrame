@@ -2438,7 +2438,6 @@
   "overlay.riven.sessionTally": "本次 {count} 次，{value} 赤毒",
   "inventory.showing": "显示 {shown} / {total}",
   "inventory.showMore": "再显示 {count} 个",
-  "inventory.pricing": "正在获取价格 {done}/{total}…",
   "inventory.pricingFailed": "{count} 个价格未加载",
   "inventory.pricingRetry": "重试",
   "settings.group.diagnostics": "诊断",
