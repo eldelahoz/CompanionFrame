@@ -14,6 +14,7 @@ import type { RelicDatabase } from "../lib/relic/types";
 import { useSavedSearches } from "../lib/savedSearches";
 import { buildWikiUrl } from "../lib/wikiUrl";
 import { useItemDatabase } from "../stores/items";
+import { createViewState } from "../stores/viewState";
 import { openItemBy, openRelicDetailed } from "../stores/modals";
 
 export { formatDropChance };
@@ -36,9 +37,12 @@ const KIND_LABEL = {
 
 const LINK = "cursor-pointer border-0 bg-transparent p-0 text-left text-inherit hover:text-accent hover:underline";
 
+/** The search comes back as the user left it, and runs again (memory only). */
+const wiki = createViewState({ query: "", mode: "item" as DropSearchMode });
+
 export default function WikiView({ tr }: { tr: Translator }) {
-  const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<DropSearchMode>("item");
+  const [query, setQuery] = wiki.useField("query");
+  const [mode, setMode] = wiki.useField("mode");
   const [rows, setRows] = useState<DropRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);

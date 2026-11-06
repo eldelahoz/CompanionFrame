@@ -30,6 +30,7 @@ import {
   type PageLoadMode,
 } from "../lib/missionRewardRows";
 import { usePersisted } from "../lib/usePersisted";
+import { createViewState } from "../stores/viewState";
 
 interface Props {
   tr: Translator;
@@ -49,6 +50,9 @@ const PERIOD_KEYS = {
 const count = (tr: Translator, one: "missions.todayCountOne" | "missions.recordedOne" | "missions.itemTypeCountOne", many: "missions.todayCount" | "missions.recorded" | "missions.itemTypeCount", n: number, locale: string) =>
   tr(n === 1 ? one : many, { count: formatNumber(n, locale) });
 
+/** The filters come back as the user left them (memory only). */
+const missions = createViewState({ missionType: "", search: "", expanded: {} as Record<string, boolean>, showPeriodItems: false });
+
 export default function MissionsView({ tr, locale, items }: Props) {
   const [period, setPeriod] = usePersisted<MissionPeriod>("wf_missions_period", MISSION_PERIODS, "7d");
   const [page, setPage] = useState<MissionRewardsPage | null>(null);
@@ -56,11 +60,11 @@ export default function MissionsView({ tr, locale, items }: Props) {
   const [failed, setFailed] = useState(false);
   const [failedFilterChange, setFailedFilterChange] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [missionType, setMissionType] = useState("");
-  const [search, setSearch] = useState("");
-  const [appliedSearch, setAppliedSearch] = useState("");
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [showPeriodItems, setShowPeriodItems] = useState(false);
+  const [missionType, setMissionType] = missions.useField("missionType");
+  const [search, setSearch] = missions.useField("search");
+  const [appliedSearch, setAppliedSearch] = useState(search);
+  const [expanded, setExpanded] = missions.useField("expanded");
+  const [showPeriodItems, setShowPeriodItems] = missions.useField("showPeriodItems");
   const [nodeLabels, setNodeLabels] = useState<Map<string, string>>(new Map());
   const rowsRef = useRef<MissionRewardSummary[]>([]);
 

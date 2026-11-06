@@ -1,5 +1,6 @@
 import { Check, Copy, RefreshCw, Search, SearchX, Star, TriangleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createViewState } from "../../stores/viewState";
 import { ayatanSculptureBySlug } from "../../../config/shared/ayatanEndo";
 import { formatWfmAssetUrl, titleFromSlug } from "../../../config/shared/wfm";
 import { formatUnitPlatinum, WFM_MOD_VARIANTS } from "../../../config/shared/wfmOrders";
@@ -71,11 +72,25 @@ export function filterRows(entries: OrderBookEntry[], status: SellerStatusFilter
   );
 }
 
+/** The view comes back as the user left it (memory only); the book is refetched, not kept. */
+const browse = createViewState({
+  query: "",
+  selected: null as BrowseItem | null,
+  view: "orders" as "orders" | "stats",
+  side: "sell" as Side,
+  status: "ingame" as SellerStatusFilter,
+  rankFilter: "all" as RankFilter,
+  subtype: "regular",
+  minPrice: null as number | null,
+  maxPrice: null as number | null,
+  ayatan: false,
+});
+
 export default function MarketBrowseView({ tr, locale, catalog, loggedIn, onPostOrder }: Props) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = browse.useField("query");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [active, setActive] = useState(0);
-  const [selected, setSelected] = useState<BrowseItem | null>(null);
+  const [selected, setSelected] = browse.useField("selected");
   const [book, setBook] = useState<ItemOrderBook | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -85,17 +100,17 @@ export default function MarketBrowseView({ tr, locale, catalog, loggedIn, onPost
   const [feedback, setFeedback] = useState<MessageKey | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [saved, setSaved] = useState(readSaved);
-  const [ayatan, setAyatan] = useState(false);
-  const [view, setView] = useState<"orders" | "stats">("orders");
-  const [side, setSide] = useState<Side>("sell");
+  const [ayatan, setAyatan] = browse.useField("ayatan");
+  const [view, setView] = browse.useField("view");
+  const [side, setSide] = browse.useField("side");
   // Default to in-game sellers - the only ones you can actually trade with.
-  const [status, setStatus] = useState<SellerStatusFilter>("ingame");
-  const [rankFilter, setRankFilter] = useState<RankFilter>("all");
-  const [subtype, setSubtype] = useState("regular");
+  const [status, setStatus] = browse.useField("status");
+  const [rankFilter, setRankFilter] = browse.useField("rankFilter");
+  const [subtype, setSubtype] = browse.useField("subtype");
   const [subtypeOptions, setSubtypeOptions] = useState<string[]>([]);
   const [tax, setTax] = useState<number | null>(null);
-  const [minPrice, setMinPrice] = useState<number | null>(null);
-  const [maxPrice, setMaxPrice] = useState<number | null>(null);
+  const [minPrice, setMinPrice] = browse.useField("minPrice");
+  const [maxPrice, setMaxPrice] = browse.useField("maxPrice");
   const [rowLimit, setRowLimit] = useState(MAX_ROWS);
   const feedbackTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);

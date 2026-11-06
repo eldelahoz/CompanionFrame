@@ -18,6 +18,7 @@ import WfmPresenceBar from "../components/market/WfmPresenceBar";
 import { Button, Card, CardHeader, EmptyState, PageHeader, SearchInput, Select, SettingRow, Switch } from "../components/ui";
 import type { Language, PresenceOptions, Settings, WfmPresenceState, WfmStatus } from "../lib/ipc";
 import { openView, requestedSettingsCard } from "../stores/nav";
+import { createViewState } from "../stores/viewState";
 
 interface Props {
   settings: Settings;
@@ -37,9 +38,12 @@ interface Section {
   body: ReactNode;
 }
 
+/** The search and section come back as the user left them (memory only). */
+const settingsUi = createViewState({ query: "", active: "appearance" });
+
 export default function SettingsView({ settings, onChange, tr, market }: Props) {
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState("appearance");
+  const [query, setQuery] = settingsUi.useField("query");
+  const [active, setActive] = settingsUi.useField("active");
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const grid = useRef<HTMLDivElement>(null);
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createViewState } from "../stores/viewState";
 import { gdprApply, gdprPreviewFile, ledgerEdit, ledgerGetRange, ledgerListBatches, ledgerUndoBatch, type ItemDatabase, type LedgerBatch, type LedgerImportPreview, type LedgerPage, type LedgerPatch, type LedgerQuery } from "../lib/ipc";
 import type { MessageKey, Translator } from "../lib/i18n";
 import { pageLedgerRange } from "../lib/stats/ledgerPaging";
@@ -53,9 +54,18 @@ interface Status {
   tone: "ok" | "error";
 }
 
+/** The view comes back as the user left it (memory only). */
+const analysis = createViewState({
+  preset: "ytd" as RangePreset,
+  range: resolveRangePreset("ytd") as DateRange,
+  offset: 0,
+  search: "",
+  typeFilter: "all" as TradeType | "all",
+});
+
 export default function MarketAnalysisView({ tr, locale, items }: { tr: Translator; locale: string; items: ItemDatabase }) {
-  const [preset, setPreset] = useState<RangePreset>("ytd");
-  const [range, setRange] = useState<DateRange>(() => resolveRangePreset("ytd"));
+  const [preset, setPreset] = analysis.useField("preset");
+  const [range, setRange] = analysis.useField("range");
   const [events, setEvents] = useState<TradeEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -64,10 +74,10 @@ export default function MarketAnalysisView({ tr, locale, items }: { tr: Translat
   const [comparisonFailed, setComparisonFailed] = useState(false);
   const [page, setPage] = useState<LedgerPage | null>(null);
   const [tableLoading, setTableLoading] = useState(true);
-  const [offset, setOffset] = useState(0);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TradeType | "all">("all");
+  const [offset, setOffset] = analysis.useField("offset");
+  const [search, setSearch] = analysis.useField("search");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => search.trim());
+  const [typeFilter, setTypeFilter] = analysis.useField("typeFilter");
   const [editing, setEditing] = useState<TradeEvent | null>(null);
   const [matching, setMatching] = useState<TradeEvent | null>(null);
   const [saving, setSaving] = useState(false);
@@ -133,7 +143,12 @@ export default function MarketAnalysisView({ tr, locale, items }: { tr: Translat
     const current = start("table");
     setTableLoading(true);
     ledgerGetRange({ ...baseQuery, offset, limit: TABLE_PAGE_SIZE, type: typeFilter === "all" ? null : typeFilter, text: debouncedSearch || null })
-      .then((next) => current() && setPage(next))
+      .then((next) => {
+        if (!current()) return;
+        // a kept offset can be past the end after the ledger shrank
+        if (next.total > 0 && next.events.length === 0 && offset > 0) return setOffset(Math.floor((next.total - 1) / TABLE_PAGE_SIZE) * TABLE_PAGE_SIZE);
+        setPage(next);
+      })
       .catch(() => current() && (setPage(null), setFailed(true)))
       .finally(() => current() && setTableLoading(false));
   }, [baseQuery, offset, typeFilter, debouncedSearch, reload]);

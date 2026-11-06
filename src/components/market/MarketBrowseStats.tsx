@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createViewState } from "../../stores/viewState";
 import { SearchX, TriangleAlert } from "lucide-react";
 import type { Translator } from "../../lib/i18n";
 import { Button, Card, Checkbox, Chip, EmptyState, Field, Skeleton } from "../ui";
@@ -21,13 +22,16 @@ const PERIODS: ReadonlyArray<readonly [Period, "browse.days30" | "browse.days90"
   ["latest", "browse.latest"],
 ];
 
+/** Chart choices come back with the item (memory only). */
+const stats = createViewState({ period: "90days" as Period, show: { candles: false, median: true, movingAvg: true, avgPrice: false, donchian: true } });
+
 export default function MarketBrowseStats({ slug, tr, locale }: Props) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [period, setPeriod] = useState<Period>("90days");
+  const [period, setPeriod] = stats.useField("period");
   const [rank, setRank] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [width, setWidth] = useState(0);
-  const [show, setShow] = useState({ candles: false, median: true, movingAvg: true, avgPrice: false, donchian: true });
+  const [show, setShow] = stats.useField("show");
   const box = useRef<HTMLDivElement>(null);
 
   const fetchHistory = useCallback(() => {

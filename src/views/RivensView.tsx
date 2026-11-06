@@ -21,6 +21,7 @@ import {
   type WfmContract,
 } from "../lib/ipc";
 import { usePersisted } from "../lib/usePersisted";
+import { createViewState } from "../stores/viewState";
 import RivenInventory, { rivenCounts } from "../components/rivens/RivenInventory";
 
 interface Props {
@@ -76,9 +77,12 @@ function SessionRow({ s, tr, locale, onChange }: { s: RivenRollSession; tr: Tran
   );
 }
 
+/** The sessions search comes back as the user left it (memory only). */
+const rivenSessions = createViewState({ query: "" });
+
 function Sessions({ tr, locale }: Props) {
   const [sessions, setSessions] = useState<RivenRollSession[] | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = rivenSessions.useField("query");
 
   useEffect(() => {
     void rivensGet().then((l) => setSessions(order(l)));

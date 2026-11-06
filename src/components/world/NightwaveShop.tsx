@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { NIGHTWAVE_PERMANENT_SHOP } from "../../../config/shared/nightwaveShop";
 import type { Translator } from "../../lib/i18n";
 import type { WorldState } from "../../lib/ipc";
@@ -9,6 +9,7 @@ import { openItemBy } from "../../stores/modals";
 import { useInventory } from "../../stores/inventory";
 import { useItemDatabase } from "../../stores/items";
 import { useClock } from "../../stores/world";
+import { worldView } from "../../stores/worldView";
 import ItemImage from "../ItemImage";
 import { Input } from "../ui";
 
@@ -26,7 +27,7 @@ export default function NightwaveShop({ wd, tr, locale }: Props) {
   const db = useItemDatabase();
   const { data: inventory } = useInventory();
   const now = useClock(30_000);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = worldView.useField("nightwaveSearch");
   const owned = useMemo(() => buildBaroOwnedSet(inventory), [inventory]);
   const season = wd.nightwave;
   const verified = season?.affiliationTag === REFERENCE.seasonAffiliationTag && activeWindow(season.activation, season.expiry, now);

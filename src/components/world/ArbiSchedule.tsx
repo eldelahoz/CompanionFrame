@@ -11,6 +11,7 @@ import {
   type ArbiSelectionPreset,
 } from "../../lib/world/arbiScheduleData";
 import { useClock } from "../../stores/world";
+import { worldView } from "../../stores/worldView";
 import { applyIds, shiftOf, useRangeSelect } from "../../lib/useRangeSelect";
 
 const DAY_OPTIONS = [7, 14, 30, 60].map((d) => [d, String(d)] as const);
@@ -32,7 +33,7 @@ export default function ArbiSchedule({ tr, locale }: { tr: Translator; locale: s
   const [presetName, setPresetName] = useState("");
   const [presetSelected, setPresetSelected] = useState("");
   const [presetStatus, setPresetStatus] = useState("");
-  const [searchRaw, setSearchRaw] = useState("");
+  const [searchRaw, setSearchRaw] = worldView.useField("arbiSearch");
   const [days, setDays] = useState(loadDaysToShow);
   const [copySelection, setCopySelection] = useState<ReadonlySet<string>>(new Set());
   const [copyState, setCopyState] = useState<CopyState>("idle");

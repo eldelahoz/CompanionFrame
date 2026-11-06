@@ -20,6 +20,7 @@ import { pushRelicOverlayFilters } from "../lib/relic/overlayFilters";
 import { relicPrice, useRelicPrices } from "../lib/relic/relicPrices";
 import { isRewardNeeded, type RewardNeedContext } from "../lib/relic/rewardNeed";
 import { useWfmCatalog } from "../stores/market";
+import { createViewState } from "../stores/viewState";
 import { ownershipFor } from "../stores/inventory";
 import { useInventorySafety } from "../stores/inventorySafety";
 import { addToast } from "../stores/toasts";
@@ -84,6 +85,9 @@ const plannerFilters = (view: RelicViewState, hasInventory: boolean): RelicPlann
   return hasInventory ? filters : { ...filters, ownedAbove: 0 };
 };
 
+/** The folded filters stay as the user left them (memory only). */
+const relicsUi = createViewState({ filtersOpen: false });
+
 export default function RelicsView({ tr, locale = "en", items, inventory = null }: Props) {
   const view = useRelicView();
   const [db, setDb] = useState<RelicDatabase | null>(null);
@@ -91,7 +95,7 @@ export default function RelicsView({ tr, locale = "en", items, inventory = null 
   // The refinement pinned on a card in "owned" mode.
   const [pinned, setPinned] = useState<Record<string, RelicQuality>>({});
   // Narrow windows fold the selects behind a Filters button (relics.css container query).
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = relicsUi.useField("filtersOpen");
   const [dataInfo, setDataInfo] = useState<RelicDataInfo | null>(null);
     const { catalog } = useWfmCatalog();
   const safety = useInventorySafety(inventory as RawInventoryData | null, items as unknown as Record<string, ItemDbEntry>);
