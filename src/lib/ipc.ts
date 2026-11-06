@@ -843,6 +843,7 @@ export const resetMock = (): void => {
   mockOrders = [];
   mockJobs = [];
   mockBooks.clear();
+  mockMarketDown.clear();
   mockSession = LOGGED_OUT;
   mockWorkbench = IDLE_WORKBENCH;
 
@@ -982,6 +983,8 @@ export type { Job, JobItem, JobKind, JobUpdate };
 let mockJobs: Job[] = [];
 /** Books a mock market load fetched. */
 const mockBooks = new Map<string, BookOrder[]>();
+/** Test seam: these slugs fail to load, like a dead network. */
+export const mockMarketDown = new Set<string>();
 let mockJobSeq = 0;
 const mockJobListeners = new Set<(u: JobUpdate) => void>();
 const jobUpdate = (j: Job, item: JobItem | null, withJob = false): JobUpdate => ({
@@ -1009,7 +1012,10 @@ const mockStartJob = (kind: JobKind, items: JobItem[]): string => {
       item.status = "running";
       sendJob(jobUpdate(job, item));
       try {
-        if (kind.type === "marketLoad") mockBooks.set(item.id, mockBook(item.id));
+        if (kind.type === "marketLoad") {
+          if (mockMarketDown.has(item.id)) throw new Error("network error: error sending request");
+          mockBooks.set(item.id, mockBook(item.id));
+        }
         else if (kind.type === "ordersDelete") await wfmOrderDelete(item.id);
         else await wfmOrderUpdate(item.id, (kind.type === "reprice" ? { platinum: item.platinum } : { visible: kind.type === "ordersVisibility" && kind.visible }) as never);
         item.status = "done";

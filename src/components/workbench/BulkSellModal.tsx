@@ -7,6 +7,7 @@ import { setRootOf } from "../../lib/inventory/fullSets";
 import { SAFETY_REASON_KEYS } from "../../lib/inventory/safetyRules";
 import { verdictResolver } from "../../lib/inventory/sellable";
 import {
+  jobsDismiss,
   jobsMarketBooks,
   jobsStartMarketLoad,
   jobsStop,
@@ -329,6 +330,8 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
     const targets = rowsNeedingMarketData(rows);
     if (targets.length === 0) return;
     setError(null);
+    // An earlier load that ended with failures is replaced by this one, not left beside it.
+    for (const old of marketJobs) if (!marketBusy && old.state !== "running" && old.state !== "stopping") void jobsDismiss(old.id).catch(() => {});
     // The job takes 500 items; whatever is left stays without a book for the next click.
     const unique = [...new Map(targets.map((t) => [t.slug, { slug: t.slug, name: t.itemName }])).values()].slice(0, 500);
     try {
@@ -339,6 +342,8 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
     }
   }
   const failedNames = rows.filter((r) => !r.sellBook && marketFailed.has(r.slug)).map((r) => r.itemName);
+  // Read fine, but nobody sells it: a different case from a read that failed.
+  const noOrdersNames = rows.filter((r) => r.selected && r.sellBook && r.market?.lowestSell == null).map((r) => r.itemName);
 
   const selectFiltered = (next: (r: QueueRow) => boolean) => {
     const ids = new Set(filtered.map((r) => r.rowId));
@@ -524,6 +529,15 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
             <div className={`${BANNER} border-warning/40 bg-warning/10 text-warning`} data-workbench-price-failed={failedNames.length}>
               <div>{tr("workbench.marketFailed", { count: failedNames.length })}</div>
               <div className="mt-1 max-h-16 overflow-y-auto text-xs">{failedNames.join(", ")}</div>
+              <button type="button" className="btn-secondary btn-sm mt-2" disabled={marketBusy} data-workbench-price-retry onClick={() => void loadMarket()}>
+                {tr("common.retry")}
+              </button>
+            </div>
+          )}
+          {noOrdersNames.length > 0 && (
+            <div className={`${BANNER} border-warning/40 bg-warning/10 text-warning`} data-workbench-no-orders={noOrdersNames.length}>
+              <div>{tr("workbench.marketNoOrders", { count: noOrdersNames.length })}</div>
+              <div className="mt-1 max-h-16 overflow-y-auto text-xs">{noOrdersNames.join(", ")}</div>
             </div>
           )}
 

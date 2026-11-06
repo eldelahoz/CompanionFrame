@@ -386,6 +386,27 @@ mod tests {
         }
     }
 
+    /// A dead network is a failed item with a reason, never an empty book.
+    #[tokio::test]
+    async fn a_market_load_fails_the_item_when_the_network_is_down() {
+        let dead = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            format!("http://{}", l.local_addr().unwrap())
+        };
+        let c = WfmClient::new(
+            &format!("{dead}/v1"),
+            &format!("{dead}/v2"),
+            Box::new(|_| {}),
+        )
+        .unwrap();
+        let books = MarketBooks::default();
+        let e = load_book(&c, &books, &job_item("serration", None))
+            .await
+            .unwrap_err();
+        assert!(matches!(e, WfmError::Network { .. }), "{e}");
+        assert!(books.get(&["serration".into()]).is_empty());
+    }
+
     /// A market load stores the raw book under the slug, so a modal opened later reads it.
     #[tokio::test]
     async fn a_market_load_keeps_the_book_for_a_later_reader() {
