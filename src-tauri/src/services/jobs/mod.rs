@@ -404,39 +404,24 @@ impl<H: JobHost> Jobs<H> {
         self.host.emit(&up);
     }
 
-    /// Ends a run: a dead session leaves the rest pending (interrupted); a stop skips it.
+    /// Ends a run. A dead session or a stop with items left makes it `interrupted`: the rest stays
+    /// pending for a click on Continue, as after an app close.
     fn finish(&self, id: &str, halted: bool) {
-        let (job, skipped) = {
+        let job = {
             let mut jobs = self.jobs.lock().unwrap();
             let Some(job) = jobs.iter_mut().find(|j| j.id == id) else {
                 return;
             };
             let stopped = job.state == JobState::Stopping;
-            let mut skipped = vec![];
-            if stopped {
-                for (i, item) in job.items.iter_mut().enumerate() {
-                    if item.status == ItemStatus::Pending {
-                        item.status = ItemStatus::Skipped;
-                        skipped.push(i);
-                    }
-                }
-            }
-            job.state = if halted {
+            let left = job.items.iter().any(|i| i.status == ItemStatus::Pending);
+            job.state = if halted || (stopped && left) {
                 JobState::Interrupted
             } else {
                 JobState::Done
             };
             job.finished_at = Some(now_ms_f64());
-            (job.clone(), skipped)
+            job.clone()
         };
-        for i in skipped {
-            if let Err(e) = self
-                .host
-                .with_db(|c| store::set_item(c, id, i, ItemStatus::Skipped, None))
-            {
-                tracing::error!("[Jobs] failed to persist a skipped item: {e}");
-            }
-        }
         self.save_state(&job);
         self.host.emit(&update(&job, None));
     }

@@ -209,15 +209,19 @@ async fn stop_lets_the_item_in_flight_finish_and_starts_no_other() {
         [
             ItemStatus::Done,
             ItemStatus::Done,
-            ItemStatus::Skipped,
-            ItemStatus::Skipped
+            ItemStatus::Pending,
+            ItemStatus::Pending
         ]
     );
-    assert_eq!(job.state, JobState::Done);
-    assert!(jobs.stop(&id).is_err(), "a finished job cannot be stopped");
-    // The journal agrees: nothing is left pending to resume.
+    assert_eq!(job.state, JobState::Interrupted, "as after an app close");
+    assert!(jobs.stop(&id).is_err(), "an ended job cannot be stopped");
+    // The journal agrees, and Continue runs what was left.
     let kept = f.with_db(store::load).unwrap();
-    assert_eq!(kept[0].items[3].status, ItemStatus::Skipped);
+    assert_eq!(kept[0].items[3].status, ItemStatus::Pending);
+    assert_eq!(kept[0].state, JobState::Interrupted);
+    let next = jobs.continue_job(&id).unwrap();
+    finished(&jobs, &next).await;
+    assert_eq!(*f.ran.lock().unwrap(), ["a", "b", "c", "d"]);
 }
 
 #[tokio::test]
@@ -491,8 +495,8 @@ async fn a_market_load_stops_after_the_item_in_flight() {
     f.release.notify_one();
     let job = finished(&jobs, &id).await;
     assert_eq!(*f.ran.lock().unwrap(), ["a"]);
-    assert_eq!((job.done, job.state), (1, JobState::Done));
-    assert_eq!(job.items[2].status, ItemStatus::Skipped);
+    assert_eq!((job.done, job.state), (1, JobState::Interrupted));
+    assert_eq!(job.items[2].status, ItemStatus::Pending);
 }
 
 #[tokio::test]
@@ -543,7 +547,8 @@ async fn stop_while_offline_ends_the_job_at_once() {
     .await;
     jobs.stop(&id).unwrap();
     let job = finished(&jobs, &id).await;
-    assert_eq!(job.failed, 0);
+    assert_eq!((job.failed, job.state), (0, JobState::Interrupted));
+    assert!(job.items.iter().all(|i| i.status == ItemStatus::Pending));
     assert!(f.ran.lock().unwrap().is_empty());
 }
 

@@ -1005,10 +1005,7 @@ const mockStartJob = (kind: JobKind, items: JobItem[]): string => {
   sendJob(jobUpdate(job, null, true));
   void (async () => {
     for (const item of job.items) {
-      if (job.state === "stopping") {
-        item.status = "skipped";
-        continue;
-      }
+      if (job.state === "stopping") break;
       item.status = "running";
       sendJob(jobUpdate(job, item));
       try {
@@ -1027,7 +1024,8 @@ const mockStartJob = (kind: JobKind, items: JobItem[]): string => {
       }
       sendJob(jobUpdate(job, item));
     }
-    job.state = "done";
+    // A stop with items left ends interrupted, like an app close; Continue runs the rest.
+    job.state = job.state === "stopping" && job.items.some((i) => i.status === "pending") ? "interrupted" : "done";
     job.finishedAt = Date.now();
     sendJob(jobUpdate(job, null));
   })();
