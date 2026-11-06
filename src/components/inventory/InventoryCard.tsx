@@ -19,8 +19,6 @@ import { shiftOf } from "../../lib/useRangeSelect";
 interface Props {
   row: InvRow;
   info?: PriceInfo;
-  avgWanted: boolean;
-  onLoadAverage: (slug: string) => void;
   selecting: boolean;
   selected: boolean;
   onOpen: () => void;
@@ -39,7 +37,7 @@ interface Props {
 }
 
 /** One owned item: art, name, stack and its value chips. In selection mode the whole card toggles. */
-export default function InventoryCard({ row, info, avgWanted, onLoadAverage, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, showEquipped, onSale, tr }: Props) {
+export default function InventoryCard({ row, info, selecting, selected, onOpen, onToggle, onBook, extra, mastery, sellable, showEquipped, onSale, tr }: Props) {
   const { item } = row;
   const { bind, node } = useItemPreview({ name: row.label, slug: row.artSlug, src: item.imageUrl, fallback: item.fallbackImageUrl, tr });
   return (
@@ -98,7 +96,7 @@ export default function InventoryCard({ row, info, avgWanted, onLoadAverage, sel
             <div className="inv-price-row">
               <span className="inv-price-label">{tr("inventory.col.average")}</span>
               <span className="inv-price-fig">
-                <AverageValue row={row} info={info} wanted={avgWanted} onLoad={onLoadAverage} tr={tr} />
+                <AverageValue row={row} info={info} tr={tr} />
               </span>
             </div>
           </>

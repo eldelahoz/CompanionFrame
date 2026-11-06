@@ -30,7 +30,7 @@ afterEach(() => {
 
 const slugsOnScreen = () => [...document.querySelectorAll("[data-inventory-card]")].length;
 const burst = (n: number) => {
-  for (let i = 0; i < n; i++) act(() => applyRefreshed([{ slug: `slug-${i}`, status: "ok", price: i + 1, stale: false }] as never, false));
+  for (let i = 0; i < n; i++) act(() => applyRefreshed([{ slug: `slug-${i}`, status: "ok", price: i + 1, stale: false }] as never));
 };
 
 test("sorted by name, price batches streaming in re-sort nothing", async () => {
