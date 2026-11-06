@@ -6,3 +6,5 @@ import { resetViewStates } from "./stores/viewState";
 configure({ asyncUtilTimeout: 5000 });
 // View state outlives a view by design, so each test starts from the defaults.
 beforeEach(resetViewStates);
+// jsdom has no ResizeObserver; the virtual lists only need it to exist (tests give sizes through getBoundingClientRect).
+globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };

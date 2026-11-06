@@ -154,13 +154,31 @@
       grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
     }
   }
+  /* Virtual rows need one known height: a card is always this tall, whatever it shows. */
   .inv-card {
+    height: 19rem;
     position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
     padding: var(--space-3);
     transition: border-color 0.12s ease, background-color 0.12s ease;
+  }
+  .inv-virtual {
+    position: relative;
+  }
+  .inv-virtual-row {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .inv-probe {
+    position: absolute;
+    inset-inline: 0;
+    height: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
   .inv-card:hover {
     border-color: var(--border-strong);
@@ -469,6 +487,15 @@
   .inv-link:hover {
     color: var(--text-link);
   }
+  /* Virtual rows need one known height; a stacked row (narrow container) is a fixed card too. */
+  @container table (max-width: 54rem) {
+    .inv-list > .ui-table tbody tr[data-inventory-card] {
+      box-sizing: border-box;
+      height: 9.75rem;
+      overflow: hidden;
+      align-content: center;
+    }
+  }
   .inv-list tr[data-selected] td {
     background: var(--accent-glow);
   }
@@ -700,6 +727,11 @@
   }
 
   /* ---------- Incomplete sets (Full Sets tab) ---------- */
+  .inv-card > .sets-extra {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
   .sets-extra {
     position: relative;
     display: flex;

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../lib/i18n";
 import { resetItemPricesForTest } from "../lib/inventory/itemPrices";
@@ -34,33 +34,77 @@ beforeEach(async () => {
 });
 afterEach(() => {
   cleanup();
+  document.getElementById("content")?.remove();
   history.pushState({}, "", "/");
 });
 
 const cards = () => document.querySelectorAll("[data-inventory-card]");
 
-test("a 2.6k inventory renders one batch, then more on demand, in cards and in the list", async () => {
-  render(<InventoryView items={items} tr={tr} />);
+/** jsdom has no layout: App's scroll element gets a fixed viewport and a settable offset, as the virtualizer reads them. */
+function mountInScroller(height = 800) {
+  const main = document.createElement("main");
+  main.id = "content";
+  let top = 0;
+  Object.defineProperty(main, "clientHeight", { value: height });
+  Object.defineProperty(main, "clientWidth", { value: 1280 });
+  Object.defineProperty(main, "scrollHeight", { value: 10_000_000 }); // the virtualizer ignores offsets past the scrollable end
+  Object.defineProperty(main, "scrollTop", { get: () => top, set: (v: number) => (top = v), configurable: true });
+  // a real browser reports a row's top relative to the viewport, so the scroll offset cancels out of the list's margin
+  const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+    return { top: this === main ? 0 : -top, height: 0, width: 0, bottom: 0, left: 0, right: 0, x: 0, y: 0, toJSON() {} };
+  });
+  const host = document.createElement("div");
+  main.append(host);
+  document.body.append(main);
+  return { host, scrollTo: (v: number) => { top = v; fireEvent.scroll(main); }, remove: () => (rect.mockRestore(), main.remove()) };
+}
+const names = () => [...cards()].map((c) => c.getAttribute("data-inventory-card"));
+
+test("a 2.6k inventory keeps a window of rows in the DOM, in cards and in the list; scrolling swaps the window", async () => {
+  const s = mountInScroller();
+  render(<InventoryView items={items} tr={tr} />, { container: s.host });
   await waitFor(() => expect(cards().length).toBeGreaterThan(0));
   expect(cards().length).toBeLessThanOrEqual(60);
   expect(screen.getByRole("tab", { name: /Mods/ }).textContent).toContain("26");
-  expect(document.querySelector("[data-inventory-more]")?.textContent).toMatch(/of 26\d\d/);
-  fireEvent.click(screen.getByRole("button", { name: /Show \d+ more/ }));
-  expect(cards().length).toBeLessThanOrEqual(120);
-  expect(cards().length).toBeGreaterThan(60);
-  fireEvent.click(screen.getByRole("button", { name: "List" }));
+  const top = names();
+  // 4 cards a row at 266 px: row 300 starts at ~80 000 px
+  act(() => s.scrollTo(80_000));
+  await waitFor(() => expect(names()).not.toContain(top[0]));
+  expect(cards().length).toBeGreaterThan(0);
   expect(cards().length).toBeLessThanOrEqual(60);
+  fireEvent.click(screen.getByRole("button", { name: "List" }));
+  act(() => s.scrollTo(0));
+  await waitFor(() => expect(document.querySelector("[data-inventory-list]")).toBeTruthy());
+  expect(cards().length).toBeLessThanOrEqual(60);
+  act(() => s.scrollTo(60_000)); // 41 px rows
+  await waitFor(() => expect(names()).not.toContain(top[0]));
+  expect(cards().length).toBeLessThanOrEqual(60);
+  s.remove();
 });
 
-test("searching starts again from one batch and counts follow the search", async () => {
-  render(<InventoryView items={items} tr={tr} />);
+test("searching narrows the window to the matches and counts follow the search", async () => {
+  const s = mountInScroller();
+  render(<InventoryView items={items} tr={tr} />, { container: s.host });
   await waitFor(() => expect(cards().length).toBeGreaterThan(0));
-  // role queries walk the whole 2.6k-row DOM: slow under a loaded CI worker, so the waits get room and the click uses a plain selector
-  fireEvent.click(document.querySelector("[data-inventory-more] button") as HTMLElement);
-  expect(cards().length).toBeGreaterThan(60);
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Bulk Mod 2616" } });
   await waitFor(() => expect(cards().length).toBe(1), { timeout: 15000 });
   expect(screen.getByRole("tab", { name: /Everything/ }).textContent).not.toContain("26");
+  s.remove();
+}, 30000);
+
+test("shift-click selects the whole range of the list, rows that are not in the DOM included", async () => {
+  const s = mountInScroller();
+  render(<InventoryView items={items} tr={tr} />, { container: s.host });
+  await waitFor(() => expect(cards().length).toBeGreaterThan(0));
+  fireEvent.click(document.querySelector("[data-inventory-select-toggle]") as HTMLElement);
+  fireEvent.click(cards()[0].querySelector(".inv-card-main") as HTMLElement);
+  act(() => s.scrollTo(80_000));
+  await waitFor(() => expect(names()).not.toContain(null));
+  const far = cards()[0];
+  fireEvent.click(far.querySelector(".inv-card-main") as HTMLElement, { shiftKey: true });
+  const count = Number(document.querySelector("[data-inventory-select-count]")?.textContent?.match(/\d+/)?.[0]);
+  expect(count).toBeGreaterThan(1000); // from the first row to a row ~300 rows down, not only the few in the DOM
+  s.remove();
 }, 30000);
 
 test("prices are asked in one request for the whole inventory, rows on screen first, and the totals converge", async () => {
