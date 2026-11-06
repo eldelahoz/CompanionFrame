@@ -156,6 +156,22 @@ fn corrects_rarity_and_normalizes_the_market_fields() {
 }
 
 #[test]
+fn a_reward_row_without_ducats_takes_them_from_the_item_database() {
+    let db = build(
+        &[relic(
+            "Lith A1 Intact",
+            false,
+            &["Scindo Prime Blade", "Other"],
+            0,
+        )],
+        &Fixture,
+    );
+    let got = rewards(&db);
+    assert_eq!(got[0].ducats, Some(45));
+    assert_eq!(got[1].ducats, None);
+}
+
+#[test]
 fn the_intact_image_wins_the_group_image() {
     let mut radiant = relic("Lith A1 Radiant", false, &["A"], 0);
     radiant["imageName"] = json!("radiant.png");

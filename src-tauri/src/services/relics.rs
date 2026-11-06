@@ -182,6 +182,18 @@ fn build_reward(reward: &Value, quality: &str, lookup: &dyn RewardLookup) -> Rel
         .filter(|n| !n.is_empty())
         .unwrap_or("Unknown");
     let chance = reward.get("chance").and_then(Value::as_f64).unwrap_or(0.0);
+    // @wfcd often leaves `ducats` off the reward row; the item database knows them (the planner's Ducat EV needs them).
+    let ducats = item
+        .get("ducats")
+        .and_then(Value::as_f64)
+        .filter(|d| d.is_finite() && *d >= 0.0)
+        .map(|d| d.round() as u32)
+        .or_else(|| {
+            lookup
+                .by_name_or_slug(Some(name), raw_slug)
+                .and_then(|(_, d)| d)
+        })
+        .or_else(|| unique_name.as_deref().and_then(|u| lookup.ducats_of(u)));
     RelicReward {
         name: name.to_owned(),
         display_name: unique_name
@@ -202,11 +214,7 @@ fn build_reward(reward: &Value, quality: &str, lookup: &dyn RewardLookup) -> Rel
             .and_then(|m| s(m, "id"))
             .filter(|i| !i.is_empty())
             .map(str::to_owned),
-        ducats: item
-            .get("ducats")
-            .and_then(Value::as_f64)
-            .filter(|d| d.is_finite() && *d >= 0.0)
-            .map(|d| d.round() as u32),
+        ducats,
     }
 }
 
