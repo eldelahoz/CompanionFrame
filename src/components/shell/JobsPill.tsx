@@ -29,11 +29,16 @@ const attention = (j: Job) => j.state === "interrupted" || j.failed > 0;
 /** Items that went through, failed ones included: what "12 of 40" counts. */
 const processed = (j: Job) => j.done + j.failed;
 
+/** ", 51 failed" while a job still runs, so failures are seen before it ends. */
+const failedSoFar = (j: Job, tr: Translator) => (j.failed > 0 ? tr("jobs.failedSoFar", { failed: j.failed }) : "");
+
 /** The one line a job gets: its progress while it runs, its outcome after. */
 function summary(job: Job, tr: Translator): string {
   if (active(job)) {
     const key = job.kind.type === "ordersVisibility" && job.kind.visible ? "market.bulkShowing" : RUNNING[job.kind.type];
-    return tr(key, { done: processed(job), total: job.total });
+    const text = tr(key, { done: processed(job), total: job.total });
+    // The trailing ellipsis would sit in the middle of the line.
+    return job.failed > 0 ? text.replace(/(\.\.\.|…)$/, "") + failedSoFar(job, tr) : text;
   }
   if (job.state === "interrupted") return tr("jobs.interrupted", { done: processed(job), total: job.total });
   if (job.failed > 0) return tr("jobs.doneFailed", { done: job.done, failed: job.failed });
@@ -50,7 +55,7 @@ function JobRow({ job, tr }: { job: Job; tr: Translator }) {
     <li className="flex flex-col gap-1.5 border-t border-border py-2 first:border-t-0" data-job={job.kind.type} data-job-state={job.state}>
       <div className="flex items-center gap-2 text-sm">
         <span className="font-semibold">{tr(NAME[job.kind.type])}</span>
-        <span className="ml-auto tabular-nums text-text-secondary">{active(job) ? tr("jobs.ofTotal", { done: processed(job), total: job.total }) : summary(job, tr)}</span>
+        <span className="ml-auto tabular-nums text-text-secondary">{active(job) ? tr("jobs.ofTotal", { done: processed(job), total: job.total }) + failedSoFar(job, tr) : summary(job, tr)}</span>
       </div>
       {active(job) && <Progress label={tr(NAME[job.kind.type])} value={job.total ? (processed(job) / job.total) * 100 : 0} />}
       {active(job) && !isBackground(job) && (

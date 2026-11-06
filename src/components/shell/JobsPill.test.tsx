@@ -170,3 +170,13 @@ test("a market data load is a user job: it takes the pill, with Stop and a Retry
   fireEvent.click(screen.getByRole("button", { name: "Retry the 1" }));
   expect(actions.retry).toHaveBeenCalledWith("j1");
 });
+
+test("a running job shows its failures so far in the pill and the panel row", async () => {
+  render(<JobsPill tr={tr} />);
+  await act(async () => {});
+  const j = job({ kind: { type: "marketLoad" }, total: 436, done: 118, failed: 51, items: [] });
+  act(() => send(update(j, { job: j })));
+  expect(screen.getByRole("button", { name: /Market data 169 of 436, 51 failed/ })).toBeTruthy();
+  open();
+  expect(screen.getByText("169 of 436, 51 failed")).toBeTruthy();
+});

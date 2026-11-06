@@ -2164,6 +2164,7 @@
   "jobs.name.prices": "Actualisation des prix",
   "jobs.name.market": "Données de marché",
   "jobs.ofTotal": "{done} sur {total}",
+  "jobs.failedSoFar": ", {failed} en échec",
   "jobs.stopping": "Arrêt...",
   "jobs.interrupted": "Interrompu : {done} sur {total}",
   "jobs.left": "Il en reste {count}. Rien ne reprend tout seul.",

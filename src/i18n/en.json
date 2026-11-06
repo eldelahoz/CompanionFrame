@@ -2164,6 +2164,7 @@
   "jobs.name.prices": "Price refresh",
   "jobs.name.market": "Market data",
   "jobs.ofTotal": "{done} of {total}",
+  "jobs.failedSoFar": ", {failed} failed",
   "jobs.stopping": "Stopping...",
   "jobs.interrupted": "Interrupted: {done} of {total}",
   "jobs.left": "{count} left. Nothing resumes by itself.",
