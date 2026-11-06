@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../../lib/i18n";
 import * as ipc from "../../lib/ipc";
 import { resetMock, wfmSignIn, type CatalogItem } from "../../lib/ipc";
+import { resetJobs } from "../../stores/jobs";
 import { writeCachedQueueRows } from "../../lib/tradeWorkbench/queueCache";
 import { selectionKeyFor } from "../../lib/tradeWorkbench/queueModel";
 import { buildCatalogIndex } from "../../lib/wfm/catalog";
@@ -13,7 +14,7 @@ import BulkSellModal from "./BulkSellModal";
 
 vi.mock("../../lib/ipc", async (orig) => {
   const actual = await orig<typeof import("../../lib/ipc")>();
-  return { ...actual, wfmOrdersMy: vi.fn(actual.wfmOrdersMy), getMasteryProgress: vi.fn(actual.getMasteryProgress) };
+  return { ...actual, wfmOrdersMy: vi.fn(actual.wfmOrdersMy), getMasteryProgress: vi.fn(actual.getMasteryProgress), jobsStartMarketLoad: vi.fn(actual.jobsStartMarketLoad) };
 });
 
 const tr = translator("en");
@@ -57,7 +58,9 @@ const open = (items: ParsedItem[] = ITEMS) =>
 beforeEach(() => {
   vi.mocked(ipc.wfmOrdersMy).mockReset();
   vi.mocked(ipc.getMasteryProgress).mockReset();
+  vi.mocked(ipc.jobsStartMarketLoad).mockClear();
   resetMock();
+  resetJobs();
   writeCachedQueueRows([]);
   localStorage.clear();
 });
@@ -170,4 +173,36 @@ test("shift-click on a queue checkbox ticks the rows between two clicks", async 
   fireEvent.click(boxes()[0]);
   fireEvent.click(boxes()[boxes().length - 1], { shiftKey: true });
   expect(new Set(boxes().map((b) => b.checked)).size).toBe(1); // the range takes one state
+});
+
+test("the load button starts one market-load job with the selected slugs, once each", async () => {
+  await wfmSignIn("tenno@example.com", "pw");
+  open();
+  await screen.findByText("Lex Prime Barrel", { selector: "span" });
+  fireEvent.click(document.querySelector("[data-workbench-select-all]")!);
+  fireEvent.click(document.querySelector("[data-workbench-load-market]")!);
+  await waitFor(() => expect(ipc.jobsStartMarketLoad).toHaveBeenCalledTimes(1));
+  const rows = vi.mocked(ipc.jobsStartMarketLoad).mock.calls[0][0];
+  expect(rows.map((r) => r.slug).sort()).toEqual(["boltor_prime_receiver", "lex_prime_barrel"]);
+});
+
+test("closing the modal does not stop the load, and reopening applies the books that landed meanwhile", async () => {
+  await wfmSignIn("tenno@example.com", "pw");
+  open();
+  await screen.findByText("Lex Prime Barrel", { selector: "span" });
+  fireEvent.click(document.querySelector("[data-workbench-select-all]")!);
+  fireEvent.click(document.querySelector("[data-workbench-load-market]")!);
+  await waitFor(() => expect(ipc.jobsStartMarketLoad).toHaveBeenCalled());
+  cleanup();
+  // The job went on without the modal.
+  await waitFor(async () => expect(await ipc.jobsMarketBooks(["lex_prime_barrel", "boltor_prime_receiver"])).toHaveLength(2), { timeout: 5000 });
+
+  open();
+  await screen.findByText("Lex Prime Barrel", { selector: "span" });
+  await waitFor(() => {
+    const prices = [...document.querySelectorAll<HTMLInputElement>("[data-workbench-price]")];
+    expect(prices.length).toBeGreaterThan(0);
+    expect(prices.every((p) => p.placeholder !== "")).toBe(true);
+  });
+  expect(ipc.jobsStartMarketLoad).toHaveBeenCalledTimes(1);
 });

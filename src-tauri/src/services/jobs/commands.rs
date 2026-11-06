@@ -7,6 +7,7 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use super::books::{MarketBook, MarketBooks};
 use super::{
     ItemError, ItemStatus, Job, JobHost, JobItem, JobKind, JobState, JobUpdate, Jobs, UPDATED_EVENT,
 };
@@ -23,6 +24,17 @@ use crate::services::workbench::{INTER_ROW_DELAY, Workbench, commands::WfmHost};
 
 /// More than a seller's slots can hold; a bigger request is a mistake, not something to cut short.
 pub const MAX_JOB_ITEMS: usize = 500;
+
+/// One book read for a `MarketLoad` item (its id is the slug), kept for the modal to pick up.
+pub async fn load_book(
+    client: &WfmClient,
+    books: &MarketBooks,
+    item: &JobItem,
+) -> Result<(), WfmError> {
+    let orders = orders::orders_item(client, &item.id, false, None, None).await?;
+    books.put(&item.id, orders);
+    Ok(())
+}
 
 pub struct AppHost(AppHandle);
 
@@ -64,8 +76,8 @@ pub async fn write_order(
             }
             return Ok(());
         }
-        JobKind::Workbench | JobKind::PricesLoad => {
-            return Err(WfmError::invalid("not a job this engine runs"));
+        JobKind::Workbench | JobKind::PricesLoad | JobKind::MarketLoad => {
+            return Err(WfmError::invalid("not an orders job"));
         }
     };
     cache.upsert(order, emit);
@@ -75,11 +87,17 @@ pub async fn write_order(
 impl JobHost for AppHost {
     async fn run_item(&self, kind: &JobKind, item: &JobItem) -> Result<(), ItemError> {
         let (session, cache) = (self.0.state::<Session>(), self.0.state::<MyOrdersCache>());
-        let sent = scheduler::scoped(
-            Priority::Job,
-            write_order(session.client(), &cache, announce(&self.0), kind, item),
-        )
-        .await;
+        // Priority::Job: the user clicked and waits for it, so it goes ahead of the Background price sweeps.
+        let sent = if *kind == JobKind::MarketLoad {
+            let books = self.0.state::<MarketBooks>();
+            scheduler::scoped(Priority::Job, load_book(session.client(), &books, item)).await
+        } else {
+            scheduler::scoped(
+                Priority::Job,
+                write_order(session.client(), &cache, announce(&self.0), kind, item),
+            )
+            .await
+        };
         sent.map_err(|e| ItemError {
             halt: matches!(e, WfmError::Unauthorized { .. }),
             reason: e.to_string(),
@@ -100,6 +118,7 @@ impl JobHost for AppHost {
 }
 
 pub fn setup(app: &tauri::App) {
+    app.manage(MarketBooks::default());
     app.manage(Arc::new(AppJobs::new(
         AppHost(app.handle().clone()),
         INTER_ROW_DELAY,
@@ -256,6 +275,42 @@ pub fn jobs_start_reprice(
     start_orders(&jobs, &session, &cache, JobKind::Reprice, rows)
 }
 
+#[derive(Clone, Debug, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketRow {
+    pub slug: String,
+    pub name: String,
+}
+
+/// Reads the order book of each item, one at a time, in the background. Read only.
+#[tauri::command]
+#[specta::specta]
+pub fn jobs_start_market_load(jobs: Engine, rows: Vec<MarketRow>) -> Result<String, String> {
+    let mut seen = std::collections::HashSet::new();
+    let items: Vec<JobItem> = rows
+        .into_iter()
+        .filter(|r| seen.insert(r.slug.clone()))
+        .map(|r| JobItem {
+            id: r.slug,
+            name: r.name,
+            platinum: None,
+            status: ItemStatus::Pending,
+            reason: None,
+        })
+        .collect();
+    if items.len() > MAX_JOB_ITEMS {
+        return Err(format!("At most {MAX_JOB_ITEMS} items at a time."));
+    }
+    jobs.start(JobKind::MarketLoad, items)
+}
+
+/// The books already loaded among `slugs` (fresh ones only).
+#[tauri::command]
+#[specta::specta]
+pub fn jobs_market_books(books: State<'_, MarketBooks>, slugs: Vec<String>) -> Vec<MarketBook> {
+    books.get(&slugs)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn jobs_stop(
@@ -329,6 +384,32 @@ mod tests {
             status: ItemStatus::Pending,
             reason: None,
         }
+    }
+
+    /// A market load stores the raw book under the slug, so a modal opened later reads it.
+    #[tokio::test]
+    async fn a_market_load_keeps_the_book_for_a_later_reader() {
+        let book = r#"{"data":[{"id":"o1","type":"sell","platinum":12,"quantity":1}]}"#;
+        let m = spawn(vec![reply(200, book), reply(500, "{}")]);
+        let c = WfmClient::new(
+            &format!("{}/v1", m.url),
+            &format!("{}/v2", m.url),
+            Box::new(|_| {}),
+        )
+        .unwrap();
+        let books = MarketBooks::default();
+        load_book(&c, &books, &job_item("serration", None))
+            .await
+            .unwrap();
+        let got = books.get(&["serration".into()]);
+        assert_eq!(got[0].orders.len(), 1);
+        assert_eq!(got[0].orders[0].platinum, 12);
+        assert!(
+            load_book(&c, &books, &job_item("gone", None))
+                .await
+                .is_err()
+        );
+        assert!(books.get(&["gone".into()]).is_empty());
     }
 
     /// Each confirmed write edits the my-orders copy and announces it, the way the single-order

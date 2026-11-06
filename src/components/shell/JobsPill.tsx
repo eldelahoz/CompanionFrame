@@ -12,6 +12,7 @@ const RUNNING: Record<Job["kind"]["type"], MessageKey> = {
   reprice: "jobs.running.reprice",
   workbench: "jobs.running.workbench",
   pricesLoad: "jobs.running.prices",
+  marketLoad: "jobs.running.market",
 };
 const NAME: Record<Job["kind"]["type"], MessageKey> = {
   ordersVisibility: "jobs.name.visibility",
@@ -19,6 +20,7 @@ const NAME: Record<Job["kind"]["type"], MessageKey> = {
   reprice: "jobs.name.reprice",
   workbench: "jobs.name.workbench",
   pricesLoad: "jobs.name.prices",
+  marketLoad: "jobs.name.market",
 };
 const MAX_REASONS = 5;
 

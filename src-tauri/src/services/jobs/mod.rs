@@ -5,6 +5,7 @@
 //! Three sources feed the same list: jobs this engine runs and journals (`orders` kinds), the workbench
 //! run (mirrored, its own engine and journal stay) and the price refresh worker (progress only).
 
+pub mod books;
 pub mod commands;
 mod store;
 
@@ -33,12 +34,19 @@ pub enum JobKind {
     Workbench,
     /// Mirror of the price refresh worker: progress only.
     PricesLoad,
+    /// Reads the order book of each item (read only, no write to warframe.market); item id = slug.
+    MarketLoad,
 }
 
 impl JobKind {
     /// Run and journaled by this engine (the others are mirrors).
     fn owned(&self) -> bool {
         !matches!(self, Self::Workbench | Self::PricesLoad)
+    }
+
+    /// Writes orders: one at a time, and the my-orders poll waits. A market load only reads.
+    fn writes(&self) -> bool {
+        self.owned() && *self != Self::MarketLoad
     }
 }
 
@@ -214,8 +222,9 @@ impl<H: JobHost> Jobs<H> {
         }
         let job = {
             let mut jobs = self.jobs.lock().unwrap();
-            // One orders job at a time keeps the writes in sequence.
-            if kind.owned() && jobs.iter().any(|j| j.kind.owned() && j.active()) {
+            // One job per class at a time: orders writes stay in sequence, loads do not pile up.
+            let same = |j: &Job| j.kind.owned() && j.kind.writes() == kind.writes();
+            if kind.owned() && jobs.iter().any(|j| same(j) && j.active()) {
                 return Err("Another job is still running.".into());
             }
             let mut job = Job {
@@ -252,7 +261,15 @@ impl<H: JobHost> Jobs<H> {
 
     /// Runs the pending items in order. Returns the state it ended in.
     async fn run(self: Arc<Self>, id: String) {
-        self.host.hold(true);
+        let writes = self
+            .jobs
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|j| j.id == id && j.kind.writes());
+        if writes {
+            self.host.hold(true);
+        }
         let mut halted = false;
         loop {
             // Take the next pending item, unless a stop was asked.
@@ -295,7 +312,9 @@ impl<H: JobHost> Jobs<H> {
             }
             tokio::time::sleep(self.delay).await;
         }
-        self.host.hold(false);
+        if writes {
+            self.host.hold(false);
+        }
         self.finish(&id, halted);
         tracing::info!("[Jobs] job finished");
     }

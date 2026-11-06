@@ -842,6 +842,7 @@ export const resetMock = (): void => {
   mockPresenceListeners.clear();
   mockOrders = [];
   mockJobs = [];
+  mockBooks.clear();
   mockSession = LOGGED_OUT;
   mockWorkbench = IDLE_WORKBENCH;
 
@@ -979,6 +980,8 @@ import type { Job_Serialize as Job, JobItem_Serialize as JobItem, JobKind, JobUp
 export type { Job, JobItem, JobKind, JobUpdate };
 
 let mockJobs: Job[] = [];
+/** Books a mock market load fetched. */
+const mockBooks = new Map<string, BookOrder[]>();
 let mockJobSeq = 0;
 const mockJobListeners = new Set<(u: JobUpdate) => void>();
 const jobUpdate = (j: Job, item: JobItem | null, withJob = false): JobUpdate => ({
@@ -1006,7 +1009,8 @@ const mockStartJob = (kind: JobKind, items: JobItem[]): string => {
       item.status = "running";
       sendJob(jobUpdate(job, item));
       try {
-        if (kind.type === "ordersDelete") await wfmOrderDelete(item.id);
+        if (kind.type === "marketLoad") mockBooks.set(item.id, mockBook(item.id));
+        else if (kind.type === "ordersDelete") await wfmOrderDelete(item.id);
         else await wfmOrderUpdate(item.id, (kind.type === "reprice" ? { platinum: item.platinum } : { visible: kind.type === "ordersVisibility" && kind.visible }) as never);
         item.status = "done";
         job.done++;
@@ -1039,6 +1043,14 @@ export const jobsStartOrdersDelete = async (ids: string[]): Promise<string> =>
   inTauri() ? unwrap(await commands.jobsStartOrdersDelete(ids)) : mockStartJob({ type: "ordersDelete" }, mockJobItems(ids));
 export const jobsStartReprice = async (items: { id: string; platinum: number }[]): Promise<string> =>
   inTauri() ? unwrap(await commands.jobsStartReprice(items)) : mockStartJob({ type: "reprice" }, mockJobItems(items.map((i) => i.id), new Map(items.map((i) => [i.id, i.platinum]))));
+/** Reads the order book of each item in the background (read only); the books wait for `jobsMarketBooks`. */
+export const jobsStartMarketLoad = async (rows: { slug: string; name: string }[]): Promise<string> =>
+  inTauri()
+    ? unwrap(await commands.jobsStartMarketLoad(rows))
+    : mockStartJob({ type: "marketLoad" }, rows.map((r) => ({ id: r.slug, name: r.name, platinum: null, status: "pending", reason: null })));
+/** The raw books already loaded among `slugs` (fresh ones only). */
+export const jobsMarketBooks = async (slugs: string[]): Promise<{ slug: string; orders: BookOrder[] }[]> =>
+  inTauri() ? commands.jobsMarketBooks(slugs) : slugs.flatMap((slug) => (mockBooks.has(slug) ? [{ slug, orders: mockBooks.get(slug)! }] : []));
 /** The item in flight finishes, no further one starts. */
 export const jobsStop = async (id: string): Promise<void> => {
   if (inTauri()) return void unwrap(await commands.jobsStop(id));

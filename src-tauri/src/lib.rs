@@ -189,6 +189,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::jobs::commands::jobs_start_orders_visibility,
             services::jobs::commands::jobs_start_orders_delete,
             services::jobs::commands::jobs_start_reprice,
+            services::jobs::commands::jobs_start_market_load,
+            services::jobs::commands::jobs_market_books,
             services::jobs::commands::jobs_stop,
             services::jobs::commands::jobs_retry_failed,
             services::jobs::commands::jobs_continue,

@@ -412,3 +412,64 @@ fn a_mirrored_job_announces_only_what_changed_and_a_dismissed_one_stays_gone() {
     jobs.mirror("p", JobKind::PricesLoad, JobState::Done, (0, 0), vec![]);
     assert!(!jobs.has("p"));
 }
+
+#[tokio::test]
+async fn a_market_load_reads_in_order_records_reasons_and_never_holds_the_poll() {
+    let (f, jobs) = engine(fake(&[("b", "HTTP 503", false)], &[]));
+    let id = jobs
+        .start(JobKind::MarketLoad, items(&["a", "b", "c"]))
+        .unwrap();
+    let job = finished(&jobs, &id).await;
+    assert_eq!(*f.ran.lock().unwrap(), ["a", "b", "c"]);
+    assert_eq!((job.done, job.failed), (2, 1));
+    assert_eq!(job.items[1].reason.as_deref(), Some("HTTP 503"));
+    assert!(
+        f.holds.lock().unwrap().is_empty(),
+        "a read does not hold the poll"
+    );
+
+    // Retry runs only the failed one, as a new job.
+    let again = jobs.retry_failed(&id).unwrap();
+    finished(&jobs, &again).await;
+    assert_eq!(f.ran.lock().unwrap()[3..], ["b"]);
+}
+
+#[tokio::test]
+async fn a_market_load_runs_beside_an_orders_job_but_not_beside_another_load() {
+    let (f, jobs) = engine(fake(&[], &["w"]));
+    let orders = jobs.start(HIDE, items(&["w"])).unwrap();
+    until("the orders job in flight", || {
+        f.flying.load(Ordering::SeqCst) == 1
+    })
+    .await;
+    let load = jobs.start(JobKind::MarketLoad, items(&["a"])).unwrap();
+    finished(&jobs, &load).await;
+    assert!(
+        jobs.start(JobKind::MarketLoad, items(&["slow"])).is_ok(),
+        "the first load ended"
+    );
+    f.release.notify_one();
+    finished(&jobs, &orders).await;
+}
+
+#[tokio::test]
+async fn a_market_load_stops_after_the_item_in_flight() {
+    let (f, jobs) = engine(fake(&[], &["a"]));
+    let id = jobs
+        .start(JobKind::MarketLoad, items(&["a", "b", "c"]))
+        .unwrap();
+    until("the first read in flight", || {
+        f.flying.load(Ordering::SeqCst) == 1
+    })
+    .await;
+    assert!(
+        jobs.start(JobKind::MarketLoad, items(&["z"])).is_err(),
+        "one load at a time"
+    );
+    jobs.stop(&id).unwrap();
+    f.release.notify_one();
+    let job = finished(&jobs, &id).await;
+    assert_eq!(*f.ran.lock().unwrap(), ["a"]);
+    assert_eq!((job.done, job.state), (1, JobState::Done));
+    assert_eq!(job.items[2].status, ItemStatus::Skipped);
+}

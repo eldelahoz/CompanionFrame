@@ -64,11 +64,11 @@ export default function Titlebar({ tr, appName, logo, onSelectView, onOpenMenu, 
       </div>
       {onSelectView && <ViewSearch tr={tr} onSelect={onSelectView} />}
       <div className="titlebar-right app-region-no-drag">
+        <JobsPill tr={tr} />
         <button type="button" className="titlebar-pill" data-tip={tip} aria-label={tip} data-inventory-status={tone} onClick={() => openView("settings")}>
           <span className={`status-dot ${DOT[tone]}`} />
           <span className="titlebar-pill-text">{text}</span>
         </button>
-        <JobsPill tr={tr} />
         {children}
         <button type="button" className="ui-icon-btn" aria-label={themeLabel} data-tip={themeLabel} onClick={() => themeSettings.applyPreset(light ? "default" : "light")}>
           {light ? <Moon /> : <Sun />}

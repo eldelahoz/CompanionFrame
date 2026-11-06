@@ -7,6 +7,9 @@ import { setRootOf } from "../../lib/inventory/fullSets";
 import { SAFETY_REASON_KEYS } from "../../lib/inventory/safetyRules";
 import { verdictResolver } from "../../lib/inventory/sellable";
 import {
+  jobsMarketBooks,
+  jobsStartMarketLoad,
+  jobsStop,
   workbenchAckOverride,
   workbenchCancelRun,
   workbenchExecutePlan,
@@ -34,7 +37,6 @@ import {
   buildSelectedQueueRows,
   captureSafetySnapshot,
   filterQueueRows,
-  loadQueueMarketData,
   mergeQueueRows,
   planTotals,
   rowNeedsOverride,
@@ -46,10 +48,11 @@ import {
   type QueueListedFilter,
   type WorkbenchQueueRow as QueueRow,
 } from "../../lib/tradeWorkbench/queueModel";
-import { fetchRowBook } from "../../lib/tradeWorkbench/rowBook";
+import { rowBookOf } from "../../lib/tradeWorkbench/rowBook";
 import { STRATEGY_KEYS } from "../../lib/tradeWorkbench/strategyLabels";
 import type { CatalogIndex } from "../../lib/wfm/catalog";
 import { useInventorySafety } from "../../stores/inventorySafety";
+import { useJobs } from "../../stores/jobs";
 import { loadMyOrders } from "../../stores/myOrders";
 import { useWorkbenchState } from "../../stores/workbench";
 import type { ItemDbEntry, ParsedItem, RawInventoryData } from "../../types/inventory";
@@ -136,10 +139,14 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
   // null until the session answers: no sign-in or orders notice is shown on a guess.
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [ownUser, setOwnUser] = useState<string | null>(null);
-  const [marketBusy, setMarketBusy] = useState(false);
-  const [marketProgress, setMarketProgress] = useState<[number, number]>([0, 0]);
-  const [marketFailed, setMarketFailed] = useState<readonly string[]>([]);
-  const marketAbort = useRef(false);
+  // The market load is a background job: it goes on when this modal closes, and its state is read from the jobs store.
+  const marketJobs = useJobs().jobs.filter((j) => j.kind.type === "marketLoad");
+  const marketJob = marketJobs[marketJobs.length - 1] ?? null;
+  const marketBusy = marketJob?.state === "running" || marketJob?.state === "stopping";
+  const marketProgress: [number, number] = marketJob ? [marketJob.done + marketJob.failed, marketJob.total] : [0, 0];
+  const marketFailed = new Set(marketJob?.items.filter((i) => i.status === "failed").map((i) => i.id));
+  const medianAfterLoad = useRef(false);
+  const booksProbed = useRef(false);
   const [report, setReport] = useState<WorkbenchReviewReport | null>(null);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [preview, setPreview] = useState<Validation | null>(null);
@@ -229,7 +236,6 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
     })();
     return () => {
       live = false;
-      marketAbort.current = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- opening snapshot by design
   }, []);
@@ -277,41 +283,62 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
     setRows((prev) => prev.map((r) => (ids.has(r.rowId) && applyTokens.current.get(r.rowId) === token ? applyStrategy(r, config, ownUser, damping, workbenchMedianLoader.peek(config.id, r)) : r)));
   }
 
+  /** Applies the books the job already loaded to the rows still without one (the same path a live fetch took). */
+  async function applyLoadedBooks(slugs: string[]) {
+    const wanted = rowsRef.current.filter((r) => r.selected && !r.sellBook && slugs.includes(r.slug));
+    if (wanted.length === 0) return;
+    const books = new Map((await jobsMarketBooks([...new Set(wanted.map((r) => r.slug))])).map((b) => [b.slug, b.orders]));
+    const config = strategyConfig();
+    const ids = new Set<string>();
+    rowsRef.current = rowsRef.current.map((current) => {
+      const orders = books.get(current.slug);
+      if (!orders || current.sellBook || !current.selected) return current;
+      const book = rowBookOf(orders, current);
+      claim([current.rowId]);
+      ids.add(current.rowId);
+      const next = attachMarketData(current, book.sell, book.buy, ordersRef.current);
+      return applyStrategy(next, config, ownUser, damping, workbenchMedianLoader.peek(config.id, next));
+    });
+    if (ids.size === 0) return;
+    markQueueMarketFetched();
+    const byId = new Map(rowsRef.current.map((r) => [r.rowId, r]));
+    setRows((prev) => prev.map((r) => (ids.has(r.rowId) ? (byId.get(r.rowId) ?? r) : r)));
+  }
+
+  // Opening asks for everything already loaded; after that each finished read is applied as the job reports it.
+  const loadedSlugs = useJobs().jobs.flatMap((j) => (j.kind.type === "marketLoad" ? j.items.filter((i) => i.status === "done").map((i) => i.id) : []));
+  const loadedKey = loadedSlugs.join(",");
+  const marketDone = marketJob?.state === "done";
+  useEffect(() => {
+    if (!queueBuilt) return;
+    const first = !booksProbed.current;
+    booksProbed.current = true;
+    void (async () => {
+      await applyLoadedBooks(first || marketDone ? rowsRef.current.map((r) => r.slug) : loadedSlugs);
+      if (marketDone && medianAfterLoad.current) {
+        medianAfterLoad.current = false;
+        const config = strategyConfig();
+        if (isMedianStrategy(config.id)) await applyConfig(config, new Set(rowsRef.current.filter((r) => r.selected && r.sellBook).map((r) => r.rowId)));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the job's progress only
+  }, [queueBuilt, loadedKey, marketDone]);
+
   async function loadMarket() {
     if (marketBusy) return;
     const targets = rowsNeedingMarketData(rows);
     if (targets.length === 0) return;
-    setMarketBusy(true);
-    marketAbort.current = false;
-    setMarketProgress([0, targets.length]);
-    setMarketFailed([]);
-    let done = 0;
+    setError(null);
+    // The job takes 500 items; whatever is left stays without a book for the next click.
+    const unique = [...new Map(targets.map((t) => [t.slug, { slug: t.slug, name: t.itemName }])).values()].slice(0, 500);
     try {
-      const summary = await loadQueueMarketData(targets, {
-        isCancelled: () => marketAbort.current,
-        fetchBook: fetchRowBook,
-        onRow: (target, book) => {
-          setMarketProgress([++done, targets.length]);
-          const current = rowsRef.current.find((r) => r.rowId === target.rowId);
-          if (!current) return;
-          const config = strategyConfig();
-          claim([target.rowId]);
-          let next = attachMarketData(current, book?.sell ?? null, book?.buy ?? null, ordersRef.current);
-          next = applyStrategy(next, config, ownUser, damping, workbenchMedianLoader.peek(config.id, next));
-          // The loop outruns React's render, so keep the ref current for the next row.
-          rowsRef.current = rowsRef.current.map((r) => (r.rowId === next.rowId ? next : r));
-          patchRow(next);
-          if (book?.sell) markQueueMarketFetched();
-        },
-      });
-      setMarketFailed(summary.failedRowIds);
-      const config = strategyConfig();
-      if (isMedianStrategy(config.id) && !marketAbort.current) await applyConfig(config, new Set(targets.map((t) => t.rowId)), () => marketAbort.current);
-    } finally {
-      setMarketBusy(false);
+      await jobsStartMarketLoad(unique);
+      medianAfterLoad.current = true;
+    } catch (e) {
+      setError(messageOf(e));
     }
   }
-  const failedNames = rows.filter((r) => marketFailed.includes(r.rowId)).map((r) => r.itemName);
+  const failedNames = rows.filter((r) => !r.sellBook && marketFailed.has(r.slug)).map((r) => r.itemName);
 
   const selectFiltered = (next: (r: QueueRow) => boolean) => {
     const ids = new Set(filtered.map((r) => r.rowId));
@@ -542,7 +569,7 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
               </span>
             )}
             {marketBusy && (
-              <button type="button" className="btn-secondary btn-sm" data-workbench-price-stop onClick={() => (marketAbort.current = true)}>
+              <button type="button" className="btn-secondary btn-sm" data-workbench-price-stop onClick={() => marketJob && void jobsStop(marketJob.id).catch((e: unknown) => setError(messageOf(e)))}>
                 {tr("workbench.stopLoadingMarket")}
               </button>
             )}

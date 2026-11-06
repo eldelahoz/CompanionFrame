@@ -178,6 +178,10 @@ export const commands = {
 	jobsStartOrdersVisibility: (ids: string[], visible: boolean) => typedError<string, string>(__TAURI_INVOKE("jobs_start_orders_visibility", { ids, visible })),
 	jobsStartOrdersDelete: (ids: string[]) => typedError<string, string>(__TAURI_INVOKE("jobs_start_orders_delete", { ids })),
 	jobsStartReprice: (items: RepriceItem[]) => typedError<string, string>(__TAURI_INVOKE("jobs_start_reprice", { items })),
+	/**  Reads the order book of each item, one at a time, in the background. Read only. */
+	jobsStartMarketLoad: (rows: MarketRow[]) => typedError<string, string>(__TAURI_INVOKE("jobs_start_market_load", { rows })),
+	/**  The books already loaded among `slugs` (fresh ones only). */
+	jobsMarketBooks: (slugs: string[]) => __TAURI_INVOKE<MarketBook_Serialize[]>("jobs_market_books", { slugs }),
 	jobsStop: (id: string) => typedError<null, string>(__TAURI_INVOKE("jobs_stop", { id })),
 	jobsRetryFailed: (id: string) => typedError<string, string>(__TAURI_INVOKE("jobs_retry_failed", { id })),
 	jobsContinue: (id: string) => typedError<string, string>(__TAURI_INVOKE("jobs_continue", { id })),
@@ -1603,7 +1607,9 @@ export type JobKind = { type: "ordersVisibility"; visible: boolean } | { type: "
 /**  Mirror of the workbench run; its engine stays in charge. */
 { type: "workbench" } | 
 /**  Mirror of the price refresh worker: progress only. */
-{ type: "pricesLoad" };
+{ type: "pricesLoad" } | 
+/**  Reads the order book of each item (read only, no write to warframe.market); item id = slug. */
+{ type: "marketLoad" };
 
 export type JobState = "running" | 
 /**  Stop asked: the item in flight finishes, none starts. */
@@ -1965,7 +1971,24 @@ export type MarketAlertTestFire = {
 	detail: string,
 };
 
+export type MarketBook = MarketBook_Serialize | MarketBook_Deserialize;
+
+export type MarketBook_Deserialize = {
+	slug: string,
+	orders: BookOrder_Deserialize[],
+};
+
+export type MarketBook_Serialize = {
+	slug: string,
+	orders: BookOrder_Serialize[],
+};
+
 export type MarketOrderSide = "sell" | "buy";
+
+export type MarketRow = {
+	slug: string,
+	name: string,
+};
 
 /**  One closed-sales day of warframe.market statistics, as the Browse chart plots it. */
 export type MarketStatPoint = MarketStatPoint_Serialize | MarketStatPoint_Deserialize;

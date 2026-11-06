@@ -157,3 +157,16 @@ test("a partial update for a job the store never saw makes it appear from the sn
   act(() => send(update(more)));
   expect(screen.getByRole("button", { name: /Prices 600 of 1493/ })).toBeTruthy();
 });
+
+test("a market data load is a user job: it takes the pill, with Stop and a Retry for failed rows", async () => {
+  render(<JobsPill tr={tr} />);
+  await act(async () => {});
+  const j = job({ kind: { type: "marketLoad" }, done: 1, failed: 1, items: [item("a", "done"), item("b", "failed", "HTTP 503"), item("c", "pending"), item("d", "pending")] });
+  act(() => send(update(j, { job: j })));
+  expect(screen.getByRole("button", { name: /Market data 2 of 4/ }).getAttribute("data-jobs-pill")).toBe("running");
+  open();
+  expect(screen.getAllByRole("button", { name: "Stop" })).toHaveLength(1);
+  act(() => send(update({ ...j, state: "done", done: 3, failed: 1 })));
+  fireEvent.click(screen.getByRole("button", { name: "Retry the 1" }));
+  expect(actions.retry).toHaveBeenCalledWith("j1");
+});
