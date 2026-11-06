@@ -142,3 +142,18 @@ test("a background job shows muted, without a spinner, when no user job runs; a 
   act(() => void vi.advanceTimersByTime(10));
   expect(screen.queryByText("585 of 1493")).toBeNull();
 });
+
+test("a partial update for a job the store never saw makes it appear from the snapshot", async () => {
+  render(<JobsPill tr={tr} />);
+  await act(async () => {});
+  // The first, full update was missed (it came before the listener); the job exists in the backend by now.
+  const prices = job({ id: "p", kind: { type: "pricesLoad" }, total: 1493, done: 585, items: [] });
+  snapshot = [prices];
+  act(() => send(update(prices)));
+  await act(async () => {});
+  expect(screen.getByRole("button", { name: /Prices 585 of 1493/ })).toBeTruthy();
+  // Later partial updates now apply.
+  const more = { ...prices, done: 600 };
+  act(() => send(update(more)));
+  expect(screen.getByRole("button", { name: /Prices 600 of 1493/ })).toBeTruthy();
+});
