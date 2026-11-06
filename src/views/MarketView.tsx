@@ -25,6 +25,7 @@ import type { WfmPresenceState, PresenceOptions, WfmStatus, WfmSession } from ".
 import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
 import { useWfmCatalog } from "../stores/market";
+import { useJobs } from "../stores/jobs";
 import { refreshMyOrders, useMyOrders } from "../stores/myOrders";
 import type { ItemDbEntry } from "../types/inventory";
 
@@ -55,6 +56,8 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const [sort, setSort] = usePersisted("wf_market_orders_sort", SORTS, "date:desc");
   const [sortKey, sortDir] = sort.split(":") as [OrderSortKey, OrderSortDir];
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  // The backend runs one orders job at a time: the bar waits for it.
+  const jobRunning = useJobs().jobs.some((j) => (j.state === "running" || j.state === "stopping") && (j.kind.type === "ordersVisibility" || j.kind.type === "ordersDelete" || j.kind.type === "reprice"));
   const { catalog } = useWfmCatalog();
   const art = useMarketArt();
   const loggedIn = session?.logged_in === true;
@@ -330,7 +333,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
           count={pickedCount}
           total={list.length}
           canReprice={tab === "sell"}
-          busy={busy.size > 0}
+          busy={busy.size > 0 || jobRunning}
           onAll={() => setSelected(new Set(list.map((o) => o.id)))}
           onHide={() => setAllVisible(false)}
           onShow={() => setAllVisible(true)}

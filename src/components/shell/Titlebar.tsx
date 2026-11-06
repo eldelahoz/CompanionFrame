@@ -7,6 +7,7 @@ import { getInventoryStatus, onInventoryStatusUpdated, windowClose, windowMinimi
 import { themeSettings, useThemeSettings } from "../../lib/theme/themeStore";
 import type { ViewName } from "../../lib/viewRegistry";
 import { BrandMark } from "../icons";
+import JobsPill from "./JobsPill";
 import ViewSearch from "./ViewSearch";
 
 /** The age label moves on its own; the status events only fire on changes. */
@@ -67,6 +68,7 @@ export default function Titlebar({ tr, appName, logo, onSelectView, onOpenMenu, 
           <span className={`status-dot ${DOT[tone]}`} />
           <span className="titlebar-pill-text">{text}</span>
         </button>
+        <JobsPill tr={tr} />
         {children}
         <button type="button" className="ui-icon-btn" aria-label={themeLabel} data-tip={themeLabel} onClick={() => themeSettings.applyPreset(light ? "default" : "light")}>
           {light ? <Moon /> : <Sun />}
