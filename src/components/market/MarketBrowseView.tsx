@@ -83,6 +83,7 @@ const browse = createViewState({
   subtype: "regular",
   minPrice: null as number | null,
   maxPrice: null as number | null,
+  ayatan: false,
 });
 
 export default function MarketBrowseView({ tr, locale, catalog, loggedIn, onPostOrder }: Props) {
@@ -99,7 +100,7 @@ export default function MarketBrowseView({ tr, locale, catalog, loggedIn, onPost
   const [feedback, setFeedback] = useState<MessageKey | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [saved, setSaved] = useState(readSaved);
-  const [ayatan, setAyatan] = useState(false);
+  const [ayatan, setAyatan] = browse.useField("ayatan");
   const [view, setView] = browse.useField("view");
   const [side, setSide] = browse.useField("side");
   // Default to in-game sellers - the only ones you can actually trade with.
