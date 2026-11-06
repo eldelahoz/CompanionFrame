@@ -26,6 +26,7 @@ import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
 import { useWfmCatalog } from "../stores/market";
 import { refreshMyOrders, useMyOrders } from "../stores/myOrders";
+import { createViewState } from "../stores/viewState";
 import type { ItemDbEntry } from "../types/inventory";
 
 type Tab = "sell" | "buy" | "rivens" | "browse" | "alerts";
@@ -44,8 +45,11 @@ interface Props {
   presence: { state: WfmPresenceState; options: PresenceOptions; setStatus: (s: WfmStatus) => void; saveOptions: (p: Partial<PresenceOptions>) => void };
 }
 
+/** The view comes back as the user left it (memory only). */
+const market = createViewState({ tab: "sell" as Tab, selected: new Set<string>() as ReadonlySet<string> });
+
 export default function MarketView({ tr, items, locale = "en", session, signIn, signInWebview, signOut, presence }: Props) {
-  const [tab, setTab] = useState<Tab>("sell");
+  const [tab, setTab] = market.useField("tab");
   // The backend owns the orders: the store paints its last copy at once and follows its updates.
   const { orders, loaded, refreshing } = useMyOrders();
   const [error, setError] = useState("");
@@ -55,7 +59,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const [sort, setSort] = usePersisted("wf_market_orders_sort", SORTS, "date:desc");
   const [sortKey, sortDir] = sort.split(":") as [OrderSortKey, OrderSortDir];
   const [bulkRun, setBulkRun] = useState<BulkRun | null>(null);
-  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [selected, setSelected] = market.useField("selected");
   const { catalog } = useWfmCatalog();
   const art = useMarketArt();
   const loggedIn = session?.logged_in === true;
@@ -72,12 +76,18 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     }
   };
 
-  useEffect(() => setSelected(new Set()), [tab]);
+  // a tab switch clears the picks, but coming back to the view keeps them
+  const shownTab = useRef(tab);
+  useEffect(() => {
+    if (shownTab.current !== tab) setSelected(new Set());
+    shownTab.current = tab;
+  }, [tab, setSelected]);
   // a refetch can drop orders: forget their ids
   useEffect(() => {
+    if (!loaded) return;
     const live = new Set([...orders.sell, ...orders.buy].map((o) => o.id));
     setSelected((cur) => (cur.size === 0 || [...cur].every((id) => live.has(id)) ? cur : new Set([...cur].filter((id) => live.has(id)))));
-  }, [orders]);
+  }, [orders, loaded, setSelected]);
 
   // Once per sign-in, not on the poll; a failed lookup just hides the figure.
   const [reputation, setReputation] = useState<number | null>(null);
