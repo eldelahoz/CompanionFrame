@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, Pin, PinOff } from "lucide-react";
+import VirtualCards from "../components/inventory/VirtualCards";
 import ImportNote from "../components/inventory/ImportNote";
 import { useEffect, useMemo, useState } from "react";
 import { fallbackNameFromUniqueName, sanitizeDisplayName } from "../../config/shared/displayName";
@@ -10,7 +11,7 @@ import CodexPanel from "../components/mastery/CodexPanel";
 import IncarnonTracker from "../components/mastery/IncarnonTracker";
 import MasteryPlanner from "../components/mastery/MasteryPlanner";
 import MasteryRoadmap from "../components/mastery/MasteryRoadmap";
-import { Badge, Button, Card, EmptyState, Field, IconButton, PageHeader, Readout, SearchInput, Segmented, Select, ShowMore, Skeleton, StatStrip, Tabs, useBatch, type StatItem } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Field, IconButton, PageHeader, Readout, SearchInput, Segmented, Select, Skeleton, StatStrip, Tabs, type StatItem } from "../components/ui";
 import { parseArchonShards, summarizeArchonShards } from "../lib/inventory/archonShards";
 import { getRelicDatabase, wfmPricesBulk, type MasteryProgress } from "../lib/ipc";
 import NoInventoryState from "../components/inventory/NoInventoryState";
@@ -92,11 +93,16 @@ function summaryRows(data: MasteryProgress, tr: Translator, locale: string): Sta
   return rows;
 }
 
+/** Components drawn as dots; the rest collapse into a "+N". */
+const PART_DOTS = 6;
+
 function MasteryCard({ item, tr, locale, shards, itemDb, pinned }: { item: Item; tr: Translator; locale: string; shards: ReturnType<typeof parseArchonShards>["suits"]; itemDb: Record<string, ItemDbEntry>; pinned: boolean }) {
   const name = label(item);
   const missing = item.status === "missing";
   const pct = missing ? 0 : Math.max(0, Math.min(100, Math.floor((item.rank / Math.max(item.maxRank, 1)) * 100)));
   const remaining = item.masteryXpRemaining ?? 0;
+  const sub = `${item.category}${item.masteryReq ? `, ${tr("rivens.mr", { level: item.masteryReq })}` : ""}`;
+  const partTitle = (c: Item["components"][number]) => `${sanitizeDisplayName(c.displayName || c.name) || "?"}: ${tr(c.owned ? "common.owned" : "common.missing")}`;
   return (
     <div className="ms-card" data-mastery-card={item.uniqueName} data-status={item.status}>
       <button type="button" className="ms-card-main" onClick={() => openItemBy({ uniqueName: item.uniqueName })} title={tr("common.openDetailsFor", { name })}>
@@ -117,35 +123,45 @@ function MasteryCard({ item, tr, locale, shards, itemDb, pinned }: { item: Item;
           <span className={`ms-card-dot ms-card-dot--${item.status}`} aria-hidden="true" />
         </span>
         <span className="ms-card-body">
-          <span className="ms-card-name">{name}</span>
-          <span className="ms-sub ms-sub--muted">
-            {item.category}
-            {item.masteryReq ? `, ${tr("rivens.mr", { level: item.masteryReq })}` : ""}
+          <span className="ms-card-name" title={name}>
+            {name}
           </span>
-          {remaining > 0 && (
-            <span title={tr("mastery.xpBadgeTitle")}>
-              <Readout chip currency="mastery" value={remaining} locale={locale}>
-                <span>+{remaining.toLocaleString(locale)} XP</span>
-              </Readout>
-            </span>
-          )}
-          {missing ? (
-            <span className="ms-sub ms-sub--muted">{tr("mastery.notOwned")}</span>
-          ) : (
-            <>
-              <span className={`ui-meter ui-meter--${item.status === "mastered" ? "success" : "accent"}`} aria-hidden="true">
-                <span style={{ width: `${Math.min(100, (item.rank / Math.max(item.maxRank, 1)) * 100)}%` }} />
+          <span className="ms-sub ms-sub--muted ms-slot" title={sub}>
+            {sub}
+          </span>
+          <span className="ms-slot ms-slot--xp">
+            {remaining > 0 && (
+              <span title={tr("mastery.xpBadgeTitle")}>
+                <Readout chip currency="mastery" value={remaining} locale={locale}>
+                  <span>+{remaining.toLocaleString(locale)} XP</span>
+                </Readout>
               </span>
-              <span className="ms-sub ms-sub--muted">{tr("mastery.rankLine", { rank: item.rank, maxRank: item.maxRank, pct })}</span>
-            </>
-          )}
-          {item.components.length > 0 && (
-            <span className="ms-card-parts">
-              {item.components.slice(0, 8).map((c, i) => (
-                <i key={`${c.uniqueName}-${i}`} data-part-state={c.owned ? "owned" : "missing"} title={`${sanitizeDisplayName(c.displayName || c.name) || "?"}: ${tr(c.owned ? "common.owned" : "common.missing")}`} />
-              ))}
-            </span>
-          )}
+            )}
+          </span>
+          <span className="ms-slot ms-slot--progress">
+            {missing ? (
+              <span className="ms-sub ms-sub--muted">{tr("mastery.notOwned")}</span>
+            ) : (
+              <>
+                <span className={`ui-meter ui-meter--${item.status === "mastered" ? "success" : "accent"}`} aria-hidden="true">
+                  <span style={{ width: `${Math.min(100, (item.rank / Math.max(item.maxRank, 1)) * 100)}%` }} />
+                </span>
+                <span className="ms-sub ms-sub--muted ms-card-rank" title={tr("mastery.rankLine", { rank: item.rank, maxRank: item.maxRank, pct })}>
+                  {item.rank}/{item.maxRank}
+                </span>
+              </>
+            )}
+          </span>
+          <span className="ms-slot ms-card-parts">
+            {item.components.slice(0, PART_DOTS).map((c, i) => (
+              <i key={`${c.uniqueName}-${i}`} data-part-state={c.owned ? "owned" : "missing"} title={partTitle(c)} />
+            ))}
+            {item.components.length > PART_DOTS && (
+              <b className="ms-card-more" title={item.components.slice(PART_DOTS).map(partTitle).join("\n")}>
+                +{item.components.length - PART_DOTS}
+              </b>
+            )}
+          </span>
         </span>
       </button>
       {item.status !== "mastered" && (
@@ -277,8 +293,6 @@ export default function MasteryView({ tr, locale }: Props) {
     };
     return [...rows].sort((a, b) => by[sort](a, b) || label(a).localeCompare(label(b)));
   }, [data, cat, status, query, sort]);
-  const { limit, more } = useBatch(`${cat}|${status}|${query}|${sort}`);
-  const shown = shownAll.slice(0, limit);
 
   const header = (
     <>
@@ -481,16 +495,20 @@ export default function MasteryView({ tr, locale }: Props) {
         <Tabs label={tr("common.category")} items={catTabs} active={cat} onSelect={setCat} />
       </div>
 
-      <div className="ms-grid" data-mastery-grid data-item-count={shownAll.length}>
+      <div data-mastery-grid data-item-count={shownAll.length}>
         {shownAll.length === 0 ? (
-          <Card className="col-span-full">
+          <Card>
             <EmptyState title={tr("mastery.noItemsMatch")} />
           </Card>
         ) : (
-          shown.map((item) => <MasteryCard key={item.uniqueName} item={item} tr={tr} locale={locale} shards={archon.bySuitType.get(item.uniqueName) ?? []} itemDb={itemDb} pinned={pins.includes(item.uniqueName)} />)
+          <VirtualCards
+            rows={shownAll}
+            gridClass="ms-grid"
+            kind="mastery"
+            render={(item) => <MasteryCard key={item.uniqueName} item={item} tr={tr} locale={locale} shards={archon.bySuitType.get(item.uniqueName) ?? []} itemDb={itemDb} pinned={pins.includes(item.uniqueName)} />}
+          />
         )}
       </div>
-      {shownAll.length > 0 && <ShowMore shown={shown.length} total={shownAll.length} onMore={more} tr={tr} />}
     </>
   );
 }

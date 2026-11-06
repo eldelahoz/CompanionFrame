@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../lib/i18n";
 import { getItemDatabase, resetMock, type ItemDatabase } from "../lib/ipc";
+import MasteryView from "./MasteryView";
 import RelicsView from "./RelicsView";
 
 const tr = translator("en");
@@ -71,4 +72,28 @@ test("Relics: the vaulted badge sits on the second line next to the owned count,
   expect(card.querySelector(".relic-row-name")?.textContent).toBe("Lith A1");
   expect(card.querySelector(".relic-row-name")?.getAttribute("title")).toBe("Lith A1");
   expect(card.querySelector(".relic-row-name")?.textContent).not.toContain(tr("common.vaulted"));
+});
+
+test("Mastery: a big item list keeps a window of cards in the DOM; scrolling swaps it", async () => {
+  history.pushState({}, "", "/?bigMastery=2000");
+  await expectWindowed(<MasteryView tr={tr} locale="en" />, "data-mastery-card", 100_000);
+});
+
+test("Mastery: components past the sixth collapse into a +N whose title lists them", async () => {
+  history.pushState({}, "", "/?bigMastery=40");
+  render(<MasteryView tr={tr} locale="en" />);
+  await waitFor(() => expect(document.querySelectorAll("[data-mastery-card]").length).toBeGreaterThan(0));
+  const search = (q: string) => fireEvent.change(screen.getByRole("searchbox"), { target: { value: q } });
+  search("Bulk Item 8");
+  await waitFor(() => expect(document.querySelector('[data-mastery-card="/Lotus/Mock/Bulk8"]')).toBeTruthy());
+  const card =document.querySelector('[data-mastery-card="/Lotus/Mock/Bulk8"]') as HTMLElement; // 8 parts
+  expect(card.querySelectorAll(".ms-card-parts i").length).toBe(6);
+  const more = card.querySelector(".ms-card-more") as HTMLElement;
+  expect(more.textContent).toBe("+2");
+  expect(more.title.split("\n")).toHaveLength(2);
+  // the progress slot carries the compact rank, or "Not owned" in the same slot
+  expect(card.querySelector(".ms-slot--progress")?.textContent).toBe(tr("mastery.notOwned"));
+  search("Bulk Item 6"); // exactly 6 parts: no +N
+  await waitFor(() => expect(document.querySelector('[data-mastery-card="/Lotus/Mock/Bulk6"]')).toBeTruthy());
+  expect(document.querySelector('[data-mastery-card="/Lotus/Mock/Bulk6"] .ms-card-more')).toBeNull();
 });
