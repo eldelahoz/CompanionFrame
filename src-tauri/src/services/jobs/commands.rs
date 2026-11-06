@@ -57,8 +57,11 @@ pub async fn write_order(
             .await?
         }
         JobKind::OrdersDelete => {
-            let ack = orders::delete(client, &item.id).await?;
-            cache.remove(&ack.id, emit);
+            // 404: the order is already gone (an earlier run's delete landed), which is the goal.
+            match orders::delete(client, &item.id).await {
+                Ok(_) | Err(WfmError::Api { status: 404, .. }) => cache.remove(&item.id, emit),
+                Err(e) => return Err(e),
+            }
             return Ok(());
         }
         JobKind::Workbench | JobKind::PricesRefresh => {
@@ -400,12 +403,18 @@ mod tests {
             .collect();
         assert_eq!(ids, [A]);
 
-        // A failure announces nothing and leaves the copy alone.
+        // Already deleted (404) counts as done and leaves the copy without it.
+        write_order(&c, &cache, emit, &JobKind::OrdersDelete, &job_item(A, None))
+            .await
+            .unwrap();
+        assert!(seen.borrow().last().unwrap().sell.is_empty());
+
+        // Any other failure announces nothing.
         let before = seen.borrow().len();
         let e = write_order(&c, &cache, emit, &JobKind::OrdersDelete, &job_item(A, None))
             .await
             .unwrap_err();
-        assert!(matches!(e, WfmError::Api { status: 404, .. }));
+        assert!(matches!(e, WfmError::Api { status: 599, .. }));
         assert_eq!(seen.borrow().len(), before);
         let reqs = m.requests();
         assert!(
