@@ -1,4 +1,3 @@
-import { isIpcError } from "../ipcGuards";
 import {
   DEFAULT_DAMPING_RULE,
   suggestPrice,
@@ -102,67 +101,4 @@ export function repriceTotals(rows: readonly RepriceRow[]): RepriceTotals {
     platinumDelta += next - row.currentPrice;
   }
   return { rows: rows.length, sending: sending.length, raised, lowered, platinumDelta };
-}
-
-interface RepriceRunResult {
-  applied: Array<{ id: string; platinum: number }>;
-  failed: string[];
-  cancelled: boolean;
-  stopReason: "auth" | null;
-}
-
-interface RepriceRunOptions {
-  updateOrder: (row: RepriceRow, platinum: number) => Promise<unknown>;
-  isCancelled?: () => boolean;
-  /** Main signs the session out on a 401, the one failure that repeats for every row. */
-  isSignedOut?: () => Promise<boolean>;
-  onProgress?: (applied: number, failed: readonly string[]) => void;
-}
-
-async function sessionLost(options: RepriceRunOptions): Promise<boolean> {
-  if (!options.isSignedOut) return false;
-  try {
-    return await options.isSignedOut();
-  } catch {
-    return false;
-  }
-}
-
-/** True when the row did not go out; PATCH is not replayable, so it is never retried. */
-async function sendRow(
-  row: RepriceRow,
-  platinum: number,
-  options: RepriceRunOptions,
-): Promise<boolean> {
-  try {
-    return isIpcError(await options.updateOrder(row, platinum));
-  } catch {
-    return true;
-  }
-}
-
-export async function runReprice(
-  rows: readonly RepriceRow[],
-  options: RepriceRunOptions,
-): Promise<RepriceRunResult> {
-  const result: RepriceRunResult = { applied: [], failed: [], cancelled: false, stopReason: null };
-  for (const row of rows) {
-    if (options.isCancelled?.()) {
-      result.cancelled = true;
-      break;
-    }
-    const platinum = row.nextPrice;
-    if (platinum === null) continue;
-
-    const failed = await sendRow(row, platinum, options);
-    if (failed) result.failed.push(row.label);
-    else result.applied.push({ id: row.order.id, platinum });
-    options.onProgress?.(result.applied.length, result.failed);
-
-    if (failed && (await sessionLost(options))) {
-      result.stopReason = "auth";
-      break;
-    }
-  }
-  return result;
 }

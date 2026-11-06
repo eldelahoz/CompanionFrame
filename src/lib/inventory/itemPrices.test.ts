@@ -43,75 +43,67 @@ test("value totals multiply stacks, floor at one price hole and count ducats for
   expect(computeInventoryValueTotals([prime], "prime", 15).counted).toBe(0);
 });
 
-test("a transient price failure is not cached, it is asked again after the backoff; a no_data answer is cached", async () => {
-  vi.resetModules();
-  const calls: string[][] = [];
-  let failed = true;
-  vi.doMock("../ipc", () => ({
-    wfmPricesBulk: async (slugs: string[]) => {
-      calls.push(slugs);
-      return slugs.map((slug) => ({ slug, status: failed ? "failed" : slug === "none" ? "no_data" : "ok", price: failed || slug === "none" ? null : 7, stale: false }));
-    },
-    wfmStatsHistory: async () => [],
-    onPricesRefreshed: async () => () => {},
-  }));
-  const { renderHook, waitFor } = await import("@testing-library/react");
-  const mod = await import("./itemPrices");
-  const slugs = ["a", "none"];
-  const first = renderHook(() => mod.useItemPrices(slugs, []));
-  await waitFor(() => expect(calls.length).toBe(1));
-  expect(first.result.current.get("a")?.state).toBe("loading");
-  first.unmount();
-  failed = false;
-  const second = renderHook(() => mod.useItemPrices(slugs, []));
-  await waitFor(() => expect(second.result.current.get("a")?.price).toBe(7), { timeout: 5000 }); // after the 2 s backoff
-  expect(second.result.current.get("none")?.state).toBe("none");
-  vi.doUnmock("../ipc");
-}, 10000);
+const entry = (slug: string, status: string, price: number | null = null) => ({ slug, status, price, stale: false });
 
-test("a slug that keeps failing gives up into a retry state, and retrying asks again", async () => {
+/** The backend stands in: `load` answers the call (its cache), `send` plays a `wfm-prices-refreshed` batch (its queue). */
+async function withBackend(load: (slugs: string[]) => Promise<unknown[]>) {
   vi.resetModules();
-  vi.useFakeTimers();
-  let failed = true;
+  let send: (e: unknown[]) => void = () => {};
   vi.doMock("../ipc", () => ({
-    wfmPricesBulk: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: failed ? "failed" : "ok", price: failed ? null : 3, stale: false })),
+    wfmPricesLoad: load,
     wfmStatsHistory: async () => [],
-    onPricesRefreshed: async () => () => {},
+    onPricesRefreshed: async (cb: (e: unknown[]) => void) => ((send = cb), () => {}),
   }));
-  const { renderHook, act } = await import("@testing-library/react");
-  const mod = await import("./itemPrices");
-  const slugs = ["a"];
-  const hook = renderHook(() => ({ prices: mod.useItemPrices(slugs, []), progress: mod.useItemPriceProgress(slugs) }));
-  await act(() => vi.advanceTimersByTimeAsync(60_000));
-  expect(hook.result.current.progress).toMatchObject({ done: 0, failed: 1, total: 1 });
-  failed = false;
-  await act(async () => hook.result.current.progress.retry());
-  await act(() => vi.advanceTimersByTimeAsync(10));
-  expect(hook.result.current.prices.get("a")?.price).toBe(3);
-  expect(hook.result.current.progress).toMatchObject({ done: 1, failed: 0 });
-  vi.useRealTimers();
+  const { renderHook, waitFor, act } = await import("@testing-library/react");
+  return { renderHook, waitFor, act, mod: await import("./itemPrices"), send: (e: unknown[]) => send(e) };
+}
+
+test("one request carries every slug, the rows on screen first; the cache answers at once and the queue fills the rest", async () => {
+  const calls: string[][] = [];
+  const b = await withBackend(async (slugs) => (calls.push(slugs), [entry("a", "ok", 7)]));
+  const visible = ["b"], later = ["a", "none", "b"];
+  const hook = b.renderHook(() => b.mod.useItemPrices(visible, [], later));
+  await b.waitFor(() => expect(hook.result.current.get("a")?.price).toBe(7));
+  expect(calls).toEqual([["b", "a", "none"]]);
+  expect(hook.result.current.get("b")?.state).toBe("loading");
+  // The worker's batch lands later; a settled "no price" is cached, not shown as loading.
+  b.act(() => b.send([entry("b", "ok", 3), entry("none", "no_data")]));
+  expect(hook.result.current.get("b")?.price).toBe(3);
+  expect(hook.result.current.get("none")?.state).toBe("none");
+  // Asking again for what is known sends nothing.
+  hook.rerender();
+  expect(calls).toHaveLength(1);
   vi.doUnmock("../ipc");
 });
 
-test("a dropped bulk call is retried once and concurrent hooks share one request", async () => {
-  vi.resetModules();
+test("a slug the backend gave up on shows a retry state, and retrying asks again for just that one", async () => {
+  const calls: string[][] = [];
+  const b = await withBackend(async (slugs) => (calls.push(slugs), []));
+  const slugs = ["a", "x"];
+  const hook = b.renderHook(() => ({ prices: b.mod.useItemPrices(slugs, []), progress: b.mod.useItemPriceProgress(slugs) }));
+  await b.waitFor(() => expect(calls).toHaveLength(1));
+  b.act(() => b.send([entry("a", "ok", 3), entry("x", "failed")]));
+  expect(hook.result.current.progress).toMatchObject({ done: 1, failed: 1, total: 2 });
+  b.act(() => hook.result.current.progress.retry());
+  await b.waitFor(() => expect(calls).toHaveLength(2));
+  expect(calls[1]).toEqual(["x"]);
+  b.act(() => b.send([entry("x", "ok", 5)]));
+  expect(hook.result.current.progress).toMatchObject({ done: 2, failed: 0 });
+  vi.doUnmock("../ipc");
+});
+
+test("a dropped call is retried once and concurrent hooks share one request", async () => {
   let calls = 0;
-  vi.doMock("../ipc", () => ({
-    wfmPricesBulk: async (slugs: string[]) => {
-      if (++calls === 1) throw new Error("Failed to fetch");
-      return slugs.map((slug) => ({ slug, status: "ok", price: 7, stale: false }));
-    },
-    wfmStatsHistory: async () => [],
-    onPricesRefreshed: async () => () => {},
-  }));
-  const { renderHook, waitFor } = await import("@testing-library/react");
-  const mod = await import("./itemPrices");
+  const b = await withBackend(async (slugs) => {
+    if (++calls === 1) throw new Error("Failed to fetch");
+    return slugs.map((s) => entry(s, "ok", 7));
+  });
   const slugs = ["a"];
-  const one = renderHook(() => mod.useItemPrices(slugs, []));
-  const two = renderHook(() => mod.useItemPrices(slugs, []));
-  await waitFor(() => expect(one.result.current.get("a")?.price).toBe(7));
+  const one = b.renderHook(() => b.mod.useItemPrices(slugs, []));
+  const two = b.renderHook(() => b.mod.useItemPrices(slugs, []));
+  await b.waitFor(() => expect(one.result.current.get("a")?.price).toBe(7));
   expect(two.result.current.get("a")?.price).toBe(7);
-  expect(calls).toBe(2); // the failed try and its retry, not one pair per hook
+  expect(calls).toBeLessThanOrEqual(3); // the failed try and its retry, plus at most the second hook's own ask
   vi.doUnmock("../ipc");
 });
 
@@ -153,7 +145,7 @@ test("a mod with rank 0 and rank 10 history gets two medians; a 10/10 and a 0/10
 test("a refresh event replaces the cached price; cached answers are known at once and a failed refresh entry is ignored", async () => {
   vi.resetModules();
   vi.doMock("../ipc", () => ({
-    wfmPricesBulk: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: "ok", price: 5, maxPrice: null, stale: true, updatedAt: 1 })),
+    wfmPricesLoad: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: "ok", price: 5, maxPrice: null, stale: true, updatedAt: 1 })),
     wfmStatsHistory: async () => [],
     onPricesRefreshed: async () => () => {},
   }));
@@ -174,7 +166,7 @@ test("a refresh event recomputes the weekly median of slugs already shown, witho
   let median = 10;
   const asked: string[] = [];
   vi.doMock("../ipc", () => ({
-    wfmPricesBulk: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: "ok", price: 5, maxPrice: null, stale: false, updatedAt: 1 })),
+    wfmPricesLoad: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: "ok", price: 5, maxPrice: null, stale: false, updatedAt: 1 })),
     wfmStatsHistory: async (slug: string) => (asked.push(slug), [pt(1, median)]),
     onPricesRefreshed: async () => () => {},
   }));

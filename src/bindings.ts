@@ -79,6 +79,12 @@ export const commands = {
 	wfmPrice: (slug: string) => typedError<PriceEntry_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_price", { slug })),
 	/**  Prices for many slugs (the inventory view). A slug that fails comes back `failed`, not as an error. */
 	wfmPricesBulk: (slugs: string[]) => typedError<PriceEntry_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_prices_bulk", { slugs })),
+	/**
+	 *  The whole inventory's prices in one request: the cached ones come back at once, the rest are fetched or
+	 *  refreshed by the one worker (background priority, this call's slugs ahead of what was already queued) and
+	 *  arrive as `wfm-prices-refreshed` batches, `failed` entries included. Progress is the `PricesLoad` job.
+	 */
+	wfmPricesLoad: (slugs: string[]) => typedError<PriceEntry_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_prices_load", { slugs })),
 	wfmStatsHistory: (slug: string) => typedError<MarketStatPoint_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_stats_history", { slug })),
 	wfmPresenceGet: () => typedError<PresenceState_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_presence_get")),
 	wfmPresenceSet: (status: Status) => typedError<PresenceState_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_presence_set", { status })),
@@ -93,15 +99,12 @@ export const commands = {
 	wfmOrdersMyCached: () => typedError<CachedOrders_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_my_cached")),
 	/**  The Refresh button: always asks WFM. */
 	wfmOrdersRefresh: () => typedError<MyOrders_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_refresh")),
-	/**  A bulk run started (`true`) or ended (`false`): the poll waits meanwhile. */
-	wfmOrdersHold: (hold: boolean) => __TAURI_INVOKE<void>("wfm_orders_hold", { hold }),
 	/**  Hides or shows all sell (or all buy) orders in one request, then refreshes the copy. */
 	wfmOrdersSetAllVisible: (orderType: string, visible: boolean) => typedError<number, WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_set_all_visible", { orderType, visible })),
 	wfmOrderCreate: (order: CreateOrder_Deserialize) => typedError<MyOrder_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_create", { order })),
 	wfmOrderUpdate: (orderId: string, updates: OrderUpdates_Deserialize) => typedError<MyOrder_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_update", { orderId, updates })),
 	wfmOrderDelete: (orderId: string) => typedError<OrderAck, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_delete", { orderId })),
 	wfmOrderClose: (orderId: string, quantity: number, perTrade: number | null) => typedError<OrderAck, WfmError_Serialize>(__TAURI_INVOKE("wfm_order_close", { orderId, quantity, perTrade })),
-	wfmOrdersSetVisible: (orderIds: string[], visible: boolean) => typedError<VisibilityResult_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_set_visible", { orderIds, visible })),
 	wfmOrdersItem: (slug: string, top: boolean, rank: number | null, subtype: string | null) => typedError<BookOrder_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_orders_item", { slug, top, rank, subtype })),
 	notifGetState: () => __TAURI_INVOKE<ChannelState>("notif_get_state"),
 	notifSetWebhook: (channel: WebhookChannel, url: string) => typedError<ChannelState, WebhookUrlError>(__TAURI_INVOKE("notif_set_webhook", { channel, url })),
@@ -172,6 +175,18 @@ export const commands = {
 	wfmRivenAuctionClose: (auctionId: string) => typedError<null, WfmError_Serialize>(__TAURI_INVOKE("wfm_riven_auction_close", { auctionId })),
 	wfmSendPlusRep: (username: string) => typedError<SendRepResult, WfmError_Serialize>(__TAURI_INVOKE("wfm_send_plus_rep", { username })),
 	wfmMyReputation: () => typedError<number | null, WfmError_Serialize>(__TAURI_INVOKE("wfm_my_reputation")),
+	jobsStartOrdersVisibility: (ids: string[], visible: boolean) => typedError<string, string>(__TAURI_INVOKE("jobs_start_orders_visibility", { ids, visible })),
+	jobsStartOrdersDelete: (ids: string[]) => typedError<string, string>(__TAURI_INVOKE("jobs_start_orders_delete", { ids })),
+	jobsStartReprice: (items: RepriceItem[]) => typedError<string, string>(__TAURI_INVOKE("jobs_start_reprice", { items })),
+	/**  Reads the order book of each item, one at a time, in the background. Read only. */
+	jobsStartMarketLoad: (rows: MarketRow[]) => typedError<string, string>(__TAURI_INVOKE("jobs_start_market_load", { rows })),
+	/**  The books already loaded among `slugs` (fresh ones only). */
+	jobsMarketBooks: (slugs: string[]) => __TAURI_INVOKE<MarketBook_Serialize[]>("jobs_market_books", { slugs }),
+	jobsStop: (id: string) => typedError<null, string>(__TAURI_INVOKE("jobs_stop", { id })),
+	jobsRetryFailed: (id: string) => typedError<string, string>(__TAURI_INVOKE("jobs_retry_failed", { id })),
+	jobsContinue: (id: string) => typedError<string, string>(__TAURI_INVOKE("jobs_continue", { id })),
+	jobsDismiss: (id: string) => typedError<null, string>(__TAURI_INVOKE("jobs_dismiss", { id })),
+	jobsList: () => __TAURI_INVOKE<Job_Serialize[]>("jobs_list"),
 	workbenchGetState: () => __TAURI_INVOKE<WorkbenchState_Serialize>("workbench_get_state"),
 	workbenchPreviewPlan: (plan: WorkbenchPlan_Deserialize, safety: WorkbenchSafetySnapshot) => typedError<WorkbenchPlanValidation_Serialize, string>(__TAURI_INVOKE("workbench_preview_plan", { plan, safety })),
 	workbenchExecutePlan: (plan: WorkbenchPlan_Deserialize, safety: WorkbenchSafetySnapshot) => __TAURI_INVOKE<WorkbenchExecuteResult_Serialize>("workbench_execute_plan", { plan, safety }),
@@ -1494,6 +1509,22 @@ export type ItemDbEntry_Serialize = {
 	reusableBlueprint?: boolean,
 };
 
+export type ItemStatus = "pending" | "running" | "done" | "failed" | "skipped";
+
+export type ItemUpdate = ItemUpdate_Serialize | ItemUpdate_Deserialize;
+
+export type ItemUpdate_Deserialize = {
+	id: string,
+	status: ItemStatus,
+	reason?: string | null,
+};
+
+export type ItemUpdate_Serialize = {
+	id: string,
+	status: ItemStatus,
+	reason: string | null,
+};
+
 export type Item_Deserialize = {
 	id: string,
 	slug: string,
@@ -1544,6 +1575,110 @@ export type Item_Serialize = {
 	tradingTax: number | null,
 	tradable: boolean | null,
 	i18n: { [key in string]: I18n_Serialize },
+};
+
+export type Job = Job_Serialize | Job_Deserialize;
+
+export type JobItem = JobItem_Serialize | JobItem_Deserialize;
+
+export type JobItem_Deserialize = {
+	/**  The order id. */
+	id: string,
+	name: string,
+	/**  The new price of a `Reprice` item. */
+	platinum?: number | null,
+	status: ItemStatus,
+	/**  Why a failed item failed. */
+	reason?: string | null,
+};
+
+export type JobItem_Serialize = {
+	/**  The order id. */
+	id: string,
+	name: string,
+	/**  The new price of a `Reprice` item. */
+	platinum: number | null,
+	status: ItemStatus,
+	/**  Why a failed item failed. */
+	reason: string | null,
+};
+
+export type JobKind = { type: "ordersVisibility"; visible: boolean } | { type: "ordersDelete" } | { type: "reprice" } | 
+/**  Mirror of the workbench run; its engine stays in charge. */
+{ type: "workbench" } | 
+/**  Mirror of the price refresh worker: progress only. */
+{ type: "pricesLoad" } | 
+/**  Reads the order book of each item (read only, no write to warframe.market); item id = slug. */
+{ type: "marketLoad" };
+
+export type JobState = "running" | 
+/**  Stop asked: the item in flight finishes, none starts. */
+"stopping" | 
+/**  No connection: paused on the item that hit the wall, retried by itself until the network is back. */
+"offline" | "done" | 
+/**  The app closed mid-run (or the session died): the pending items wait for the user. */
+"interrupted";
+
+/**
+ *  What changed, small: the counts, the state and at most one item. `job` rides along only when the job
+ *  is new, so the UI learns its items once.
+ */
+export type JobUpdate = JobUpdate_Serialize | JobUpdate_Deserialize;
+
+/**
+ *  What changed, small: the counts, the state and at most one item. `job` rides along only when the job
+ *  is new, so the UI learns its items once.
+ */
+export type JobUpdate_Deserialize = {
+	id: string,
+	state: JobState,
+	total: number,
+	done: number,
+	failed: number,
+	item?: ItemUpdate_Deserialize | null,
+	job?: Job_Deserialize | null,
+};
+
+/**
+ *  What changed, small: the counts, the state and at most one item. `job` rides along only when the job
+ *  is new, so the UI learns its items once.
+ */
+export type JobUpdate_Serialize = {
+	id: string,
+	state: JobState,
+	total: number,
+	done: number,
+	failed: number,
+	item: ItemUpdate_Serialize | null,
+	job: Job_Serialize | null,
+};
+
+export type Job_Deserialize = {
+	id: string,
+	kind: JobKind,
+	state: JobState,
+	total: number,
+	/**  Items that went through. */
+	done: number,
+	failed: number,
+	/**  Empty for the price refresh, which has no per-item story. */
+	items: JobItem_Deserialize[],
+	createdAt: number | null,
+	finishedAt?: number | null,
+};
+
+export type Job_Serialize = {
+	id: string,
+	kind: JobKind,
+	state: JobState,
+	total: number,
+	/**  Items that went through. */
+	done: number,
+	failed: number,
+	/**  Empty for the price refresh, which has no per-item story. */
+	items: JobItem_Serialize[],
+	createdAt: number | null,
+	finishedAt: number | null,
 };
 
 export type LedgerBatch = LedgerBatch_Serialize | LedgerBatch_Deserialize;
@@ -1838,7 +1973,24 @@ export type MarketAlertTestFire = {
 	detail: string,
 };
 
+export type MarketBook = MarketBook_Serialize | MarketBook_Deserialize;
+
+export type MarketBook_Deserialize = {
+	slug: string,
+	orders: BookOrder_Deserialize[],
+};
+
+export type MarketBook_Serialize = {
+	slug: string,
+	orders: BookOrder_Serialize[],
+};
+
 export type MarketOrderSide = "sell" | "buy";
+
+export type MarketRow = {
+	slug: string,
+	name: string,
+};
 
 /**  One closed-sales day of warframe.market statistics, as the Browse chart plots it. */
 export type MarketStatPoint = MarketStatPoint_Serialize | MarketStatPoint_Deserialize;
@@ -2866,6 +3018,11 @@ export type RelicReward_Serialize = {
 	urlName: string | null,
 	wfmId: string | null,
 	ducats: number | null,
+};
+
+export type RepriceItem = {
+	id: string,
+	platinum: number,
 };
 
 export type RewardFailure = 
@@ -4076,20 +4233,6 @@ export type VeiledRivenGroup = {
 };
 
 export type VerdictKind = "keep" | "take" | "close";
-
-export type VisibilityResult = VisibilityResult_Serialize | VisibilityResult_Deserialize;
-
-export type VisibilityResult_Deserialize = {
-	id: string,
-	order?: MyOrder_Deserialize | null,
-	error?: string | null,
-};
-
-export type VisibilityResult_Serialize = {
-	id: string,
-	order: MyOrder_Serialize | null,
-	error: string | null,
-};
 
 export type WebhookChannel = "discord" | "generic";
 

@@ -352,69 +352,6 @@ export function rowsNeedingMarketData(rows: readonly WorkbenchQueueRow[]): Workb
   return rows.filter((row) => row.selected && !row.sellBook);
 }
 
-interface QueueMarketBook {
-  sell: readonly PricingListing[] | null;
-  buy: readonly PricingListing[] | null;
-}
-
-interface MarketLoadRow {
-  rowId: string;
-}
-
-interface QueueMarketLoadOptions<T extends MarketLoadRow> {
-  fetchBook: (row: T) => Promise<QueueMarketBook | null>;
-  onRow: (row: T, book: QueueMarketBook | null) => void;
-  minIntervalMs?: number;
-  isCancelled?: () => boolean;
-  sleep?: (ms: number) => Promise<void>;
-  now?: () => number;
-}
-
-interface QueueMarketLoadSummary {
-  loaded: number;
-  failedRowIds: string[];
-  cancelled: boolean;
-}
-
-/** warframe.market budgets per IP at roughly 2.5 requests/second. */
-const MARKET_LOAD_INTERVAL_MS = 400;
-
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-export async function loadQueueMarketData<T extends MarketLoadRow>(
-  targets: readonly T[],
-  options: QueueMarketLoadOptions<T>,
-): Promise<QueueMarketLoadSummary> {
-  const interval = options.minIntervalMs ?? MARKET_LOAD_INTERVAL_MS;
-  const now = options.now ?? Date.now;
-  const wait = options.sleep ?? defaultSleep;
-  const summary: QueueMarketLoadSummary = { loaded: 0, failedRowIds: [], cancelled: false };
-  let lastStartedAt: number | null = null;
-
-  for (const target of targets) {
-    if (options.isCancelled?.()) {
-      summary.cancelled = true;
-      break;
-    }
-    if (lastStartedAt != null) {
-      const elapsed = now() - lastStartedAt;
-      if (elapsed < interval) await wait(interval - elapsed);
-      if (options.isCancelled?.()) {
-        summary.cancelled = true;
-        break;
-      }
-    }
-    lastStartedAt = now();
-    const book = await options.fetchBook(target);
-    if (book?.sell) summary.loaded += 1;
-    else summary.failedRowIds.push(target.rowId);
-    options.onRow(target, book);
-  }
-  return summary;
-}
-
 export function applyStrategy(
   row: WorkbenchQueueRow,
   config: StrategyConfig,

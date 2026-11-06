@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Translator } from "../../lib/i18n";
-import { wfmOrderUpdate, wfmSessionStatus, type MyOrder } from "../../lib/ipc";
-import { buildRepriceRows, priceRepriceRow, repriceRowsToSend, repriceTotals, runReprice, type RepriceRow, type RepriceSkipReason } from "../../lib/market/repriceOrders";
+import { jobsStartReprice, type MyOrder } from "../../lib/ipc";
+import { addToast } from "../../stores/toasts";
+import { buildRepriceRows, priceRepriceRow, repriceRowsToSend, repriceTotals, type RepriceRow, type RepriceSkipReason } from "../../lib/market/repriceOrders";
 import { workbenchMedianLoader } from "../../lib/tradeWorkbench/medianReference";
 import { DEFAULT_DAMPING_RULE, isMedianStrategy, type StrategyConfig, type WorkbenchStrategyId } from "../../lib/tradeWorkbench/pricingStrategies";
 import { fetchItemOrderBookBySlug } from "../../lib/wfm/orderBook";
@@ -24,12 +25,10 @@ interface Props {
   orders: readonly MyOrder[];
   ownUserName: string | null;
   onClose: () => void;
-  /** Called when at least one price went out, so the list refetches. */
-  onApplied?: () => void;
   tr: Translator;
 }
 
-export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApplied, tr }: Props) {
+export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }: Props) {
   const [rows, setRows] = useState<RepriceRow[]>(() => buildRepriceRows(orders));
   const [strategyId, setStrategyId] = useState<StrategyId>("cheapest-minus-one");
   const [percent, setPercent] = useState(-1);
@@ -37,9 +36,7 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApp
   // Bumped when median references land: the loader keeps them outside React state.
   const [medianRev, setMedianRev] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
-  const [progress, setProgress] = useState<{ phase: "loading" | "applying"; done: number; total: number } | null>(null);
-  const [failed, setFailed] = useState<string[]>([]);
-  const [stopped, setStopped] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const cancelled = useRef(false);
   // reset on mount: StrictMode runs the cleanup once before the real mount
   useEffect(() => {
@@ -74,39 +71,29 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApp
   const loadBooks = async () => {
     const pending = rows.filter((r) => r.selected && r.sellBook === null);
     if (busy || pending.length === 0) return;
-    setProgress({ phase: "loading", done: 0, total: pending.length });
+    setProgress({ done: 0, total: pending.length });
     let done = 0;
     for (const row of pending) {
       if (cancelled.current) return;
       const res = await fetchItemOrderBookBySlug(row.slug, { rank: row.rank, subtype: row.subtype });
       const book = res.status === "ok" ? res.data.sell : null;
       setRows((rs) => rs.map((r) => (r.rowId === row.rowId ? { ...r, sellBook: book } : r)));
-      setProgress({ phase: "loading", done: ++done, total: pending.length });
+      setProgress({ done: ++done, total: pending.length });
     }
     setProgress(null);
   };
 
+  // The backend runs the prices one by one; progress, Stop and Retry live in the jobs pill.
   const apply = async () => {
     const sending = repriceRowsToSend(priced);
     if (busy || sending.length === 0) return;
-    setFailed([]);
-    setStopped(false);
-    setProgress({ phase: "applying", done: 0, total: sending.length });
-    const result = await runReprice(sending, {
-      updateOrder: (row, platinum) => wfmOrderUpdate(row.order.id, { platinum } as never),
-      isCancelled: () => cancelled.current,
-      isSignedOut: async () => !(await wfmSessionStatus()).logged_in,
-      onProgress: (applied, bad) => setProgress({ phase: "applying", done: applied + bad.length, total: sending.length }),
-    });
-    // closed mid-run: the orders already sent still changed, so the table must refresh
-    if (cancelled.current) return void (result.applied.length > 0 && onApplied?.());
-    setProgress(null);
-    setFailed(result.failed);
-    setStopped(result.stopReason === "auth");
-    if (result.applied.length > 0) onApplied?.();
-    // applied rows now sit at their new price; drop them from the preview
-    const done = new Set(result.applied.map((a) => a.id));
-    setRows((rs) => rs.filter((r) => !done.has(r.rowId)));
+    try {
+      await jobsStartReprice(sending.map((r) => ({ id: r.order.id, platinum: r.nextPrice! })));
+      addToast({ level: "success", message: tr("market.reprice.started", { count: sending.length }) });
+      onClose();
+    } catch (e) {
+      addToast({ level: "error", message: (e as Error).message });
+    }
   };
 
   const range = useRangeSelect(shown.map((r) => r.rowId));
@@ -198,17 +185,7 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, onApp
         </div>
         {progress && (
           <p className="mb-0 mt-2 text-sm text-text-secondary" role="status">
-            {tr(progress.phase === "loading" ? "market.reprice.loading" : "market.reprice.applying", { done: progress.done, total: progress.total })}
-          </p>
-        )}
-        {failed.length > 0 && (
-          <p className="mb-0 mt-2 text-sm text-danger" role="alert" title={failed.join(", ")}>
-            {tr("market.reprice.failed", { count: failed.length })}
-          </p>
-        )}
-        {stopped && (
-          <p className="mb-0 mt-2 text-sm text-warning" role="alert">
-            {tr("market.reprice.stoppedAuth")}
+            {tr("market.reprice.loading", { done: progress.done, total: progress.total })}
           </p>
         )}
         <div className="mt-3 flex items-center justify-end gap-2">

@@ -134,8 +134,8 @@ test("an incomplete set shows its set price and the sum of its missing parts, ea
 test("set and missing-part slugs are asked through the price queue", async () => {
   localStorage.setItem("wf_inventory_incomplete_sets", "1");
   const asked: string[] = [];
-  const real = ipc.wfmPricesBulk;
-  vi.spyOn(ipc, "wfmPricesBulk").mockImplementation((slugs) => (asked.push(...slugs), real(slugs)));
+  const real = ipc.wfmPricesLoad;
+  vi.spyOn(ipc, "wfmPricesLoad").mockImplementation((slugs) => (asked.push(...slugs), real(slugs)));
   await openSets();
   await waitFor(() => expect(asked).toContain("rhino_prime_systems"));
   expect(asked).toContain("rhino_prime_set");

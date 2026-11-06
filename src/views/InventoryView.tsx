@@ -474,18 +474,12 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
         />
       )}
 
-      {listed && progress.total > 0 && progress.done < progress.total && (
+      {listed && progress.failed > 0 && (
         <div className="inv-pricing" role="status" data-inventory-pricing>
-          {progress.failed > 0 ? (
-            <>
-              <span>{tr("inventory.pricingFailed", { count: progress.failed })}</span>
-              <Button size="sm" data-inventory-pricing-retry onClick={progress.retry}>
-                {tr("inventory.pricingRetry")}
-              </Button>
-            </>
-          ) : (
-            <span>{tr("inventory.pricing", { done: progress.done, total: progress.total })}</span>
-          )}
+          <span>{tr("inventory.pricingFailed", { count: progress.failed })}</span>
+          <Button size="sm" data-inventory-pricing-retry onClick={progress.retry}>
+            {tr("inventory.pricingRetry")}
+          </Button>
         </div>
       )}
 
