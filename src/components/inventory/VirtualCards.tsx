@@ -6,7 +6,7 @@ import { useVirtualRows, type RowKind } from "./useVirtualRows";
  * `gridClass` resolves `auto-fill` for the current width), so the breakpoints live in one place. Every card of a grid has
  * the same height in CSS; `kind` names it so the last measured row size is remembered per grid.
  */
-export default function VirtualCards<T>({ rows, render, gridClass = "inv-grid", kind = "cards" }: { rows: readonly T[]; render: (row: T) => ReactNode; gridClass?: string; kind?: RowKind }) {
+export default function VirtualCards<T>({ rows, render, gridClass = "inv-grid", kind = "cards" }: { rows: readonly T[]; render: (row: T, index: number) => ReactNode; gridClass?: string; kind?: RowKind }) {
   const box = useRef<HTMLDivElement>(null);
   const probe = useRef<HTMLDivElement>(null);
   const [grid, setGrid] = useState({ cols: 4, gap: 12 });
@@ -37,7 +37,7 @@ export default function VirtualCards<T>({ rows, render, gridClass = "inv-grid", 
           className={`${gridClass} inv-virtual-row`}
           style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, transform: `translateY(${it.start - v.options.scrollMargin}px)` }}
         >
-          {rows.slice(it.index * grid.cols, (it.index + 1) * grid.cols).map(render)}
+          {rows.slice(it.index * grid.cols, (it.index + 1) * grid.cols).map((row, n) => render(row, it.index * grid.cols + n))}
         </div>
       ))}
     </div>

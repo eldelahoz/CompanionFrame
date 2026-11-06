@@ -3,6 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../lib/i18n";
 import { getItemDatabase, resetMock, type ItemDatabase } from "../lib/ipc";
+import IngredientChips, { type Chip } from "../components/foundry/IngredientChips";
+import FoundryView from "./FoundryView";
 import MasteryView from "./MasteryView";
 import RelicsView from "./RelicsView";
 
@@ -96,4 +98,32 @@ test("Mastery: components past the sixth collapse into a +N whose title lists th
   search("Bulk Item 6"); // exactly 6 parts: no +N
   await waitFor(() => expect(document.querySelector('[data-mastery-card="/Lotus/Mock/Bulk6"]')).toBeTruthy());
   expect(document.querySelector('[data-mastery-card="/Lotus/Mock/Bulk6"] .ms-card-more')).toBeNull();
+});
+
+test("Foundry: a 2.6k blueprint inventory keeps a window of cards in the DOM; scrolling swaps it", async () => {
+  history.pushState({}, "", "/?bigFoundry=2617");
+  await expectWindowed(<FoundryView items={items} tr={tr} />, "data-foundry-card", 100_000);
+});
+
+const chip = (i: number): Chip => ({ key: `k${i}`, uniqueName: `/Lotus/Chip${i}`, name: `Part ${i}`, image: null, have: i, need: 5, state: i % 3 === 0 ? "owned" : i % 3 === 1 ? "blueprint" : "missing" });
+
+test("Foundry: ingredient chips that do not fit the card turn the last slot into +N, listing the hidden ones in its title", () => {
+  // 16 px rem: a chip is 56 px and the gap 6 px, so 304 px holds 5 slots
+  const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(304);
+  try {
+    const six = render(<IngredientChips chips={[0, 1, 2, 3, 4, 5].map(chip)} tr={tr} />);
+    expect(six.container.querySelectorAll("[data-ingredient]").length).toBe(4);
+    const more = six.container.querySelector("[data-ingredients-more]") as HTMLElement;
+    expect(more.textContent).toBe("+2");
+    expect(more.title).toBe(`Part 4: ${tr("common.blueprintOwnedNotBuilt")}\nPart 5: ${tr("common.missing")}`);
+    six.unmount();
+    const five = render(<IngredientChips chips={[0, 1, 2, 3, 4].map(chip)} tr={tr} />);
+    expect(five.container.querySelectorAll("[data-ingredient]").length).toBe(5);
+    expect(five.container.querySelector("[data-ingredients-more]")).toBeNull();
+    // every chip names its ingredient and its state outside the colour of its border
+    expect(five.container.querySelector('[data-ingredient="/Lotus/Chip1"]')?.getAttribute("title")).toBe(`Part 1: ${tr("common.blueprintOwnedNotBuilt")}`);
+    expect(five.container.querySelector('[data-ingredient="/Lotus/Chip2"] svg[aria-label]')?.getAttribute("aria-label")).toBe(tr("common.missing"));
+  } finally {
+    width.mockRestore();
+  }
 });

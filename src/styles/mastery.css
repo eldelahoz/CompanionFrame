@@ -641,6 +641,7 @@
   }
   .fd-card {
     position: relative;
+    height: 13.5rem;
   }
   .fd-card-main {
     display: flex;
@@ -678,31 +679,76 @@
   .fd-card-head > .ms-thumb {
     flex-shrink: 0;
   }
-  .fd-ingredients {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-2) var(--space-4);
+  .fd-card-head .ms-name {
+    flex-wrap: nowrap;
   }
-  .fd-ingredient {
+  /* Fixed slots, so every card has the same height (the grid is virtualized) and the heads, chips and feet line up. */
+  .fd-chips-slot {
     display: flex;
+    height: 4.25rem;
     min-width: 0;
     align-items: center;
-    gap: var(--space-2);
     font-size: var(--text-sm);
   }
-  .fd-ingredient .ms-thumb {
+  .fd-chips {
+    display: flex;
+    width: 100%;
+    gap: 0.375rem; /* CHIP_GAP_REM */
+    overflow: hidden;
+  }
+  .fd-chip {
+    position: relative;
+    display: flex;
+    width: 3.5rem; /* CHIP_REM */
+    flex-shrink: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.25rem 0.125rem;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+  }
+  .fd-chip[data-part-state="owned"] {
+    border-color: var(--success);
+  }
+  .fd-chip[data-part-state="blueprint"] {
+    border-color: var(--warning);
+  }
+  .fd-chip[data-part-state="missing"] {
+    border-color: var(--danger);
+  }
+  .fd-chip--more {
+    justify-content: center;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .fd-chip .ms-thumb {
     width: 2.25rem;
     height: 2.25rem;
     flex-shrink: 0;
   }
-  .fd-ingredient svg {
-    width: 0.9rem;
-    height: 0.9rem;
-    flex-shrink: 0;
+  .fd-chip-count {
+    max-width: 100%;
+    font-size: 0.6875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary);
+  }
+  .fd-chip svg {
+    position: absolute;
+    top: 0.125rem;
+    right: 0.125rem;
+    width: 0.8rem;
+    height: 0.8rem;
   }
   .fd-card-foot {
     display: flex;
-    flex-wrap: wrap;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    white-space: nowrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
