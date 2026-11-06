@@ -369,11 +369,15 @@ const mockStatus = (): InventoryStatus => ({
   picksApplied: mockSource === "none" ? 0 : 2,
   gameSyncedSinceImport: false,
 });
+// Every `inventory-updated` listener gets its own copy of the same ~1 MB text: the last one parsed is reused, so one update parses once.
+let lastInv: { text: string; data: RawInventoryData } | null = null;
 const parseInv = (text: string | null): RawInventoryData | null => {
   if (!text) return null;
+  if (lastInv?.text === text) return lastInv.data;
   const t0 = performance.now();
   const data = JSON.parse(text) as RawInventoryData;
   logTiming("json_parse_inventory", { bytes: text.length, ms: msSince(t0) });
+  lastInv = { text, data };
   return data;
 };
 

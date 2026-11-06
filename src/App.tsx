@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { appInfo, getOnboarding, getRawInventory, getSettings, setZoom, onInventoryUpdated, setGameLocale, setSettings, type AppInfo, type Settings } from "./lib/ipc";
+import { appInfo, getOnboarding, getSettings, setZoom, setGameLocale, setSettings, type AppInfo, type Settings } from "./lib/ipc";
 import { setUiLocale } from "./lib/format";
 import { translator } from "./lib/i18n";
 import { bindThemePersistence, getThemeSettings, hydrateFromSettings, legacyThemeOf } from "./lib/theme/themeStore";
 import { VIEWS, type ViewName } from "./lib/viewRegistry";
 import { useItemDatabase } from "./stores/items";
+import { useInventory } from "./stores/inventory";
 import { PopoutSoloSection, isPopoutWindow, popoutSectionId, popoutView } from "./stores/popout";
 import RelicsView from "./views/RelicsView";
 import SettingsView from "./views/SettingsView";
@@ -62,7 +63,8 @@ export default function App() {
     setView(requested);
     requestedView.set(null);
   }, [requested]);
-  const [inventory, setInventory] = useState<Record<string, unknown> | null>(null);
+  // The shared store: the main window fetches and parses the inventory once, and once per update.
+  const inventory = useInventory().data as Record<string, unknown> | null;
   const wfm = useWfmSession();
   const presence = usePresence(wfm.session?.logged_in === true);
   useNotificationFeed();
@@ -76,9 +78,6 @@ export default function App() {
       setLocal(s);
     });
     void appInfo().then(setInfo);
-    void getRawInventory().then(setInventory);
-    const off = onInventoryUpdated((d) => setInventory(d as Record<string, unknown> | null));
-    return () => void off.then((f) => f());
   }, []);
 
   useEffect(() => {
