@@ -27,6 +27,11 @@ export const isActive = (j: Job) => j.state === "running" || j.state === "stoppi
 
 const cleanFinish = (j: Job) => j.state === "done" && j.failed === 0;
 
+// Dismiss, Continue and Retry take a job out of the backend list without an event, so the pill drops it itself.
+let drop: (id: string) => void = () => {};
+/** Removes a job the backend no longer lists. */
+export const dropJob = (id: string) => drop(id);
+
 /** Running jobs, those that need the user (failures, interrupted) and, for a few seconds, a clean finish. */
 const store = createSharedStore<JobsState>({ jobs: [] }, (patch) => {
   let dead = false;
@@ -40,6 +45,7 @@ const store = createSharedStore<JobsState>({ jobs: [] }, (patch) => {
     timers.delete(id);
     set(jobs.filter((j) => j.id !== id));
   };
+  drop = forget;
   // The snapshot fills in what ran before this view looked; events that already landed win.
   let fetching = false;
   const refetch = () => {
@@ -66,6 +72,7 @@ const store = createSharedStore<JobsState>({ jobs: [] }, (patch) => {
   refetch();
   return () => {
     dead = true;
+    drop = () => {};
     timers.forEach(clearTimeout);
     void off.then((f) => f());
   };

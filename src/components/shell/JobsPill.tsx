@@ -2,7 +2,7 @@ import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { MessageKey, Translator } from "../../lib/i18n";
 import { jobsContinue, jobsDismiss, jobsRetryFailed, jobsStop, type Job } from "../../lib/ipc";
-import { isActive, isBackground, useJobs } from "../../stores/jobs";
+import { dropJob, isActive, isBackground, useJobs } from "../../stores/jobs";
 import { addToast } from "../../stores/toasts";
 import { Button, Progress } from "../ui";
 
@@ -78,16 +78,16 @@ function JobRow({ job, tr }: { job: Job; tr: Translator }) {
       {!active(job) && attention(job) && (
         <div className="flex flex-wrap gap-2">
           {job.state === "interrupted" && repeatable && left > 0 && (
-            <Button size="sm" variant="primary" onClick={act(() => jobsContinue(job.id))}>
+            <Button size="sm" variant="primary" onClick={act(() => jobsContinue(job.id).then(() => dropJob(job.id)))}>
               {tr("jobs.continue", { count: left })}
             </Button>
           )}
           {job.state === "done" && repeatable && failed.length > 0 && (
-            <Button size="sm" variant="primary" onClick={act(() => jobsRetryFailed(job.id))}>
+            <Button size="sm" variant="primary" onClick={act(() => jobsRetryFailed(job.id).then(() => dropJob(job.id)))}>
               {tr("jobs.retry", { count: failed.length })}
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={act(() => jobsDismiss(job.id))}>
+          <Button size="sm" variant="ghost" onClick={act(() => jobsDismiss(job.id).then(() => dropJob(job.id)))}>
             {tr("jobs.dismiss")}
           </Button>
         </div>

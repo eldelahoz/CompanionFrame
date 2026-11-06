@@ -106,6 +106,9 @@ test("an interrupted job says nothing resumes by itself and offers Continue", as
   expect(screen.getByText("2 left. Nothing resumes by itself.")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Continue with the 2" }));
   expect(actions.cont).toHaveBeenCalledWith("j1");
+  // The backend drops the interrupted job without an event; the pill must drop it too.
+  await act(async () => {});
+  expect(screen.queryByText("2 left. Nothing resumes by itself.")).toBeNull();
 });
 
 test("a clean finish shows a check line that goes away after its timeout", async () => {
