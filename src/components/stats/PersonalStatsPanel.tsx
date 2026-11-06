@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, RefreshCw, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createViewState } from "../../stores/viewState";
 import { getItemDatabase, getPersonalLoadouts, getPersonalProfile, onInventoryUpdated, type ItemDatabase, type PersonalProfileResult, type SavedLoadout } from "../../lib/ipc";
 import { itemLabel } from "../../lib/itemLabel";
 import type { MessageKey, Translator } from "../../lib/i18n";
@@ -68,6 +69,9 @@ interface Row {
 
 const num = (v: number | null | undefined, locale: string) => (v == null ? null : v.toLocaleString(locale, { maximumFractionDigits: 1 }));
 
+/** The panel comes back as the user left it (memory only). */
+const personal = createViewState({ section: "career" as Section, search: "", sort: "name" as "name" | Metric, descending: false, page: 0 });
+
 /** Stats "personal" tab: career totals, per-item tables and the saved loadouts, from the public profile and the inventory. */
 export default function PersonalStatsPanel({ tr, locale }: { tr: Translator; locale: string }) {
   const [result, setResult] = useState<PersonalProfileResult | null>(null);
@@ -75,11 +79,11 @@ export default function PersonalStatsPanel({ tr, locale }: { tr: Translator; loc
   const [db, setDb] = useState<ItemDatabase>({});
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [section, setSection] = useState<Section>("career");
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<"name" | Metric>("name");
-  const [descending, setDescending] = useState(false);
-  const [page, setPage] = useState(0);
+  const [section, setSection] = personal.useField("section");
+  const [search, setSearch] = personal.useField("search");
+  const [sort, setSort] = personal.useField("sort");
+  const [descending, setDescending] = personal.useField("descending");
+  const [page, setPage] = personal.useField("page");
   const [now, setNow] = useState(Date.now());
   const alive = useRef(true);
   const generation = useRef(0);
