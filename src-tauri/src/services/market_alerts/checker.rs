@@ -1,7 +1,7 @@
 //! The alert engine: a periodic tick evaluates due rules against warframe.market (riven auctions on
 //! v1, item order books on v2), dedups by listing+price, records hits and notifies once per new
 //! listing. Evaluation is the only part that touches the network; it runs under the shared WFM
-//! budget (`Scheduler`, background priority) and never holds the DB lock across an await.
+//! budget (the shared `Scheduler`, background priority) and never holds the DB lock across an await.
 
 use crate::services::clock::now_ms;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -23,7 +23,7 @@ use crate::services::notify::{NotificationDispatch, Notifier};
 use crate::services::wfm::client::{Api, WfmClient};
 use crate::services::wfm::errors::WfmError;
 use crate::services::wfm::orders::orders_item;
-use crate::services::wfm::scheduler::{Priority, Scheduler};
+use crate::services::wfm::scheduler::{self, Priority};
 
 pub const TICK_SECS: u64 = 60;
 pub const INITIAL_DELAY_SECS: u64 = 30;
@@ -71,7 +71,6 @@ struct Runtime {
 #[derive(Default)]
 pub struct Engine {
     rt: Mutex<Runtime>,
-    sched: Scheduler,
     busy: AtomicBool,
     armed: AtomicBool,
 }
@@ -127,7 +126,7 @@ impl Engine {
         Fut: std::future::Future<Output = Result<T, WfmError>>,
     {
         self.note_request(now);
-        self.sched.run(Priority::Background, f).await
+        scheduler::scoped(Priority::Background, f()).await
     }
 
     async fn evaluate(

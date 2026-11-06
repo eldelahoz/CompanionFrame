@@ -17,7 +17,9 @@ use crate::services::wfm::catalog::{self, SetLookup};
 use crate::services::wfm::contracts::{self, Contracts, WfmContract};
 use crate::services::wfm::errors::WfmError;
 use crate::services::wfm::legacy_v1;
+use crate::services::wfm::my_orders::{MyOrdersCache, UPDATED_EVENT};
 use crate::services::wfm::orders::{self, MyOrder, MyOrders, SEND_PER_TRADE};
+use crate::services::wfm::scheduler::{self, Priority};
 use crate::services::wfm::session::Session;
 use crate::services::wfm::validators::{CreateOrder, OrderUpdates};
 
@@ -49,8 +51,11 @@ impl WorkbenchHost for WfmHost {
             per_trade: None,
             subtype: o.subtype,
         };
-        let created =
-            orders::create(self.session().client(), &self.db(), order, &SEND_PER_TRADE).await?;
+        let created = scheduler::scoped(
+            Priority::Job,
+            orders::create(self.session().client(), &self.db(), order, &SEND_PER_TRADE),
+        )
+        .await?;
         Ok(created.id)
     }
 
@@ -65,9 +70,12 @@ impl WorkbenchHost for WfmHost {
             quantity: Some(quantity),
             ..Default::default()
         };
-        Ok(orders::update(self.session().client(), id, updates)
-            .await?
-            .id)
+        Ok(scheduler::scoped(
+            Priority::Job,
+            orders::update(self.session().client(), id, updates),
+        )
+        .await?
+        .id)
     }
 
     async fn my_sell_orders(&self) -> Result<Vec<MyOrder>, WfmError> {
@@ -77,8 +85,11 @@ impl WorkbenchHost for WfmHost {
     }
 
     async fn item_id(&self, slug: &str) -> Result<Option<String>, WfmError> {
-        let items = catalog::items(self.session().client(), &self.db()).await?;
-        Ok(items.into_iter().find(|i| i.slug == slug).map(|i| i.id))
+        let items = catalog::items_containing(self.session().client(), &self.db(), |l| {
+            l.iter().any(|i| i.slug == slug)
+        })
+        .await?;
+        Ok(items.iter().find(|i| i.slug == slug).map(|i| i.id.clone()))
     }
 
     fn with_db<R>(&self, f: impl FnOnce(&Connection) -> R) -> R {
@@ -105,9 +116,9 @@ impl MatchHost for WfmHost {
             .await
             .ok()?;
         items
-            .into_iter()
+            .iter()
             .find(|i| i.name.to_lowercase() == wanted)
-            .map(|i| i.slug)
+            .map(|i| i.slug.clone())
     }
 
     async fn item_rank_info(&self, slug: &str) -> Result<Option<ItemRankInfo>, WfmError> {
@@ -265,6 +276,12 @@ pub async fn workbench_match_trade(
 pub fn announce_order_closed(app: &AppHandle, m: &WorkbenchTradeMatch) {
     if !matches!(m.kind, WorkbenchMatchKind::Order) {
         return;
+    }
+    // The Market copy shrinks first, so the views see it through `wfm-orders-updated`.
+    if let Some(cache) = app.try_state::<MyOrdersCache>() {
+        cache.lower(&m.order_id, m.quantity, |o| {
+            let _ = app.emit(UPDATED_EVENT, o);
+        });
     }
     let payload = serde_json::json!({ "order_id": m.order_id, "quantity": m.quantity });
     if let Err(e) = app.emit(ORDER_CLOSED_EVENT, payload) {

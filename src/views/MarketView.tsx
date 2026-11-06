@@ -1,5 +1,5 @@
-import { ArrowDown, ArrowUp, LogOut, Plus, RefreshCw, ShoppingCart, Star, WandSparkles } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Eye, EyeOff, LogOut, Plus, RefreshCw, ShoppingCart, Star, WandSparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { normalizePerTrade } from "../../config/shared/wfmOrders";
 import HeaderTabs from "../components/HeaderTabs";
 import MarketAlerts from "../components/market/alerts/MarketAlerts";
@@ -20,15 +20,15 @@ import { Button, Card, EmptyState, IconButton, PageHeader, Skeleton, Table } fro
 import { askConfirm } from "../stores/confirm";
 import { addToast } from "../stores/toasts";
 import type { Translator } from "../lib/i18n";
-import { onWfmOrderClosed, wfmMyReputation, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersMy, type ItemDatabase, type MyOrder, type MyOrders } from "../lib/ipc";
+import { wfmMyReputation, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersHold, wfmOrdersSetAllVisible, type ItemDatabase, type MyOrder } from "../lib/ipc";
 import type { WfmPresenceState, PresenceOptions, WfmStatus, WfmSession } from "../lib/ipc";
 import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
 import { useWfmCatalog } from "../stores/market";
+import { refreshMyOrders, useMyOrders } from "../stores/myOrders";
 import type { ItemDbEntry } from "../types/inventory";
 
 type Tab = "sell" | "buy" | "rivens" | "browse" | "alerts";
-const POLL_MS = 30_000;
 const SORTS = (["name", "platinum", "quantity", "date", "visible"] as const).flatMap((k) => (["asc", "desc"] as const).map((d) => `${k}:${d}` as const));
 
 interface Props {
@@ -46,8 +46,8 @@ interface Props {
 
 export default function MarketView({ tr, items, locale = "en", session, signIn, signInWebview, signOut, presence }: Props) {
   const [tab, setTab] = useState<Tab>("sell");
-  const [orders, setOrders] = useState<MyOrders>({ sell: [], buy: [] });
-  const [loading, setLoading] = useState(false);
+  // The backend owns the orders: the store paints its last copy at once and follows its updates.
+  const { orders, loaded, refreshing } = useMyOrders();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [modal, setModal] = useState<{ order: MyOrder | null; draft?: OrderDraft } | null>(null);
@@ -63,17 +63,14 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const parsed = useParsedInventory(inventory, items);
   const wfmItems = useMemo(() => wfmLookup(catalog), [catalog]);
 
-  const fetchOrders = useCallback(async (background = false) => {
-    if (!background) setLoading(true);
+  const refresh = async () => {
     try {
-      setOrders(await wfmOrdersMy());
+      await refreshMyOrders();
       setError("");
     } catch (e) {
-      if (!background) setError((e as Error).message);
-    } finally {
-      setLoading(false);
+      setError((e as Error).message);
     }
-  }, []);
+  };
 
   useEffect(() => setSelected(new Set()), [tab]);
   // a refetch can drop orders: forget their ids
@@ -81,13 +78,6 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     const live = new Set([...orders.sell, ...orders.buy].map((o) => o.id));
     setSelected((cur) => (cur.size === 0 || [...cur].every((id) => live.has(id)) ? cur : new Set([...cur].filter((id) => live.has(id)))));
   }, [orders]);
-
-  useEffect(() => {
-    if (!loggedIn) return setOrders({ sell: [], buy: [] });
-    void fetchOrders();
-    const t = setInterval(() => !document.hidden && void fetchOrders(true), POLL_MS);
-    return () => clearInterval(t);
-  }, [loggedIn, fetchOrders]);
 
   // Once per sign-in, not on the poll; a failed lookup just hides the figure.
   const [reputation, setReputation] = useState<number | null>(null);
@@ -100,23 +90,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     };
   }, [loggedIn]);
 
-  // A trade match closed units elsewhere: patch just that row; the poll reconciles the rest.
-  useEffect(() => {
-    if (!loggedIn) return;
-    let off: (() => void) | undefined;
-    let dead = false;
-    void onWfmOrderClosed(({ order_id, quantity }) => {
-      const lower = (list: MyOrder[]) =>
-        list.flatMap((o) => (o.id !== order_id ? [o] : o.quantity - quantity > 0 ? [{ ...o, quantity: o.quantity - quantity }] : []));
-      setOrders((cur) => ({ sell: lower(cur.sell), buy: lower(cur.buy) }));
-    }).then((u) => (dead ? u() : (off = u)));
-    return () => {
-      dead = true;
-      off?.();
-    };
-  }, [loggedIn]);
-
-  // One write per order at a time; the lock also covers the refetch that follows.
+  // One write per order at a time. Rows follow the backend's copy: a confirmed write, a trade close or a poll all arrive as updates.
   const guarded = async (id: string, run: () => Promise<void>) => {
     if (busy.has(id)) return;
     setBusy((b) => new Set(b).add(id));
@@ -138,7 +112,6 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     await guarded(id, async () => {
       await wfmOrderDelete(id);
       addToast({ level: "success", message: tr("market.orderDeleted") });
-      await fetchOrders(true);
     });
   };
   const closeOne = async (o: MyOrder) => {
@@ -147,35 +120,29 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     const params = { count: size, item: o.itemName, price: o.platinum };
     const msg = tr(size > 1 ? (bought ? "market.confirmOrderBoughtTrade" : "market.confirmOrderSoldTrade") : bought ? "market.confirmOrderBought" : "market.confirmOrderSold", params);
     if (!(await askConfirm(msg))) return;
-    // the API reports no remainder, so refetch
     void guarded(o.id, async () => {
       await wfmOrderClose(o.id, size);
-      await fetchOrders(true);
     });
   };
   const patch = (o: MyOrder, updates: { platinum?: number; quantity?: number; visible?: boolean }) =>
     guarded(o.id, async () => {
       await wfmOrderUpdate(o.id, updates as never);
-      await fetchOrders(true);
     });
 
   // Stop (or leaving the view) ends a bulk run before its next order; the one in flight finishes.
   const stopBulk = useRef(false);
-  const gone = useRef(false);
   useEffect(() => {
-    gone.current = false;
+    stopBulk.current = false;
     return () => {
-      gone.current = true;
       stopBulk.current = true;
     };
   }, []);
-  const patchLocal = (id: string, fn: (o: MyOrder) => MyOrder | null) => {
-    const apply = (l: MyOrder[]) => l.flatMap((o) => (o.id !== id ? [o] : fn(o) ?? []));
-    setOrders((cur) => ({ sell: apply(cur.sell), buy: apply(cur.buy) }));
-  };
+  // Each confirmed write reaches the rows through the backend's update event: a bulk run asks for nothing else.
   const bulk = async (action: BulkRun["action"], targets: MyOrder[], run: (o: MyOrder) => Promise<void>) => {
     stopBulk.current = false;
     setBulkRun({ action, done: 0, total: targets.length });
+    // the backend's 30 s poll waits while this runs
+    void wfmOrdersHold(true);
     try {
       // one at a time: warframe.market rate limits
       for (const [i, o] of targets.entries()) {
@@ -185,25 +152,28 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
       }
     } finally {
       setBulkRun(null);
-      // the one source of truth, unless the view was left
-      if (!gone.current) await fetchOrders(true);
+      void wfmOrdersHold(false);
     }
   };
   const setAllVisible = (visible: boolean) =>
     bulk(
       visible ? "show" : "hide",
       list.filter((o) => selected.has(o.id) && o.visible !== visible),
-      async (o) => {
-        await wfmOrderUpdate(o.id, { visible } as never);
-        patchLocal(o.id, (x) => ({ ...x, visible }));
-      },
+      async (o) => void (await wfmOrderUpdate(o.id, { visible } as never)),
     );
+  // One request for the whole side of the book (the sell or buy tab being shown).
+  const setSideVisible = async (visible: boolean) => {
+    try {
+      await wfmOrdersSetAllVisible(tab === "buy" ? "buy" : "sell", visible);
+    } catch (e) {
+      addToast({ level: "error", message: (e as Error).message });
+    }
+  };
   const delSelected = async () => {
     const targets = list.filter((o) => selected.has(o.id));
     if (!(await askConfirm(tr("market.confirmDeleteOrders", { count: targets.length })))) return;
     await bulk("delete", targets, async (o) => {
       await wfmOrderDelete(o.id);
-      patchLocal(o.id, () => null);
       setSelected((cur) => applyIds(cur, [o.id], false));
     });
   };
@@ -292,8 +262,13 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
                 {tr("market.repriceSelected")}
               </Button>
             )}
-            <IconButton label={tr("common.refresh")} onClick={() => fetchOrders()}>
-              <RefreshCw />
+            {list.length > 0 && (
+              <Button size="sm" icon={list.some((o) => o.visible) ? <EyeOff /> : <Eye />} data-market-side-visibility disabled={busy.size > 0 || bulkRun !== null} onClick={() => void setSideVisible(!list.some((o) => o.visible))}>
+                {tr(list.some((o) => o.visible) ? "market.hideAll" : "market.showAll")}
+              </Button>
+            )}
+            <IconButton label={tr("common.refresh")} onClick={() => void refresh()} aria-busy={refreshing || undefined}>
+              <RefreshCw className={refreshing ? "animate-spin" : undefined} />
             </IconButton>
             <Button size="sm" variant="primary" icon={<Plus />} data-market-new-order onClick={() => setModal({ order: null })}>
               {tr("market.newOrder")}
@@ -304,7 +279,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
               {error}
             </p>
           )}
-          {loading ? (
+          {!loaded ? (
             <Card className="flex flex-col gap-4 p-4" aria-busy="true" aria-label={tr("market.loadingOrders")}>
               {[60, 45, 52].map((w) => (
                 <Skeleton key={w} width={`${w}%`} height="1.1rem" />
@@ -395,7 +370,6 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
           ownUserName={session?.user_name ?? null}
           tr={tr}
           onClose={() => setRepricing(null)}
-          onApplied={() => void fetchOrders(true)}
         />
       )}
       {modal && (
@@ -405,10 +379,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
           catalog={catalog}
           draft={modal.draft}
           onClose={() => setModal(null)}
-          onSaved={() => {
-            setModal(null);
-            void fetchOrders(true);
-          }}
+          onSaved={() => setModal(null)}
           tr={tr}
         />
       )}

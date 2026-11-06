@@ -54,7 +54,7 @@ Everything runs locally on your PC: there is no CompanionFrame server. The app r
   - Cycles, fissures and the arbitration schedule.
   - Baro, with a planner and wishlist, and Varzia alerts.
 - **warframe.market**
-  - Your orders: sort them by name, price, quantity, date or visibility, and select several (Shift+click for a range) to hide, show, reprice or delete them.
+  - Your orders: sort them by name, price, quantity, date or visibility, and select several (Shift+click for a range) to hide, show, reprice or delete them, or hide or show a whole side at once.
   - Riven auctions, including your decoded owned rivens.
   - Listing warnings, price history, alerts and bulk selling.
   - Every write is a click of yours, except one opt-in setting (off by default) that closes the listings a finished trade matches. warframe.market's rules call automation a grey area, so turning it on is your call.

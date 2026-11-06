@@ -6,6 +6,7 @@ pub mod contracts;
 pub mod errors;
 pub mod legacy_v1;
 pub mod live;
+pub mod my_orders;
 pub mod orders;
 pub mod presence;
 pub mod prices;

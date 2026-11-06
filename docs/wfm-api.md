@@ -86,6 +86,8 @@ Sources: https://docs.warframe.market/docs/api/overview/ · https://docs.warfram
 | WebSocket rate limits | UNKNOWN |
 | `Retry-After` header | UNKNOWN (not documented) |
 
+In the app one scheduler (`wfm/scheduler.rs`) spends this budget for every request: 2.5/s overall, and a separate 12/min bucket for contract and auction searches. A 429 raises one gate for everything.
+
 Rules doc: limits may change without notice. Clients should cache, avoid tight polling, and prefer WebSocket subscriptions.
 
 ---
@@ -193,6 +195,7 @@ Abbreviations: `L` = Language-aware, `P` = Platform/Crossplay-aware, `B` = Beare
 
 Notes from docs:
 - Groups: only virtual `all` and `ungrouped` are documented. Custom group CRUD "will be published later".
+- CompanionFrame uses `PATCH /v2/orders/group/all` with `{visible, type}` for "Hide all" / "Show all" on the sell or buy tab (one request, then the orders are re-read). The docs do not list the values of `type`; the app sends `sell` or `buy`. Unverified against the live API.
 - Orders: `/v2/order/{id}` GET has no auth callout in docs. Treat as UNKNOWN for anonymous access until tested.
 
 ---

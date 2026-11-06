@@ -2144,6 +2144,8 @@
   "market.selectedOf": "{count} von {total} ausgewählt",
   "market.bulkHide": "Verstecken",
   "market.bulkShow": "Anzeigen",
+  "market.hideAll": "Alle ausblenden",
+  "market.showAll": "Alle einblenden",
   "market.bulkStop": "Stopp",
   "market.bulkHiding": "Verstecke {done} von {total}...",
   "market.bulkShowing": "Zeige {done} von {total}...",

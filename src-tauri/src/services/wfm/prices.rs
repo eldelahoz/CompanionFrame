@@ -6,7 +6,7 @@
 //! - 401/403/408/429/5xx/network -> cache nothing; serve the stale entry if there is one, else error.
 
 use crate::services::clock::now_ms;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -19,7 +19,7 @@ use tauri::{Emitter, Manager, State};
 use super::catalog::path_slug;
 use super::client::WfmClient;
 use super::errors::WfmError;
-use super::scheduler::{Priority, Scheduler};
+use super::scheduler::{self, Priority};
 use super::session::Session;
 use super::stats_history::{self, MarketStatPoint, MergeMode};
 use super::stats_v1;
@@ -134,11 +134,17 @@ pub fn normalize_slug(input: &str) -> Result<String, WfmError> {
 
 #[derive(Default)]
 pub struct Prices {
-    sched: Scheduler,
     /// One fetch per slug at a time: the second caller finds the first one's cache entry.
     flights: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
-    /// Slugs a background refresh already covers, so overlapping bulk calls don't queue them twice.
-    refreshing: Mutex<HashSet<String>>,
+    refresh: Mutex<RefreshQueue>,
+}
+
+/// What the single refresh worker drains. `covered` is the queued slugs plus the one in flight.
+#[derive(Default)]
+struct RefreshQueue {
+    pending: VecDeque<String>,
+    covered: HashSet<String>,
+    running: bool,
 }
 
 impl Prices {
@@ -179,10 +185,7 @@ impl Prices {
             if let Some(c) = read(db, &slug).filter(fresh) {
                 return Ok(entry(&slug, &c, false));
             }
-            let fetched = self
-                .sched
-                .run(priority, || stats_v1::fetch(client, &slug))
-                .await;
+            let fetched = scheduler::scoped(priority, stats_v1::fetch(client, &slug)).await;
             self.settle(db, &slug, fetched)
         }
         .await;
@@ -247,7 +250,7 @@ impl Prices {
         let slug = normalize_slug(slug)?;
         let stored = stats_history::load(db, &slug).map_err(WfmError::invalid)?;
         if stored.is_empty() {
-            let refreshed = self.price(client, db, &slug, Priority::Interactive).await;
+            let refreshed = self.price(client, db, &slug, Priority::Background).await;
             let stored = stats_history::load(db, &slug).map_err(WfmError::invalid)?;
             return match refreshed {
                 Err(e) if stored.is_empty() => Err(e),
@@ -255,12 +258,7 @@ impl Prices {
             };
         }
         let old = read(db, &slug).is_none_or(|c| c.v < CACHE_V || now_ms() - c.ts >= BULK_FRESH_MS);
-        let todo = if old && self.refreshing.lock().unwrap().insert(slug.clone()) {
-            vec![slug]
-        } else {
-            Vec::new()
-        };
-        Ok((stored, todo))
+        Ok((stored, if old { vec![slug] } else { Vec::new() }))
     }
 
     /// Cached prices come back at once whatever their age; only slugs with nothing cached wait on WFM.
@@ -325,13 +323,12 @@ impl Prices {
             .buffered(BULK_PARALLEL)
             .collect::<Vec<_>>()
             .await;
-        let mut refreshing = self.refreshing.lock().unwrap();
         for want in [2, 1] {
-            for (e, old) in &out {
-                if *old == want && refreshing.insert(e.slug.clone()) {
-                    stale.push(e.slug.clone());
-                }
-            }
+            stale.extend(
+                out.iter()
+                    .filter(|(_, old)| *old == want)
+                    .map(|(e, _)| e.slug.clone()),
+            );
         }
         let kv = kv_read_totals();
         let fetched = fetched.into_inner();
@@ -347,21 +344,58 @@ impl Prices {
         Ok((out.into_iter().map(|(e, _)| e).collect(), stale))
     }
 
-    /// Re-fetches `slugs` one at a time at background priority (the scheduler paces and backs off), passing every
-    /// batch of landed prices to `on_batch`. A failure keeps the old cached value; repeated failures end the run.
-    pub async fn refresh(
+    /// Queues `slugs` (most urgent first) for the one refresh worker. They go ahead of what is already
+    /// waiting, so what the user looks at now is fetched first; a slug already queued moves up, one in
+    /// flight is left alone. `true`: no worker is running, the caller must start `run_worker`.
+    pub fn enqueue(&self, slugs: Vec<String>) -> bool {
+        let mut q = self.refresh.lock().unwrap();
+        let mut front = Vec::new();
+        for s in slugs {
+            if let Some(i) = q.pending.iter().position(|p| *p == s) {
+                q.pending.remove(i);
+            } else if !q.covered.insert(s.clone()) {
+                continue;
+            }
+            front.push(s);
+        }
+        for s in front.into_iter().rev() {
+            q.pending.push_front(s);
+        }
+        let start = !q.pending.is_empty() && !q.running;
+        q.running |= start;
+        start
+    }
+
+    /// Drains the refresh queue one slug at a time at background priority (the scheduler paces and backs
+    /// off), passing every batch of landed prices to `on_batch`. A failure keeps the old cached value;
+    /// repeated failures drop what is queued (the next bulk call asks again).
+    pub async fn run_worker(
         &self,
         client: &WfmClient,
         db: &Db,
-        slugs: Vec<String>,
         on_batch: impl Fn(Vec<PriceEntry>),
     ) {
         let (mut landed, mut fails) = (Vec::new(), 0);
         let (t, mut done) = (Instant::now(), 0);
-        for slug in &slugs {
+        loop {
+            let slug = {
+                let mut q = self.refresh.lock().unwrap();
+                let next = if fails >= REFRESH_MAX_FAILS {
+                    q.pending.clear();
+                    q.covered.clear();
+                    None
+                } else {
+                    q.pending.pop_front()
+                };
+                if next.is_none() {
+                    q.running = false;
+                }
+                next
+            };
+            let Some(slug) = slug else { break };
             done += 1;
             match self
-                .price_within(client, db, slug, Priority::Background, 0)
+                .price_within(client, db, &slug, Priority::Background, 0)
                 .await
             {
                 Ok(e) if !e.stale => {
@@ -370,25 +404,18 @@ impl Prices {
                 }
                 _ => fails += 1,
             }
+            self.refresh.lock().unwrap().covered.remove(&slug);
             if landed.len() >= 20 {
                 on_batch(std::mem::take(&mut landed));
-            }
-            if fails >= REFRESH_MAX_FAILS {
-                break;
             }
         }
         if !landed.is_empty() {
             on_batch(landed);
         }
         tracing::info!(
-            "timing: wfm_prices_refresh queued={} done={done} ms={}",
-            slugs.len(),
+            "timing: wfm_prices_refresh worker done={done} ms={}",
             t.elapsed().as_millis()
         );
-        let mut refreshing = self.refreshing.lock().unwrap();
-        slugs.iter().for_each(|s| {
-            refreshing.remove(s);
-        });
     }
 }
 
@@ -420,9 +447,9 @@ pub async fn wfm_prices_bulk(
     Ok(out)
 }
 
-/// Background refresh of `stale` slugs; landed prices reach the UI through `REFRESHED_EVENT`.
+/// Queues `stale` for the one refresh worker, starting it if idle; landed prices reach the UI through `REFRESHED_EVENT`.
 fn spawn_refresh(app: tauri::AppHandle, stale: Vec<String>) {
-    if stale.is_empty() {
+    if !app.state::<Prices>().enqueue(stale) {
         return;
     }
     tauri::async_runtime::spawn(async move {
@@ -432,7 +459,7 @@ fn spawn_refresh(app: tauri::AppHandle, stale: Vec<String>) {
             app.state::<Prices>(),
         );
         prices
-            .refresh(session.client(), &db, stale, |batch| {
+            .run_worker(session.client(), &db, |batch| {
                 let _ = app.emit(REFRESHED_EVENT, batch);
             })
             .await;
@@ -578,6 +605,7 @@ mod tests {
             let (c, db, p) = (client(&m), mem_db(), Prices::default());
             assert!(price(&p, &c, &db, "x").await.is_err(), "{status}");
             assert!(read(&db, "x").is_none(), "{status}: nothing cached");
+            c.lift_gate();
             // The very next call goes back to WFM and recovers.
             let p2 = Prices::default();
             assert_eq!(
@@ -700,10 +728,12 @@ mod tests {
             (Some(64), true, vec!["x".to_string()])
         );
         assert_eq!(hits(&m), 1, "the response did not wait on the network");
-        // The same slug is not scheduled twice while its refresh is pending.
-        assert!(bulk(&p, &c, &db, &["x"]).await.1.is_empty());
+        // The same slug is not queued twice while its refresh is pending.
+        assert!(p.enqueue(todo.clone()));
+        assert!(!p.enqueue(todo.clone()));
         let landed = std::sync::Mutex::new(Vec::new());
-        p.refresh(&c, &db, todo, |b| landed.lock().unwrap().extend(b))
+        p.enqueue(todo);
+        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b))
             .await;
         assert_eq!(landed.lock().unwrap()[0].price, Some(80));
         assert_eq!(bulk(&p, &c, &db, &["x"]).await.0[0].price, Some(80));
@@ -740,13 +770,14 @@ mod tests {
         let (_, todo) = bulk(&p, &c, &db, &["new", "old"]).await;
         assert_eq!(todo, ["old", "new"]);
         let landed = std::sync::Mutex::new(Vec::new());
-        p.refresh(&c, &db, todo, |b| landed.lock().unwrap().extend(b))
+        p.enqueue(todo);
+        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b))
             .await;
         // `old` landed; `new` hit the 503 and still serves its cached value.
         assert_eq!(landed.lock().unwrap().len(), 1);
         assert_eq!(read(&db, "old").unwrap().price, Some(65));
         assert_eq!(read(&db, "new").unwrap().price, Some(64));
-        assert!(p.refreshing.lock().unwrap().is_empty());
+        assert!(p.refresh.lock().unwrap().covered.is_empty());
     }
 
     #[tokio::test]
@@ -768,11 +799,49 @@ mod tests {
             (points.len(), todo.clone(), hits(&m)),
             (1, vec!["x".to_string()], 1)
         );
-        assert!(p.history(&c, &db, "x").await.unwrap().1.is_empty());
         let landed = std::sync::Mutex::new(Vec::new());
-        p.refresh(&c, &db, todo, |b| landed.lock().unwrap().extend(b))
+        p.enqueue(todo);
+        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b))
             .await;
         assert_eq!((landed.lock().unwrap()[0].price, hits(&m)), (Some(80), 2));
         assert!(p.history(&c, &db, "x").await.unwrap().1.is_empty());
+    }
+
+    #[test]
+    fn one_worker_serves_every_bulk_call_most_recent_first() {
+        let p = Prices::default();
+        let names = |p: &Prices| {
+            p.refresh
+                .lock()
+                .unwrap()
+                .pending
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            p.enqueue(vec!["a".into(), "b".into()]),
+            "the first call starts the worker"
+        );
+        assert!(
+            !p.enqueue(vec!["c".into(), "b".into()]),
+            "the second finds it running"
+        );
+        assert_eq!(names(&p), ["c", "b", "a"], "deduped, latest request first");
+        p.refresh.lock().unwrap().pending.clear();
+        assert!(
+            !p.enqueue(vec!["a".into()]),
+            "still running: nothing to start"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_worker_stops_after_repeated_failures_and_can_start_again() {
+        let m = spawn(vec![reply(503, "{}"), reply(503, "{}"), reply(503, "{}")]);
+        let (c, db, p) = (client(&m), mem_db(), Prices::default());
+        assert!(p.enqueue((0..5).map(|i| format!("s{i}")).collect()));
+        p.run_worker(&c, &db, |_| {}).await;
+        assert_eq!(hits(&m), REFRESH_MAX_FAILS as usize);
+        assert!(p.enqueue(vec!["s9".into()]), "dropped queue, worker idle");
     }
 }

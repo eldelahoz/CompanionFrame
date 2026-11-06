@@ -27,6 +27,8 @@ export function createSharedStore<T>(initial: T, start: (patch: (p: Partial<T>) 
   const getSnapshot = () => state;
   return {
     use: () => useSyncExternalStore(subscribe, getSnapshot),
+    /** The current value, for code outside React. */
+    get: getSnapshot,
     /** Test seam: forget the cached value. */
     reset: () => {
       state = initial;

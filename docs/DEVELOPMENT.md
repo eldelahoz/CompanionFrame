@@ -106,6 +106,8 @@ Slow loads are diagnosed with `timing:` lines, which print `key=value` pairs (mi
 
 In a `db_read` line, `conn` says which connection answered (`reader0` to `reader2`, or `writer` when no reader exists), `wait_ms` is the time spent waiting for that connection and `ms` is the total, so `ms` minus `wait_ms` is the query. A high `wait_ms` means all readers were busy; a high `ms` with a low `wait_ms` means a slow query. To add a line, wrap a read in `Db::timed_read(name, |conn| …)` or call `tracing::info!("timing: …")` in Rust, or `logTiming(name, { … })` in the frontend. Use the `timing:` prefix so the lines stay searchable.
 
+For warframe.market: `my_orders` (`http_ms`, `catalog_ms`: near 0 once the catalog is in memory), `wfm_prices_refresh worker` (one line per drained queue), and at debug level (`RUST_LOG=debug`) `wfm_request priority= path_kind= wait_ms= ms=` per request (path kind is the first path segment, never an id) and `my_orders_fetch`.
+
 ## Developer card
 
 `pnpm tauri dev` (not a release build) adds a "Developer" card to Settings with buttons that show the trade popup with sample data (one listing, two, closed, purchase, no listing, plain trade). Nothing is sent to warframe.market. The card is English only and has no locale keys.

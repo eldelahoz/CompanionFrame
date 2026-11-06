@@ -13,7 +13,6 @@ import {
   workbenchPreviewPlan,
   workbenchReconcile,
   workbenchResolveReview,
-  wfmOrdersMy,
   wfmSessionStatus,
   type MyOrder,
   type WorkbenchPlanValidation as Validation,
@@ -51,6 +50,7 @@ import { fetchRowBook } from "../../lib/tradeWorkbench/rowBook";
 import { STRATEGY_KEYS } from "../../lib/tradeWorkbench/strategyLabels";
 import type { CatalogIndex } from "../../lib/wfm/catalog";
 import { useInventorySafety } from "../../stores/inventorySafety";
+import { loadMyOrders } from "../../stores/myOrders";
 import { useWorkbenchState } from "../../stores/workbench";
 import type { ItemDbEntry, ParsedItem, RawInventoryData } from "../../types/inventory";
 import WorkbenchQueueRow from "./WorkbenchQueueRow";
@@ -197,7 +197,7 @@ export default function BulkSellModal({ items, selection, inventory, itemDb, cat
   async function loadOwnOrders(): Promise<boolean> {
     setOrdersBusy(true);
     try {
-      ordersRef.current = (await wfmOrdersMy()).sell;
+      ordersRef.current = (await loadMyOrders()).sell;
       setOrdersReady(true);
       return true;
     } catch (e) {
