@@ -419,6 +419,56 @@ pub fn read_card(
     }
 }
 
+/// The card is still drawing when the open event arrives, so the first single read can fail.
+const SINGLE_RETRIES: u32 = 4;
+const SINGLE_RETRY_DELAY: Duration = Duration::from_millis(400);
+
+/// Calls `read` once, then again after `delay` (up to `retries` times) while `unread` says the result
+/// is not a good read and `alive` says the scan was not superseded. Returns the last result. Blocking.
+fn retry_read<T>(
+    retries: u32,
+    delay: Duration,
+    alive: impl Fn() -> bool,
+    unread: impl Fn(&T) -> bool,
+    mut read: impl FnMut() -> T,
+) -> T {
+    let mut out = read();
+    for _ in 0..retries {
+        if !unread(&out) || !alive() {
+            break;
+        }
+        std::thread::sleep(delay);
+        out = read();
+    }
+    out
+}
+
+/// [`read_card`] retried while the card is not read (failed, or no weapon). Blocking.
+#[allow(clippy::too_many_arguments)]
+fn read_card_retrying(
+    root: &Path,
+    capture: &dyn CaptureSource,
+    layout: RivenCardLayout,
+    data: &RivenData,
+    labels: &CardLabels,
+    rolls: &GoodRolls,
+    token: u64,
+    delay: Duration,
+    alive: impl Fn() -> bool,
+) -> (RivenOverlayView, Vec<RivenStat>) {
+    retry_read(
+        SINGLE_RETRIES,
+        delay,
+        alive,
+        |(v, _): &(RivenOverlayView, Vec<RivenStat>)| {
+            v.status != RivenOverlayStatus::Unavailable
+                && (v.status != RivenOverlayStatus::Ready
+                    || v.card.as_ref().is_none_or(|c| c.weapon.is_none()))
+        },
+        || read_card(root, capture, layout, data, labels, rolls, token),
+    )
+}
+
 /// What a compare screen gave: the brightest card is the New roll, the dimmed one the Current.
 pub struct CompareRead {
     pub new: (RivenOverlayView, Vec<RivenStat>),
@@ -730,7 +780,17 @@ pub async fn scan(app: &AppHandle, layout: RivenCardLayout) -> Result<(), String
                 )
             } else {
                 CompareRead {
-                    new: read_card(&root, &*cap, layout, &data, &labels, &rolls, token),
+                    new: read_card_retrying(
+                        &root,
+                        &*cap,
+                        layout,
+                        &data,
+                        &labels,
+                        &rolls,
+                        token,
+                        SINGLE_RETRY_DELAY,
+                        || GENERATION.is_current(token),
+                    ),
                     old: None,
                 }
             })
@@ -1112,6 +1172,52 @@ mod tests {
                 .then(|| RivenData::load(&BundledData::new(root)))
         })
         .as_ref()
+    }
+
+    /// Runs `retry_read` over a scripted reader: `true` entries are good reads. Returns (result, calls).
+    fn run_retry(script: &[bool], alive: impl Fn() -> bool) -> (bool, u32) {
+        let calls = std::cell::Cell::new(0u32);
+        let out = retry_read(
+            SINGLE_RETRIES,
+            Duration::ZERO,
+            alive,
+            |ok: &bool| !*ok,
+            || {
+                let i = calls.get() as usize;
+                calls.set(calls.get() + 1);
+                script.get(i).copied().unwrap_or(false)
+            },
+        );
+        (out, calls.get())
+    }
+
+    #[test]
+    fn retry_read_stops_at_the_first_good_read() {
+        assert_eq!(run_retry(&[false, false, true, true], || true), (true, 3));
+    }
+
+    #[test]
+    fn retry_read_gives_up_after_the_last_try() {
+        assert_eq!(run_retry(&[], || true), (false, 1 + SINGLE_RETRIES));
+    }
+
+    #[test]
+    fn retry_read_stops_when_the_scan_is_superseded() {
+        let alive = std::cell::Cell::new(true);
+        let calls = std::cell::Cell::new(0);
+        let out = retry_read(
+            SINGLE_RETRIES,
+            Duration::ZERO,
+            || alive.get(),
+            |ok: &bool| !*ok,
+            || {
+                calls.set(calls.get() + 1);
+                alive.set(false); // a newer scan began during the first read
+                false
+            },
+        );
+        assert!(!out);
+        assert_eq!(calls.get(), 1);
     }
 
     fn stat(name: &str, positive: bool, value: f64) -> RivenStat {

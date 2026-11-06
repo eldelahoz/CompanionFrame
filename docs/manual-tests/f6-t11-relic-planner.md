@@ -35,5 +35,9 @@ should win; an Omnia screen must override a stale tag through the **filter tab**
   without the screen being re-read (no flicker of "Reading the era…", no extra capture in the log).
 - "Close" hides the panel and mutes EE.log reopens for 3 s.
 
+## 6. Ducat EV
+- Every relic row shows a number in the Ducat column (a dash only if none of its rewards has a known ducat value,
+  e.g. a relic with only Forma). If every row shows a dash, the relic database lost the reward ducats.
+
 ## Not covered here
 Plat EV (needs the WFM price source), the desktop "push filters to overlay" button, and the auto-trigger setting (T18).
