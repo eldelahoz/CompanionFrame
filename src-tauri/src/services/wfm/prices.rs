@@ -25,6 +25,8 @@ use super::stats_history::{self, MarketStatPoint, MergeMode};
 use super::stats_v1;
 use crate::db::Db;
 use crate::services::cache::{kv_get, kv_get_many, kv_put, kv_read_totals};
+use crate::services::jobs::commands::AppJobs;
+use crate::services::jobs::{JobKind, JobState};
 
 /// Fresh for interactive lookups (Market, history): a trader wants the live number.
 const TTL_MS: i64 = 5 * 60 * 1000;
@@ -374,6 +376,8 @@ impl Prices {
         client: &WfmClient,
         db: &Db,
         on_batch: impl Fn(Vec<PriceEntry>),
+        // (slugs done, slugs done plus waiting) after each slug, for the jobs pill
+        on_progress: impl Fn(u32, u32),
     ) {
         let (mut landed, mut fails) = (Vec::new(), 0);
         let (t, mut done) = (Instant::now(), 0);
@@ -404,7 +408,12 @@ impl Prices {
                 }
                 _ => fails += 1,
             }
-            self.refresh.lock().unwrap().covered.remove(&slug);
+            let left = {
+                let mut q = self.refresh.lock().unwrap();
+                q.covered.remove(&slug);
+                q.pending.len() as u32
+            };
+            on_progress(done, done + left);
             if landed.len() >= 20 {
                 on_batch(std::mem::take(&mut landed));
             }
@@ -458,11 +467,29 @@ fn spawn_refresh(app: tauri::AppHandle, stale: Vec<String>) {
             app.state::<Db>(),
             app.state::<Prices>(),
         );
+        // Shown in the jobs panel, with progress and no Stop.
+        let job = |state, done, total| {
+            if let Some(jobs) = app.try_state::<Arc<AppJobs>>() {
+                jobs.mirror(
+                    "prices",
+                    JobKind::PricesRefresh,
+                    state,
+                    (done, total),
+                    vec![],
+                );
+            }
+        };
         prices
-            .run_worker(session.client(), &db, |batch| {
-                let _ = app.emit(REFRESHED_EVENT, batch);
-            })
+            .run_worker(
+                session.client(),
+                &db,
+                |batch| {
+                    let _ = app.emit(REFRESHED_EVENT, batch);
+                },
+                |done, total| job(JobState::Running, done, total),
+            )
             .await;
+        job(JobState::Done, 0, 0);
     });
 }
 
@@ -733,7 +760,7 @@ mod tests {
         assert!(!p.enqueue(todo.clone()));
         let landed = std::sync::Mutex::new(Vec::new());
         p.enqueue(todo);
-        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b))
+        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b), |_, _| {})
             .await;
         assert_eq!(landed.lock().unwrap()[0].price, Some(80));
         assert_eq!(bulk(&p, &c, &db, &["x"]).await.0[0].price, Some(80));
@@ -771,7 +798,7 @@ mod tests {
         assert_eq!(todo, ["old", "new"]);
         let landed = std::sync::Mutex::new(Vec::new());
         p.enqueue(todo);
-        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b))
+        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b), |_, _| {})
             .await;
         // `old` landed; `new` hit the 503 and still serves its cached value.
         assert_eq!(landed.lock().unwrap().len(), 1);
@@ -801,7 +828,7 @@ mod tests {
         );
         let landed = std::sync::Mutex::new(Vec::new());
         p.enqueue(todo);
-        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b))
+        p.run_worker(&c, &db, |b| landed.lock().unwrap().extend(b), |_, _| {})
             .await;
         assert_eq!((landed.lock().unwrap()[0].price, hits(&m)), (Some(80), 2));
         assert!(p.history(&c, &db, "x").await.unwrap().1.is_empty());
@@ -840,7 +867,15 @@ mod tests {
         let m = spawn(vec![reply(503, "{}"), reply(503, "{}"), reply(503, "{}")]);
         let (c, db, p) = (client(&m), mem_db(), Prices::default());
         assert!(p.enqueue((0..5).map(|i| format!("s{i}")).collect()));
-        p.run_worker(&c, &db, |_| {}).await;
+        let progress = Mutex::new(vec![]);
+        p.run_worker(
+            &c,
+            &db,
+            |_| {},
+            |d, t| progress.lock().unwrap().push((d, t)),
+        )
+        .await;
+        assert_eq!(*progress.lock().unwrap(), [(1, 5), (2, 5), (3, 5)]);
         assert_eq!(hits(&m), REFRESH_MAX_FAILS as usize);
         assert!(p.enqueue(vec!["s9".into()]), "dropped queue, worker idle");
     }

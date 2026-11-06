@@ -61,6 +61,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .typ::<services::reward_scan::payload::RewardOverlayView>()
         .typ::<services::wfm::catalog::SetLookup>()
         .typ::<services::wfm::my_orders::CachedOrders>()
+        .typ::<services::jobs::JobUpdate>()
         .typ::<services::overlay::riven::RivenOverlayView>()
         .typ::<services::relic_planner::RelicPlannerEvent>()
         .commands(collect_commands![
@@ -186,6 +187,14 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::wfm::riven_search::wfm_riven_auction_close,
             services::wfm::reviews::wfm_send_plus_rep,
             services::wfm::reviews::wfm_my_reputation,
+            services::jobs::commands::jobs_start_orders_visibility,
+            services::jobs::commands::jobs_start_orders_delete,
+            services::jobs::commands::jobs_start_reprice,
+            services::jobs::commands::jobs_stop,
+            services::jobs::commands::jobs_retry_failed,
+            services::jobs::commands::jobs_continue,
+            services::jobs::commands::jobs_dismiss,
+            services::jobs::commands::jobs_list,
             services::workbench::commands::workbench_get_state,
             services::workbench::commands::workbench_preview_plan,
             services::workbench::commands::workbench_execute_plan,
@@ -318,6 +327,7 @@ pub fn run() {
             app.manage(services::wfm::riven_search::SearchCache::default());
             services::rivens::setup(app);
             services::arbi_schedule::setup(app);
+            services::jobs::commands::setup(app);
             services::workbench::commands::setup(app);
             services::stats::setup(app);
             app.manage(window_state::WindowState::new(&data));

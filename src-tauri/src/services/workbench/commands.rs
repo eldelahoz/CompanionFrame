@@ -13,6 +13,7 @@ use super::matcher::{
 use super::types::*;
 use super::{INTER_ROW_DELAY, NewSellOrder, Workbench, WorkbenchHost};
 use crate::db::Db;
+use crate::services::jobs::commands::{AppJobs, mirror_workbench};
 use crate::services::wfm::catalog::{self, SetLookup};
 use crate::services::wfm::contracts::{self, Contracts, WfmContract};
 use crate::services::wfm::errors::WfmError;
@@ -98,6 +99,9 @@ impl WorkbenchHost for WfmHost {
 
     fn emit(&self, state: &WorkbenchState) {
         let _ = self.0.emit(STATE_EVENT, state);
+        if let Some(jobs) = self.0.try_state::<Arc<AppJobs>>() {
+            mirror_workbench(&jobs, state);
+        }
     }
 }
 

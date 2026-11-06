@@ -126,6 +126,10 @@ impl OrderUpdates {
     }
 }
 
+pub fn platinum(v: u32) -> Result<u32, WfmError> {
+    range(v, 1, MAX_PLATINUM, "platinum")
+}
+
 pub fn range_rank(r: u32) -> Result<u32, WfmError> {
     range(r, 0, MAX_RANK, "rank")
 }

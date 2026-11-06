@@ -15,6 +15,7 @@ pub mod hotkeys;
 pub mod inventory;
 pub mod inventory_sync;
 pub mod item_db;
+pub mod jobs;
 pub mod ledger;
 pub mod market_alerts;
 pub mod mastery;

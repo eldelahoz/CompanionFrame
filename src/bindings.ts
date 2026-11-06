@@ -172,6 +172,14 @@ export const commands = {
 	wfmRivenAuctionClose: (auctionId: string) => typedError<null, WfmError_Serialize>(__TAURI_INVOKE("wfm_riven_auction_close", { auctionId })),
 	wfmSendPlusRep: (username: string) => typedError<SendRepResult, WfmError_Serialize>(__TAURI_INVOKE("wfm_send_plus_rep", { username })),
 	wfmMyReputation: () => typedError<number | null, WfmError_Serialize>(__TAURI_INVOKE("wfm_my_reputation")),
+	jobsStartOrdersVisibility: (ids: string[], visible: boolean) => typedError<string, string>(__TAURI_INVOKE("jobs_start_orders_visibility", { ids, visible })),
+	jobsStartOrdersDelete: (ids: string[]) => typedError<string, string>(__TAURI_INVOKE("jobs_start_orders_delete", { ids })),
+	jobsStartReprice: (items: RepriceItem[]) => typedError<string, string>(__TAURI_INVOKE("jobs_start_reprice", { items })),
+	jobsStop: (id: string) => typedError<null, string>(__TAURI_INVOKE("jobs_stop", { id })),
+	jobsRetryFailed: (id: string) => typedError<string, string>(__TAURI_INVOKE("jobs_retry_failed", { id })),
+	jobsContinue: (id: string) => typedError<string, string>(__TAURI_INVOKE("jobs_continue", { id })),
+	jobsDismiss: (id: string) => typedError<null, string>(__TAURI_INVOKE("jobs_dismiss", { id })),
+	jobsList: () => __TAURI_INVOKE<Job_Serialize[]>("jobs_list"),
 	workbenchGetState: () => __TAURI_INVOKE<WorkbenchState_Serialize>("workbench_get_state"),
 	workbenchPreviewPlan: (plan: WorkbenchPlan_Deserialize, safety: WorkbenchSafetySnapshot) => typedError<WorkbenchPlanValidation_Serialize, string>(__TAURI_INVOKE("workbench_preview_plan", { plan, safety })),
 	workbenchExecutePlan: (plan: WorkbenchPlan_Deserialize, safety: WorkbenchSafetySnapshot) => __TAURI_INVOKE<WorkbenchExecuteResult_Serialize>("workbench_execute_plan", { plan, safety }),
@@ -1494,6 +1502,22 @@ export type ItemDbEntry_Serialize = {
 	reusableBlueprint?: boolean,
 };
 
+export type ItemStatus = "pending" | "running" | "done" | "failed" | "skipped";
+
+export type ItemUpdate = ItemUpdate_Serialize | ItemUpdate_Deserialize;
+
+export type ItemUpdate_Deserialize = {
+	id: string,
+	status: ItemStatus,
+	reason?: string | null,
+};
+
+export type ItemUpdate_Serialize = {
+	id: string,
+	status: ItemStatus,
+	reason: string | null,
+};
+
 export type Item_Deserialize = {
 	id: string,
 	slug: string,
@@ -1544,6 +1568,106 @@ export type Item_Serialize = {
 	tradingTax: number | null,
 	tradable: boolean | null,
 	i18n: { [key in string]: I18n_Serialize },
+};
+
+export type Job = Job_Serialize | Job_Deserialize;
+
+export type JobItem = JobItem_Serialize | JobItem_Deserialize;
+
+export type JobItem_Deserialize = {
+	/**  The order id. */
+	id: string,
+	name: string,
+	/**  The new price of a `Reprice` item. */
+	platinum?: number | null,
+	status: ItemStatus,
+	/**  Why a failed item failed. */
+	reason?: string | null,
+};
+
+export type JobItem_Serialize = {
+	/**  The order id. */
+	id: string,
+	name: string,
+	/**  The new price of a `Reprice` item. */
+	platinum: number | null,
+	status: ItemStatus,
+	/**  Why a failed item failed. */
+	reason: string | null,
+};
+
+export type JobKind = { type: "ordersVisibility"; visible: boolean } | { type: "ordersDelete" } | { type: "reprice" } | 
+/**  Mirror of the workbench run; its engine stays in charge. */
+{ type: "workbench" } | 
+/**  Mirror of the price refresh worker: progress only. */
+{ type: "pricesRefresh" };
+
+export type JobState = "running" | 
+/**  Stop asked: the item in flight finishes, none starts. */
+"stopping" | "done" | 
+/**  The app closed mid-run (or the session died): the pending items wait for the user. */
+"interrupted";
+
+/**
+ *  What changed, small: the counts, the state and at most one item. `job` rides along only when the job
+ *  is new, so the UI learns its items once.
+ */
+export type JobUpdate = JobUpdate_Serialize | JobUpdate_Deserialize;
+
+/**
+ *  What changed, small: the counts, the state and at most one item. `job` rides along only when the job
+ *  is new, so the UI learns its items once.
+ */
+export type JobUpdate_Deserialize = {
+	id: string,
+	state: JobState,
+	total: number,
+	done: number,
+	failed: number,
+	item?: ItemUpdate_Deserialize | null,
+	job?: Job_Deserialize | null,
+};
+
+/**
+ *  What changed, small: the counts, the state and at most one item. `job` rides along only when the job
+ *  is new, so the UI learns its items once.
+ */
+export type JobUpdate_Serialize = {
+	id: string,
+	state: JobState,
+	total: number,
+	done: number,
+	failed: number,
+	item: ItemUpdate_Serialize | null,
+	job: Job_Serialize | null,
+};
+
+export type Job_Deserialize = {
+	id: string,
+	kind: JobKind,
+	state: JobState,
+	total: number,
+	/**  Items that went through. */
+	done: number,
+	failed: number,
+	/**  Empty for the price refresh, which has no per-item story. */
+	items: JobItem_Deserialize[],
+	createdAt: number | null,
+	finishedAt?: number | null,
+};
+
+export type Job_Serialize = {
+	id: string,
+	kind: JobKind,
+	state: JobState,
+	total: number,
+	/**  Items that went through. */
+	done: number,
+	failed: number,
+	/**  Empty for the price refresh, which has no per-item story. */
+	items: JobItem_Serialize[],
+	createdAt: number | null,
+	finishedAt: number | null,
 };
 
 export type LedgerBatch = LedgerBatch_Serialize | LedgerBatch_Deserialize;
@@ -2866,6 +2990,11 @@ export type RelicReward_Serialize = {
 	urlName: string | null,
 	wfmId: string | null,
 	ducats: number | null,
+};
+
+export type RepriceItem = {
+	id: string,
+	platinum: number,
 };
 
 export type RewardFailure = 
