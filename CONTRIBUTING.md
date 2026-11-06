@@ -84,6 +84,7 @@ type(scope): summary in the imperative
 | `wfm` | warframe.market |
 | `eelog` | EE.log and trackers |
 | `db` | SQLite and migrations |
+| `jobs` | Background jobs and the titlebar jobs pill |
 | `i18n` | Translations |
 | `linux` / `windows` | Platform-specific code |
 | `deps` | Dependency updates |
