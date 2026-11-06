@@ -34,11 +34,29 @@ import { useWfmCatalog } from "../stores/market";
 import { useMasteryProgress } from "../stores/mastery";
 import { setActiveItem } from "../stores/modals";
 import { useWorkbenchState } from "../stores/workbench";
+import { createViewState } from "../stores/viewState";
 import type { InventoryGroup, ItemDbEntry } from "../types/inventory";
 import ResourcesView from "./ResourcesView";
 import { applyIds, useRangeSelect } from "../lib/useRangeSelect";
 
 type Tab = InventoryGroup | "everything" | "resources" | "pets";
+
+/** The view comes back as the user left it (memory only). */
+const inv = createViewState({
+  tab: "everything" as Tab,
+  query: "",
+  desc: false,
+  customRange: false,
+  goal: "all" as Goal,
+  tradableOnly: false,
+  ducatsOnly: false,
+  saleWant: "all" as "all" | "listed" | "unlisted",
+  primeWant: "all" as "all" | "prime" | "non",
+  masteryWant: "all" as "all" | "mastered" | "missing",
+  modWant: NO_MOD_FILTERS as ModFilters,
+  surplusOnly: false,
+  equippedView: false,
+});
 
 const TABS: ReadonlyArray<readonly [Tab, MessageKey]> = [
   ["everything", "inventory.tab.everything"],
@@ -83,22 +101,22 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
   const onSale = useOnSale(wfmLoggedIn, parsed);
   const { catalog } = useWfmCatalog();
   const { data: masteryData } = useMasteryProgress();
-  const [tab, setTab] = useState<Tab>("everything");
-  const [query, setQuery] = useState("");
+  const [tab, setTab] = inv.useField("tab");
+  const [query, setQuery] = inv.useField("query");
   const [mode, setMode] = usePersisted("wf_inventory_view_mode", MODES, "cards");
   const [sortKey, setSortKey] = usePersisted("wf_inventory_sort", SORT_KEYS, "name");
-  const [desc, setDesc] = useState(false);
+  const [desc, setDesc] = inv.useField("desc");
   const [range, setRange] = usePersistedRange();
-  const [customRange, setCustomRange] = useState(() => presetKey(range) === null);
-  const [goal, setGoal] = useState<Goal>("all");
-  const [tradableOnly, setTradableOnly] = useState(false);
-  const [ducatsOnly, setDucatsOnly] = useState(false);
-  const [saleWant, setSaleWant] = useState<"all" | "listed" | "unlisted">("all");
-  const [primeWant, setPrimeWant] = useState<"all" | "prime" | "non">("all");
-  const [masteryWant, setMasteryWant] = useState<"all" | "mastered" | "missing">("all");
-  const [modWant, setModWant] = useState<ModFilters>(NO_MOD_FILTERS);
-  const [surplusOnly, setSurplusOnly] = useState(false);
-  const [equippedView, setEquippedView] = useState(false);
+  const [customRange, setCustomRange] = inv.useField("customRange");
+  const [goal, setGoal] = inv.useField("goal");
+  const [tradableOnly, setTradableOnly] = inv.useField("tradableOnly");
+  const [ducatsOnly, setDucatsOnly] = inv.useField("ducatsOnly");
+  const [saleWant, setSaleWant] = inv.useField("saleWant");
+  const [primeWant, setPrimeWant] = inv.useField("primeWant");
+  const [masteryWant, setMasteryWant] = inv.useField("masteryWant");
+  const [modWant, setModWant] = inv.useField("modWant");
+  const [surplusOnly, setSurplusOnly] = inv.useField("surplusOnly");
+  const [equippedView, setEquippedView] = inv.useField("equippedView");
   const toggleMod = (key: keyof ModFilters) => setModWant((cur) => ({ ...cur, [key]: !cur[key] }));
   // A goal is a shortcut: it sets exactly its filters, and touching any filter by hand releases it.
   const pickGoal = (g: Goal) => {
