@@ -48,7 +48,7 @@ import type { TradeEvent } from "../types/stats";
 import { localDayKey } from "../../config/shared/dayKey";
 import type { ArbiRunStats } from "../../config/shared/arbiTypes";
 import { MOCK_ARBI_RUNS, MOCK_PT_RUNS } from "./arbi/mockRuns";
-import { MOCK_MASTERY } from "./mockMastery";
+import { bulkMasteryItem, MOCK_MASTERY } from "./mockMastery";
 
 import type { RawInventoryData } from "../types/inventory";
 import { mockWorldState } from "./world/fixture";
@@ -290,8 +290,11 @@ export const onWfmOrderClosed = async (cb: (e: { order_id: string; quantity: num
 /** Mastery progress from the inventory snapshot, else from the public profile (`fromProfile`), else null. */
 export const getMasteryProgress = async (): Promise<MasteryProgress | null> => {
   if (inTauri()) return unwrap(await commands.getMasteryProgress());
-  if (mockSource !== "none") return MOCK_MASTERY;
-  return mockParam("profile") === null ? null : { ...MOCK_MASTERY, fromProfile: true };
+  const n = Math.min(10_000, Number(mockParam("bigMastery")) || 0);
+  // `?bigMastery=N` adds that many unowned items (each with its parts), to check the Mastery grid at a real account's size.
+  const base = n ? { ...MOCK_MASTERY, items: [...MOCK_MASTERY.items, ...Array.from({ length: n }, (_, i) => bulkMasteryItem(i))] } : MOCK_MASTERY;
+  if (mockSource !== "none") return base;
+  return mockParam("profile") === null ? null : { ...base, fromProfile: true };
 };
 
 /** Fires when a public-profile fetch refreshed the profile-derived mastery data. */
@@ -497,8 +500,19 @@ export const onHelperDownloadProgress = async (cb: (p: HelperDownloadProgress) =
 
 // ---- relics, drops, spawn nodes ----
 
-export const getRelicDatabase = async (): Promise<RelicDatabase> =>
-  inTauri() ? unwrap(await commands.getRelicDatabase()) : structuredClone(MOCK_RELIC_DB);
+export const getRelicDatabase = async (): Promise<RelicDatabase> => {
+  if (inTauri()) return unwrap(await commands.getRelicDatabase());
+  const db = structuredClone(MOCK_RELIC_DB);
+  // `?bigRelics=N` adds that many relics (copies of the mock ones), to check the Relics grid at a real database's size.
+  const n = Math.min(10_000, Number(mockParam("bigRelics")) || 0);
+  const base = Object.values(MOCK_RELIC_DB.groups);
+  for (let i = 0; i < n; i++) {
+    const src = base[i % base.length];
+    const key = `${src.tier} Z${i}`;
+    db.groups[key] = { ...structuredClone(src), key, name: key, code: `Z${i}` };
+  }
+  return db;
+};
 
 export const getRelicDataInfo = async (): Promise<RelicDataInfo> =>
   inTauri() ? commands.getRelicDataInfo() : { version: "1.1276.6", source: "bundled", publishedAt: null, updateError: null, updateOffline: false, newerUnusable: false };
