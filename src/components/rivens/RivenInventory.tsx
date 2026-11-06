@@ -12,6 +12,7 @@ import SortControl from "../SortControl";
 import { Button, Card, EmptyState, Field, IconButton, SearchInput, Segmented, Select, Skeleton } from "../ui";
 import RivenCard, { type RivenCardSize } from "./RivenCard";
 import RivenDetailModal from "./RivenDetailModal";
+import { createViewState } from "../../stores/viewState";
 
 const TYPES = ["all", "Rifle", "Shotgun", "Pistol", "Melee", "Archgun", "Kitgun", "Zaw"] as const;
 // Letter families: grading emits +/- variants (A+, B-, ...), S and F stand alone.
@@ -116,14 +117,22 @@ interface Props {
 }
 
 /** Inventory rivens as decoded from their fingerprints: the Unveiled and Veiled tabs of the Rivens view. */
+/** The filters come back as the user left them (memory only). */
+const rivenInv = createViewState({
+  query: "",
+  type: "all" as (typeof TYPES)[number],
+  grade: "all" as (typeof GRADES)[number],
+  attrGrade: "all" as (typeof ATTR_GRADES)[number],
+});
+
 export default function RivenInventory({ tab, tr, locale, items, similarAuctions, onSimilarAuctions, onData }: Props) {
   const [data, setData] = useState<DecodedRivens | null>(null);
   const [listings, setListings] = useState<WfmContract[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [query, setQuery] = useState("");
-  const [type, setType] = useState<(typeof TYPES)[number]>("all");
-  const [grade, setGrade] = useState<(typeof GRADES)[number]>("all");
-  const [attrGrade, setAttrGrade] = useState<(typeof ATTR_GRADES)[number]>("all");
+  const [query, setQuery] = rivenInv.useField("query");
+  const [type, setType] = rivenInv.useField("type");
+  const [grade, setGrade] = rivenInv.useField("grade");
+  const [attrGrade, setAttrGrade] = rivenInv.useField("attrGrade");
   const [sort, setSort] = usePersisted<SortKey>("cf_rivens_sort", SORTS, "name");
   const [dir, setDir] = usePersisted("cf_rivens_sort_dir", DIRS, "asc");
   const [size, setSize] = usePersisted<RivenCardSize>("cf_rivens_card_size", SIZES, "full");

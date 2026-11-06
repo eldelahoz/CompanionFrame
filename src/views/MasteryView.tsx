@@ -24,6 +24,7 @@ import { parseOwnedRelics } from "../lib/relic/relicInventory";
 import type { RelicDatabase } from "../lib/relic/types";
 import { usePersisted } from "../lib/usePersisted";
 import { useWfmCatalog } from "../stores/market";
+import { createViewState } from "../stores/viewState";
 import { foundryFor, ownershipFor, useInventory } from "../stores/inventory";
 import { useMasteryProgress } from "../stores/mastery";
 import { useItemDatabase } from "../stores/items";
@@ -176,6 +177,9 @@ interface Props {
   locale: string;
 }
 
+/** The search comes back as the user left it (memory only). */
+const masteryUi = createViewState({ query: "" });
+
 export default function MasteryView({ tr, locale }: Props) {
   const shared = useMasteryProgress();
   const data: MasteryProgress | null | undefined = shared.loaded ? shared.data : undefined;
@@ -190,7 +194,7 @@ export default function MasteryView({ tr, locale }: Props) {
   const [status, setStatus] = usePersisted("wf_mastery_status_tab", STATUS_TABS.map(([k]) => k), "all");
   const [expanded, setExpanded] = useState(() => readStorage("mastery-breakdown-expanded") === "true");
   const [display, setDisplay] = usePersisted("mastery-breakdown-display", ["bars", "rings"] as const, "bars");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = masteryUi.useField("query");
   const [sort, setSort] = usePersisted("wf_mastery_sort", SORTS.map(([k]) => k), "name");
   const [plannerSort, setPlannerSort] = usePersisted<PlannerSort>("wf_mastery_planner_sort", PLANNER_SORTS, "mastery_xp");
   const pins = useMasteryPins();
