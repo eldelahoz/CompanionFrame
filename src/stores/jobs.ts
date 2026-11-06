@@ -9,7 +9,7 @@ export interface JobsState {
 export const OK_VISIBLE_MS = 5_000;
 
 /** The price refresh: progress only, nothing to act on. */
-export const isBackground = (job: Job) => job.kind.type === "pricesRefresh";
+export const isBackground = (job: Job) => job.kind.type === "pricesLoad";
 
 /** Folds one backend update into the list. */
 export function applyUpdate(jobs: Job[], u: JobUpdate): Job[] {

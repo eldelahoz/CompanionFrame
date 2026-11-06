@@ -2154,7 +2154,7 @@
   "jobs.pillLabel": "Hintergrundaufgaben: {text}",
   "jobs.running.reprice": "Aktualisiere Preise {done} von {total}...",
   "jobs.running.workbench": "Verkaufsplan {done} von {total}...",
-  "jobs.running.prices": "Aktualisiere Preise {done} von {total}",
+  "jobs.running.prices": "Preise {done} von {total}",
   "jobs.name.visibility": "Aufträge verstecken oder zeigen",
   "jobs.name.delete": "Aufträge löschen",
   "jobs.name.reprice": "Preise aktualisieren",

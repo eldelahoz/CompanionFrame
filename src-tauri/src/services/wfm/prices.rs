@@ -36,6 +36,8 @@ const BULK_FRESH_MS: i64 = 6 * 60 * 60 * 1000;
 const REFRESH_MAX_FAILS: u32 = 3;
 pub const REFRESHED_EVENT: &str = "wfm-prices-refreshed";
 const BULK_MAX: usize = 500;
+/// Slugs one `wfm_prices_load` call may carry (a whole inventory); the cache is read in `BULK_MAX` chunks.
+const LOAD_MAX: usize = 20_000;
 const BULK_PARALLEL: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -113,6 +115,18 @@ fn write(db: &Db, slug: &str, c: &Cached) {
         .and_then(|j| kv_put(db, &key(slug), &j).map_err(|e| e.to_string()))
     {
         tracing::warn!(error = %e, slug, "wfm price cache write failed");
+    }
+}
+
+fn failed_entry(slug: &str) -> PriceEntry {
+    PriceEntry {
+        slug: slug.into(),
+        status: PriceStatus::Failed,
+        price: None,
+        max_price: None,
+        max_rank: None,
+        stale: false,
+        updated_at: None,
     }
 }
 
@@ -293,6 +307,7 @@ impl Prices {
         let stored = kv_get_many(db, &keys).unwrap_or_default();
         let out = futures_util::stream::iter(slugs)
             .map(|s| async {
+                let s = s;
                 let norm = normalize_slug(&s).ok();
                 let hit = norm.and_then(|n| {
                     let c = parse(stored.get(&key(&n))?)?;
@@ -311,15 +326,7 @@ impl Prices {
                 let e = self
                     .price(client, db, &s, Priority::Background)
                     .await
-                    .unwrap_or(PriceEntry {
-                        slug: s,
-                        status: PriceStatus::Failed,
-                        price: None,
-                        max_price: None,
-                        max_rank: None,
-                        stale: false,
-                        updated_at: None,
-                    });
+                    .unwrap_or_else(|_| failed_entry(&s));
                 (e, 0)
             })
             .buffered(BULK_PARALLEL)
@@ -344,6 +351,53 @@ impl Prices {
             t.elapsed().as_millis()
         );
         Ok((out.into_iter().map(|(e, _)| e).collect(), stale))
+    }
+
+    /// Whatever the cache holds for `slugs` comes back at once, however old (`stale` marks the old ones); the
+    /// second value lists what the worker should fetch or refresh, in the caller's order: slugs with nothing
+    /// cached first, then pre-rank entries, then merely old ones. A slug that cannot be a route comes back
+    /// `failed`. Reads the cache in `BULK_MAX` chunks, so a whole inventory is one call.
+    pub fn load(
+        &self,
+        db: &Db,
+        slugs: Vec<String>,
+    ) -> Result<(Vec<PriceEntry>, Vec<String>), WfmError> {
+        if slugs.len() > LOAD_MAX {
+            return Err(WfmError::invalid(format!(
+                "at most {LOAD_MAX} slugs per call"
+            )));
+        }
+        let mut seen = HashSet::new();
+        let slugs: Vec<_> = slugs
+            .into_iter()
+            .filter(|s| seen.insert(s.clone()))
+            .collect();
+        let (mut served, mut todo) = (Vec::new(), [Vec::new(), Vec::new(), Vec::new()]);
+        for chunk in slugs.chunks(BULK_MAX) {
+            let norm: Vec<_> = chunk.iter().map(|s| (s, normalize_slug(s).ok())).collect();
+            let keys: Vec<_> = norm
+                .iter()
+                .filter_map(|(_, n)| n.as_deref().map(key))
+                .collect();
+            let stored = kv_get_many(db, &keys).unwrap_or_default();
+            for (raw, n) in norm {
+                let Some(n) = n else {
+                    served.push(failed_entry(raw));
+                    continue;
+                };
+                match stored.get(&key(&n)).and_then(|v| parse(v)) {
+                    Some(c) => {
+                        let old = c.v < CACHE_V || now_ms() - c.ts >= BULK_FRESH_MS;
+                        served.push(entry(&n, &c, old));
+                        if old {
+                            todo[if c.v < CACHE_V { 1 } else { 2 }].push(n);
+                        }
+                    }
+                    None => todo[0].push(n),
+                }
+            }
+        }
+        Ok((served, todo.concat()))
     }
 
     /// Queues `slugs` (most urgent first) for the one refresh worker. They go ahead of what is already
@@ -385,6 +439,8 @@ impl Prices {
             let slug = {
                 let mut q = self.refresh.lock().unwrap();
                 let next = if fails >= REFRESH_MAX_FAILS {
+                    // What was queued gives up: tell the views, they offer a retry.
+                    landed.extend(q.pending.iter().map(|s| failed_entry(s)));
                     q.pending.clear();
                     q.covered.clear();
                     None
@@ -406,7 +462,11 @@ impl Prices {
                     fails = 0;
                     landed.push(e);
                 }
-                _ => fails += 1,
+                Ok(_) => fails += 1,
+                Err(_) => {
+                    fails += 1;
+                    landed.push(failed_entry(&slug));
+                }
             }
             let left = {
                 let mut q = self.refresh.lock().unwrap();
@@ -470,13 +530,7 @@ fn spawn_refresh(app: tauri::AppHandle, stale: Vec<String>) {
         // Shown in the jobs panel, with progress and no Stop.
         let job = |state, done, total| {
             if let Some(jobs) = app.try_state::<Arc<AppJobs>>() {
-                jobs.mirror(
-                    "prices",
-                    JobKind::PricesRefresh,
-                    state,
-                    (done, total),
-                    vec![],
-                );
+                jobs.mirror("prices", JobKind::PricesLoad, state, (done, total), vec![]);
             }
         };
         prices
@@ -491,6 +545,22 @@ fn spawn_refresh(app: tauri::AppHandle, stale: Vec<String>) {
             .await;
         job(JobState::Done, 0, 0);
     });
+}
+
+/// The whole inventory's prices in one request: the cached ones come back at once, the rest are fetched or
+/// refreshed by the one worker (background priority, this call's slugs ahead of what was already queued) and
+/// arrive as `wfm-prices-refreshed` batches, `failed` entries included. Progress is the `PricesLoad` job.
+#[tauri::command]
+#[specta::specta]
+pub fn wfm_prices_load(
+    app: tauri::AppHandle,
+    db: State<'_, Db>,
+    prices: State<'_, Prices>,
+    slugs: Vec<String>,
+) -> Result<Vec<PriceEntry>, WfmError> {
+    let (served, todo) = prices.load(&db, slugs)?;
+    spawn_refresh(app, todo);
+    Ok(served)
 }
 
 #[tauri::command]
@@ -868,15 +938,65 @@ mod tests {
         let (c, db, p) = (client(&m), mem_db(), Prices::default());
         assert!(p.enqueue((0..5).map(|i| format!("s{i}")).collect()));
         let progress = Mutex::new(vec![]);
+        let told = Mutex::new(vec![]);
         p.run_worker(
             &c,
             &db,
-            |_| {},
+            |b| told.lock().unwrap().extend(b),
             |d, t| progress.lock().unwrap().push((d, t)),
         )
         .await;
+        // The tried slugs and the dropped queue are all reported as failed, so a view can offer a retry.
+        let told = told.lock().unwrap();
+        assert_eq!(told.len(), 5);
+        assert!(told.iter().all(|e| e.status == PriceStatus::Failed));
         assert_eq!(*progress.lock().unwrap(), [(1, 5), (2, 5), (3, 5)]);
         assert_eq!(hits(&m), REFRESH_MAX_FAILS as usize);
         assert!(p.enqueue(vec!["s9".into()]), "dropped queue, worker idle");
+    }
+
+    #[test]
+    fn load_serves_the_cache_at_once_and_lists_what_the_worker_must_fetch_in_the_callers_order() {
+        let (db, p) = (mem_db(), Prices::default());
+        let put = |slug: &str, ts: i64, v: u8| {
+            write(
+                &db,
+                slug,
+                &Cached {
+                    status: PriceStatus::Ok,
+                    price: Some(9),
+                    max_price: None,
+                    max_rank: None,
+                    ts,
+                    v,
+                },
+            );
+        };
+        put("fresh", now_ms(), CACHE_V);
+        put("old", now_ms() - BULK_FRESH_MS - 1, CACHE_V);
+        put("pre_rank", now_ms(), 1);
+        let ask: Vec<String> = [
+            "old", "gone", "fresh", "pre_rank", "../bad", "gone2", "fresh",
+        ]
+        .map(String::from)
+        .into();
+        let (served, todo) = p.load(&db, ask).unwrap();
+        let by = |s: &str| served.iter().find(|e| e.slug == s).unwrap();
+        assert_eq!(
+            served.len(),
+            4,
+            "duplicates once, uncached ones wait for the worker"
+        );
+        assert!(!by("fresh").stale && by("old").stale && by("pre_rank").stale);
+        assert_eq!(by("../bad").status, PriceStatus::Failed);
+        // Nothing cached first (caller's order), then pre-rank entries, then merely old ones.
+        assert_eq!(todo, ["gone", "gone2", "pre_rank", "old"]);
+        // More than one cache chunk, and a cap.
+        let many: Vec<String> = (0..BULK_MAX * 2 + 3).map(|i| format!("s{i}")).collect();
+        assert_eq!(p.load(&db, many).unwrap().1.len(), BULK_MAX * 2 + 3);
+        assert!(
+            p.load(&db, (0..=LOAD_MAX).map(|i| format!("s{i}")).collect())
+                .is_err()
+        );
     }
 }

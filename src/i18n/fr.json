@@ -2154,7 +2154,7 @@
   "jobs.pillLabel": "Tâches en arrière-plan : {text}",
   "jobs.running.reprice": "Mise à jour des prix {done} sur {total}...",
   "jobs.running.workbench": "Plan de vente {done} sur {total}...",
-  "jobs.running.prices": "Actualisation des prix {done} sur {total}",
+  "jobs.running.prices": "Prix {done} sur {total}",
   "jobs.name.visibility": "Masquer ou afficher des ordres",
   "jobs.name.delete": "Supprimer des ordres",
   "jobs.name.reprice": "Mettre à jour les prix",

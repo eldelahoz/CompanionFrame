@@ -11,14 +11,14 @@ const RUNNING: Record<Job["kind"]["type"], MessageKey> = {
   ordersDelete: "market.bulkDeleting",
   reprice: "jobs.running.reprice",
   workbench: "jobs.running.workbench",
-  pricesRefresh: "jobs.running.prices",
+  pricesLoad: "jobs.running.prices",
 };
 const NAME: Record<Job["kind"]["type"], MessageKey> = {
   ordersVisibility: "jobs.name.visibility",
   ordersDelete: "jobs.name.delete",
   reprice: "jobs.name.reprice",
   workbench: "jobs.name.workbench",
-  pricesRefresh: "jobs.name.prices",
+  pricesLoad: "jobs.name.prices",
 };
 const MAX_REASONS = 5;
 
@@ -43,7 +43,7 @@ function JobRow({ job, tr }: { job: Job; tr: Translator }) {
   const failed = job.items.filter((i) => i.status === "failed");
   const left = job.total - processed(job);
   // The workbench keeps its own review and retry flow; the price refresh has nothing to repeat.
-  const repeatable = job.kind.type !== "workbench" && job.kind.type !== "pricesRefresh";
+  const repeatable = job.kind.type !== "workbench" && job.kind.type !== "pricesLoad";
   return (
     <li className="flex flex-col gap-1.5 border-t border-border py-2 first:border-t-0" data-job={job.kind.type} data-job-state={job.state}>
       <div className="flex items-center gap-2 text-sm">
@@ -93,9 +93,10 @@ export default function JobsPill({ tr }: { tr: Translator }) {
   const { jobs } = useJobs();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  const shown = jobs.filter((j) => !isBackground(j));
-  // What the pill says: a running job first, then one that needs the user, then the latest finish.
-  const lead = shown.find(active) ?? shown.find(attention) ?? shown[shown.length - 1];
+  const user = jobs.filter((j) => !isBackground(j));
+  // What the pill says: the user's running job first, then one that needs them, then the latest finish, and only
+  // then a background job (muted).
+  const lead = user.find(active) ?? user.find(attention) ?? user[user.length - 1] ?? jobs.find((j) => isBackground(j) && active(j));
 
   useEffect(() => {
     if (!open) return;
@@ -111,11 +112,12 @@ export default function JobsPill({ tr }: { tr: Translator }) {
 
   if (!lead) return null;
   const text = summary(lead, tr);
-  const Icon = active(lead) ? LoaderCircle : attention(lead) ? TriangleAlert : Check;
+  const quiet = isBackground(lead);
+  const Icon = quiet ? null : active(lead) ? LoaderCircle : attention(lead) ? TriangleAlert : Check;
   return (
     <div ref={box} className="relative">
-      <button type="button" className="titlebar-pill" aria-label={tr("jobs.pillLabel", { text })} aria-expanded={open} aria-haspopup="dialog" data-jobs-pill={lead.state} onClick={() => setOpen((o) => !o)}>
-        <Icon className={`size-3.5 ${active(lead) ? "animate-spin" : ""}`} aria-hidden />
+      <button type="button" className={`titlebar-pill ${quiet ? "text-text-muted" : ""}`} aria-label={tr("jobs.pillLabel", { text })} aria-expanded={open} aria-haspopup="dialog" data-jobs-pill={quiet ? "background" : lead.state} onClick={() => setOpen((o) => !o)}>
+        {Icon && <Icon className={`size-3.5 ${active(lead) ? "animate-spin" : ""}`} aria-hidden />}
         <span className="titlebar-pill-text">{text}</span>
       </button>
       {open && (

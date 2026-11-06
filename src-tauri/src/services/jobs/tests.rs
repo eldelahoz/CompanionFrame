@@ -407,14 +407,8 @@ fn a_mirrored_job_announces_only_what_changed_and_a_dismissed_one_stays_gone() {
     assert!(!jobs.has("w"));
 
     // The price refresh has counts only, and vanishes when done.
-    jobs.mirror(
-        "p",
-        JobKind::PricesRefresh,
-        JobState::Running,
-        (3, 9),
-        vec![],
-    );
+    jobs.mirror("p", JobKind::PricesLoad, JobState::Running, (3, 9), vec![]);
     assert_eq!(job_of(&jobs, "p").unwrap().done, 3);
-    jobs.mirror("p", JobKind::PricesRefresh, JobState::Done, (0, 0), vec![]);
+    jobs.mirror("p", JobKind::PricesLoad, JobState::Done, (0, 0), vec![]);
     assert!(!jobs.has("p"));
 }

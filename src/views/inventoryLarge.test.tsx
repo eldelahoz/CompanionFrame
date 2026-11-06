@@ -9,7 +9,7 @@ import InventoryView from "./InventoryView";
 const bulk = vi.hoisted(() => ({ calls: [] as string[][], open: 0, peak: 0 }));
 vi.mock("../lib/ipc", async (orig) => ({
   ...(await orig<typeof import("../lib/ipc")>()),
-  wfmPricesBulk: async (slugs: string[]) => {
+  wfmPricesLoad: async (slugs: string[]) => {
     bulk.calls.push(slugs);
     bulk.peak = Math.max(bulk.peak, ++bulk.open);
     await new Promise((r) => setTimeout(r, 0));
@@ -63,16 +63,17 @@ test("searching starts again from one batch and counts follow the search", async
   expect(screen.getByRole("tab", { name: /Everything/ }).textContent).not.toContain("26");
 }, 30000);
 
-test("prices are asked in chunks of at most 40, one call at a time, rows on screen first, and the totals converge", async () => {
+test("prices are asked in one request for the whole inventory, rows on screen first, and the totals converge", async () => {
   render(<InventoryView items={items} tr={tr} />);
   await waitFor(() => expect(cards().length).toBeGreaterThan(0));
-  const onScreen = new Set([...cards()].map((c) => c.getAttribute("data-inventory-card")?.match(/Bulk(\d+)Mod/)?.[1]));
+  const onScreen = new Set([...cards()].flatMap((c) => c.getAttribute("data-inventory-card")?.match(/Bulk(\d+)Mod/)?.[1] ?? []));
   await waitFor(() => expect(bulk.calls.length).toBeGreaterThan(0));
-  expect(bulk.calls[0].every((s) => !s.startsWith("bulk_mod_") || onScreen.has(s.replace("bulk_mod_", "")))).toBe(true);
+  const first = bulk.calls[0].filter((s) => s.startsWith("bulk_mod_")).slice(0, onScreen.size);
+  expect(first.every((s) => onScreen.has(s.replace("bulk_mod_", "")))).toBe(true);
   // Everything is priced in the end: the "pricing n/m" line goes away.
   await waitFor(() => expect(document.querySelector("[data-inventory-pricing]")).toBeNull(), { timeout: 30000 });
-  expect(Math.max(...bulk.calls.map((c) => c.length))).toBeLessThanOrEqual(40);
-  expect(bulk.peak).toBe(1);
+  // The backend chunks and queues: the frontend sends everything at once.
+  expect(bulk.calls[0].length).toBeGreaterThan(40);
 }, 40000);
 
 test("hovering or focusing a card opens the large preview", async () => {

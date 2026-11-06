@@ -79,6 +79,12 @@ export const commands = {
 	wfmPrice: (slug: string) => typedError<PriceEntry_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_price", { slug })),
 	/**  Prices for many slugs (the inventory view). A slug that fails comes back `failed`, not as an error. */
 	wfmPricesBulk: (slugs: string[]) => typedError<PriceEntry_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_prices_bulk", { slugs })),
+	/**
+	 *  The whole inventory's prices in one request: the cached ones come back at once, the rest are fetched or
+	 *  refreshed by the one worker (background priority, this call's slugs ahead of what was already queued) and
+	 *  arrive as `wfm-prices-refreshed` batches, `failed` entries included. Progress is the `PricesLoad` job.
+	 */
+	wfmPricesLoad: (slugs: string[]) => typedError<PriceEntry_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_prices_load", { slugs })),
 	wfmStatsHistory: (slug: string) => typedError<MarketStatPoint_Serialize[], WfmError_Serialize>(__TAURI_INVOKE("wfm_stats_history", { slug })),
 	wfmPresenceGet: () => typedError<PresenceState_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_presence_get")),
 	wfmPresenceSet: (status: Status) => typedError<PresenceState_Serialize, WfmError_Serialize>(__TAURI_INVOKE("wfm_presence_set", { status })),
@@ -1597,7 +1603,7 @@ export type JobKind = { type: "ordersVisibility"; visible: boolean } | { type: "
 /**  Mirror of the workbench run; its engine stays in charge. */
 { type: "workbench" } | 
 /**  Mirror of the price refresh worker: progress only. */
-{ type: "pricesRefresh" };
+{ type: "pricesLoad" };
 
 export type JobState = "running" | 
 /**  Stop asked: the item in flight finishes, none starts. */

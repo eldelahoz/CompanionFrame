@@ -117,6 +117,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             services::wfm::riven_items::wfm_riven_weapons,
             services::wfm::prices::wfm_price,
             services::wfm::prices::wfm_prices_bulk,
+            services::wfm::prices::wfm_prices_load,
             services::wfm::prices::wfm_stats_history,
             services::wfm::live::wfm_presence_get,
             services::wfm::live::wfm_presence_set,

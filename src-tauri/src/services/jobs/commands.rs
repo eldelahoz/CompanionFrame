@@ -64,7 +64,7 @@ pub async fn write_order(
             }
             return Ok(());
         }
-        JobKind::Workbench | JobKind::PricesRefresh => {
+        JobKind::Workbench | JobKind::PricesLoad => {
             return Err(WfmError::invalid("not a job this engine runs"));
         }
     };

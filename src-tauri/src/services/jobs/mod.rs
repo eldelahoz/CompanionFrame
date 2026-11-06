@@ -32,13 +32,13 @@ pub enum JobKind {
     /// Mirror of the workbench run; its engine stays in charge.
     Workbench,
     /// Mirror of the price refresh worker: progress only.
-    PricesRefresh,
+    PricesLoad,
 }
 
 impl JobKind {
     /// Run and journaled by this engine (the others are mirrors).
     fn owned(&self) -> bool {
-        !matches!(self, Self::Workbench | Self::PricesRefresh)
+        !matches!(self, Self::Workbench | Self::PricesLoad)
     }
 }
 
@@ -488,7 +488,7 @@ impl<H: JobHost> Jobs<H> {
                 }
             };
             // A finished price refresh leaves nothing to show.
-            if job.kind == JobKind::PricesRefresh && state == JobState::Done {
+            if job.kind == JobKind::PricesLoad && state == JobState::Done {
                 jobs.retain(|j| j.id != id);
             }
             ups

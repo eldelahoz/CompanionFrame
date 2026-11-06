@@ -2154,7 +2154,7 @@
   "jobs.pillLabel": "Background jobs: {text}",
   "jobs.running.reprice": "Updating prices {done} of {total}...",
   "jobs.running.workbench": "Selling plan {done} of {total}...",
-  "jobs.running.prices": "Refreshing prices {done} of {total}",
+  "jobs.running.prices": "Prices {done} of {total}",
   "jobs.name.visibility": "Hide or show orders",
   "jobs.name.delete": "Delete orders",
   "jobs.name.reprice": "Update prices",

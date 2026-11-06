@@ -120,16 +120,25 @@ test("a clean finish shows a check line that goes away after its timeout", async
   expect(screen.queryByRole("button")).toBeNull();
 });
 
-test("the price refresh stays out of the pill but shows progress in the panel while a user job runs", async () => {
+test("a background job shows muted, without a spinner, when no user job runs; a running user job takes over the pill", async () => {
   render(<JobsPill tr={tr} />);
   await act(async () => {});
-  const prices = job({ id: "p", kind: { type: "pricesRefresh" }, total: 9, done: 3, items: [] });
+  const prices = job({ id: "p", kind: { type: "pricesLoad" }, total: 1493, done: 585, items: [] });
   act(() => send(update(prices, { job: prices })));
-  expect(screen.queryByRole("button")).toBeNull();
+  const pill = screen.getByRole("button", { name: /Prices 585 of 1493/ });
+  expect(pill.getAttribute("data-jobs-pill")).toBe("background");
+  expect(pill.querySelector("svg")).toBeNull();
+
   const hide = job();
   act(() => send(update(hide, { job: hide })));
+  expect(screen.getByRole("button", { name: /Hiding 0 of 4/ }).getAttribute("data-jobs-pill")).toBe("running");
   open();
-  expect(screen.getByText("3 of 9")).toBeTruthy();
-  // No Stop for it: the only one belongs to the user's job.
+  // The panel still lists the load, with progress and no Stop of its own.
+  expect(screen.getByText("585 of 1493")).toBeTruthy();
   expect(screen.getAllByRole("button", { name: "Stop" })).toHaveLength(1);
+
+  // When the background job ends nothing is left of it.
+  act(() => send(update(job({ id: "p", kind: { type: "pricesLoad" }, state: "done", total: 1493, done: 1493, items: [] }))));
+  act(() => void vi.advanceTimersByTime(10));
+  expect(screen.queryByText("585 of 1493")).toBeNull();
 });

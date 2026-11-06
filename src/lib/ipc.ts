@@ -607,6 +607,13 @@ export const wfmPrice = async (slug: string): Promise<PriceEntry> =>
 export const wfmPricesBulk = async (slugs: string[]): Promise<PriceEntry[]> =>
   inTauri() ? unwrap(await commands.wfmPricesBulk(slugs)) : [...new Set(slugs)].map(mockPrice);
 
+/**
+ * Every slug the inventory wants, in one request, the ones on screen first: the cached prices come back at once, the rest
+ * are loaded by the backend (the Prices job in the titlebar pill) and arrive through `onPricesRefreshed`.
+ */
+export const wfmPricesLoad = async (slugs: string[]): Promise<PriceEntry[]> =>
+  inTauri() ? unwrap(await commands.wfmPricesLoad(slugs)) : [...new Set(slugs)].map(mockPrice);
+
 /** Daily closed-sales history (up to a year) for the Browse chart. */
 export const wfmStatsHistory = async (slug: string): Promise<MarketStatPoint[]> =>
   inTauri() ? unwrap(await commands.wfmStatsHistory(slug)) : mockHistory(slug);

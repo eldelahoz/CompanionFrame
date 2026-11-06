@@ -2154,7 +2154,7 @@
   "jobs.pillLabel": "后台任务：{text}",
   "jobs.running.reprice": "正在更新价格 {done}/{total}...",
   "jobs.running.workbench": "出售计划 {done}/{total}...",
-  "jobs.running.prices": "正在刷新价格 {done}/{total}",
+  "jobs.running.prices": "价格 {done}/{total}",
   "jobs.name.visibility": "隐藏或显示订单",
   "jobs.name.delete": "删除订单",
   "jobs.name.reprice": "更新价格",

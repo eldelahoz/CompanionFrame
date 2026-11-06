@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { onPricesRefreshed, wfmPricesBulk, wfmStatsHistory, type MarketStatPoint, type PriceEntry } from "../ipc";
+import { onPricesRefreshed, wfmPricesLoad, wfmStatsHistory, type MarketStatPoint, type PriceEntry } from "../ipc";
 
 /** `loading` until the first answer; `none` is a settled "no price" (untradable or no sale in 48 h). */
 type PriceState = "loading" | "ok" | "none";
@@ -17,17 +17,15 @@ export interface PriceInfo {
   avgState: PriceState;
 }
 
+const NONE: readonly string[] = [];
 const LOADING: PriceInfo = { state: "loading", price: null, maxPrice: null, avg: null, maxAvg: null, avgState: "loading" };
-/** Small chunks, one on the wire at a time: the backend already fans each out 8-wide, one warframe.market request per slug. */
-const BULK_CHUNK = 40;
-const MAX_ATTEMPTS = 4;
-const BACKOFF_MS = 2_000;
 const STATS_WORKERS = 3;
 const AVG_DAYS = 7;
 const DAY_MS = 86_400_000;
 
 // Module level, so switching tabs or views never refetches. A `failed` answer (transient error, #59) is never stored:
 // the slug is simply asked again on the next load, whereas `no_data` is a real answer and stays.
+// The backend does the loading (one request, its own queue, the Prices job in the titlebar pill); this only keeps the answers.
 const prices = new Map<string, { price: number | null; maxPrice: number | null }>();
 const averages = new Map<string, { avg: number | null; maxAvg: number | null }>();
 const listeners = new Set<() => void>();
@@ -38,12 +36,7 @@ export const resetItemPricesForTest = (): void => {
   averages.clear();
   statsQueue.length = 0;
   queued.clear();
-  inFlight.clear();
-  priceQueue = [];
-  queuedPrices.clear();
-  attempts.clear();
   failedPrices.clear();
-  streak = 0;
 };
 
 /** Rank 0 by default; `rank` picks one rank's rows. */
@@ -63,7 +56,8 @@ export function mediansOfRecent(points: readonly MarketStatPoint[], now = Date.n
   return { avg: medianOfRecent(points, now), maxAvg: top > 0 ? medianOfRecent(points, now, top) : null };
 }
 
-const inFlight = new Set<string>();
+/** Slugs the backend gave up on: shown as a retry state until `retryFailedPrices`. */
+const failedPrices = new Set<string>();
 
 /** Stores an answer from a bulk call or a background refresh. Returns false for a `failed` one. */
 function applyEntry(entry: PriceEntry): boolean {
@@ -74,10 +68,14 @@ function applyEntry(entry: PriceEntry): boolean {
   return true;
 }
 
-/** Prices the backend refreshed after serving the cached ones: replace what the module cache holds. */
-export function applyRefreshed(entries: readonly PriceEntry[]): void {
-  entries.forEach((e) => e.status === "ok" && applyEntry(e));
+/** What the backend answered, from the call itself (its cache) or from `wfm-prices-refreshed` (its queue). */
+export function applyRefreshed(entries: readonly PriceEntry[], recompute = true): void {
+  for (const e of entries) {
+    if (e.status === "failed") prices.has(e.slug) || failedPrices.add(e.slug);
+    else (failedPrices.delete(e.slug), applyEntry(e));
+  }
   notify();
+  if (!recompute) return;
   // The refresh also rewrote the statistics history: recompute the medians already shown (a local read, no request).
   void Promise.all(entries.filter((e) => e.status === "ok" && averages.has(e.slug)).map((e) => loadAverage(e.slug)));
 }
@@ -88,68 +86,28 @@ function listenForRefresh(): void {
   listening = true;
   void onPricesRefreshed(applyRefreshed);
 }
-/** One retry: the custom IPC protocol sometimes drops a call right after a reload or a burst. */
-async function bulkWithRetry(chunk: string[]) {
-  try {
-    return await wfmPricesBulk(chunk);
-  } catch {
-    return wfmPricesBulk(chunk);
-  }
-}
-
-// Visible rows go to the front of the queue, the rest of the inventory behind them; one chunk is asked at a time.
-let priceQueue: string[] = [];
-const queuedPrices = new Set<string>();
-/** Slugs that kept failing: shown as a retry state until `retryFailedPrices`. */
-const failedPrices = new Set<string>();
-const attempts = new Map<string, number>();
-let pumping = false;
-let streak = 0;
-
-function enqueuePrices(slugs: readonly string[], front: boolean): void {
-  const ask = slugs.filter((s) => !prices.has(s) && !failedPrices.has(s) && !inFlight.has(s) && (front || !queuedPrices.has(s)));
+/**
+ * One backend request for everything wanted, rows on screen first. The backend answers from its cache at once and
+ * fetches the rest in its single worker queue, the latest request ahead of older ones, so a new tab's slugs jump the queue.
+ */
+function requestPrices(slugs: readonly string[]): void {
+  const ask = [...new Set(slugs)].filter((s) => !prices.has(s) && !failedPrices.has(s));
   if (ask.length === 0) return;
-  const asked = new Set(ask);
-  const rest = priceQueue.filter((s) => !asked.has(s));
-  priceQueue = front ? [...ask, ...rest] : [...rest, ...ask];
-  ask.forEach((s) => queuedPrices.add(s));
-  void pump();
-}
-
-async function pump(): Promise<void> {
-  if (pumping) return;
-  pumping = true;
-  while (priceQueue.length > 0) {
-    const chunk = priceQueue.splice(0, BULK_CHUNK);
-    chunk.forEach((s) => (queuedPrices.delete(s), inFlight.add(s)));
-    const bad = new Set<string>();
-    try {
-      for (const entry of await bulkWithRetry(chunk)) if (!applyEntry(entry)) bad.add(entry.slug);
-    } catch {
-      chunk.forEach((s) => bad.add(s));
-    }
-    chunk.forEach((s) => inFlight.delete(s));
-    for (const s of bad) {
-      const n = (attempts.get(s) ?? 0) + 1;
-      attempts.set(s, n);
-      if (n >= MAX_ATTEMPTS) failedPrices.add(s);
-      else (priceQueue.push(s), queuedPrices.add(s));
-    }
-    notify();
-    // A failing chunk usually means the rate limit: the whole queue waits, longer each time in a row.
-    streak = bad.size > 0 ? streak + 1 : 0;
-    if (streak > 0) await new Promise((r) => setTimeout(r, BACKOFF_MS * 2 ** Math.min(streak - 1, 4)));
-  }
-  pumping = false;
+  // One retry: the custom IPC protocol sometimes drops a call right after a reload or a burst.
+  void wfmPricesLoad(ask)
+    .catch(() => wfmPricesLoad(ask))
+    // The call's own answer is the backend's cache: nothing was rewritten, so the medians stay.
+    .then((entries) => applyRefreshed(entries, false), () => {
+      ask.forEach((s) => failedPrices.add(s));
+      notify();
+    });
 }
 
 /** Asks again for the slugs that gave up. */
 function retryFailedPrices(): void {
   const again = [...failedPrices];
   failedPrices.clear();
-  again.forEach((s) => attempts.delete(s));
-  streak = 0;
-  enqueuePrices(again, true);
+  requestPrices(again);
   notify();
 }
 
@@ -205,17 +163,15 @@ export function useItemPriceProgress(slugs: readonly string[]): { done: number; 
 }
 
 /**
- * `slugs` are asked first, `later` queues behind them (and is part of the returned map); one bulk call of 40 at a time with
- * backoff on failure. `avgSlugs` also get the weekly median from the statistics history, one call per slug, three at a time.
+ * `slugs` are asked first, `later` queues behind them (and is part of the returned map); the backend loads them as one
+ * background job. `avgSlugs` also get the weekly median from the statistics history, one call per slug, three at a time.
  */
-export function useItemPrices(slugs: readonly string[], avgSlugs: readonly string[], later: readonly string[] = []): ReadonlyMap<string, PriceInfo> {
+export function useItemPrices(slugs: readonly string[], avgSlugs: readonly string[], later: readonly string[] = NONE): ReadonlyMap<string, PriceInfo> {
   const version = useVersion();
   useEffect(listenForRefresh, []);
   useEffect(() => {
-    // The pump starts on the first call, so the rows on screen go in before the background ones.
-    enqueuePrices(slugs, true);
-    enqueuePrices(later, false);
-  }, [slugs, later, version]);
+    requestPrices([...slugs, ...later]);
+  }, [slugs, later]);
   const avgKey = avgSlugs.join("|");
   useEffect(() => {
     enqueueStats([...avgSlugs]);
