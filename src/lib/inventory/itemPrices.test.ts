@@ -68,7 +68,8 @@ test("one request carries every slug, the rows on screen first; the cache answer
   expect(hook.result.current.get("b")?.state).toBe("loading");
   // The worker's batch lands later; a settled "no price" is cached, not shown as loading.
   b.act(() => b.send([entry("b", "ok", 3), entry("none", "no_data")]));
-  expect(hook.result.current.get("b")?.price).toBe(3);
+  // Within the window of the last change: heard at its end.
+  await b.waitFor(() => expect(hook.result.current.get("b")?.price).toBe(3));
   expect(hook.result.current.get("none")?.state).toBe("none");
   // Asking again for what is known sends nothing.
   hook.rerender();
@@ -83,12 +84,12 @@ test("a slug the backend gave up on shows a retry state, and retrying asks again
   const hook = b.renderHook(() => ({ prices: b.mod.useItemPrices(slugs, []), progress: b.mod.useItemPriceProgress(slugs) }));
   await b.waitFor(() => expect(calls).toHaveLength(1));
   b.act(() => b.send([entry("a", "ok", 3), entry("x", "failed")]));
-  expect(hook.result.current.progress).toMatchObject({ done: 1, failed: 1, total: 2 });
+  await b.waitFor(() => expect(hook.result.current.progress).toMatchObject({ done: 1, failed: 1, total: 2 }));
   b.act(() => hook.result.current.progress.retry());
   await b.waitFor(() => expect(calls).toHaveLength(2));
   expect(calls[1]).toEqual(["x"]);
   b.act(() => b.send([entry("x", "ok", 5)]));
-  expect(hook.result.current.progress).toMatchObject({ done: 2, failed: 0 });
+  await b.waitFor(() => expect(hook.result.current.progress).toMatchObject({ done: 2, failed: 0 }));
   vi.doUnmock("../ipc");
 });
 
@@ -156,7 +157,7 @@ test("a refresh event replaces the cached price; cached answers are known at onc
   await waitFor(() => expect(hook.result.current.get("a")?.price).toBe(5));
   expect(hook.result.current.get("a")?.state).toBe("ok"); // stale-but-cached is not "loading"
   act(() => mod.applyRefreshed([{ slug: "a", status: "ok", price: 9, maxPrice: 20, stale: false }, { slug: "b", status: "failed", price: null, stale: false }] as never));
-  expect(hook.result.current.get("a")).toMatchObject({ price: 9, maxPrice: 20 });
+  await waitFor(() => expect(hook.result.current.get("a")).toMatchObject({ price: 9, maxPrice: 20 }));
   expect(hook.result.current.get("b")?.price).toBe(5);
   vi.doUnmock("../ipc");
 });
@@ -179,4 +180,29 @@ test("a refresh event recomputes the weekly median of slugs already shown, witho
   await waitFor(() => expect(hook.result.current.get("a")?.avg).toBe(14));
   expect(asked).toEqual(["a", "a"]);
   vi.doUnmock("../ipc");
+});
+
+test("a burst of price batches and medians is heard twice at most: at once, and once more when the window ends with the last prices", async () => {
+  vi.resetModules();
+  vi.doMock("../ipc", () => ({ wfmPricesLoad: () => new Promise(() => {}), wfmStatsHistory: async () => [], onPricesRefreshed: async () => () => {} }));
+  const { act, renderHook } = await import("@testing-library/react");
+  const mod = await import("./itemPrices");
+  vi.useFakeTimers();
+  try {
+    let maps = 0;
+    const hook = renderHook(() => (maps++, mod.useItemPrices(["a"], [])));
+    maps = 0;
+    const batch = (price: number) => act(() => mod.applyRefreshed([{ slug: "a", status: "ok", price, stale: false }] as never, false));
+    for (let i = 1; i <= 20; i++) batch(i);
+    expect(maps).toBe(1); // the first one went through, the other 19 wait
+    expect(hook.result.current.get("a")?.price).toBe(1);
+    await act(async () => void vi.advanceTimersByTime(300));
+    expect(maps).toBe(2);
+    expect(hook.result.current.get("a")?.price).toBe(20); // the last prices land
+    await act(async () => void vi.advanceTimersByTime(1000));
+    expect(maps).toBe(2); // nothing was pending: quiet stays quiet
+  } finally {
+    vi.useRealTimers();
+    vi.doUnmock("../ipc");
+  }
 });

@@ -233,7 +233,8 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
     return [...wanted];
   }, [filtered, rows, partSlugs]);
   // Price order is unknown before the prices are, so the first rows asked are the head of the unpriced order.
-  const head = useMemo(() => sortRows(filtered, NO_PRICES, sortKey, desc).slice(0, limit), [filtered, sortKey, desc, limit]);
+  const unpriced = useMemo(() => sortRows(filtered, NO_PRICES, sortKey, desc), [filtered, sortKey, desc]);
+  const head = useMemo(() => unpriced.slice(0, limit), [unpriced, limit]);
   const headSlugs = useMemo(() => [...head.flatMap((r) => (r.slug ? [r.slug] : [])), ...partSlugs(head)], [head, partSlugs]);
   // The weekly median costs one request per item, so only the first rows on screen and the picked ones get it.
   const [loadedAvg, setLoadedAvg] = useState<ReadonlySet<string>>(new Set());
@@ -246,10 +247,9 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
   const livePrices = useItemPrices(headSlugs, listed ? avgSlugs : [], allSlugs);
   const progress = useItemPriceProgress(allSlugs);
   // The platinum range filters the list: with a bound set, no market price hides the row; rows still loading stay.
-  const visible = useMemo(
-    () => sortRows(filtered, livePrices, sortKey, desc).filter((r) => passesPlatRange(r, r.slug ? livePrices.get(r.slug) : undefined, range)),
-    [filtered, livePrices, sortKey, desc, range],
-  );
+  // Only the price sorts depend on the prices: any other order is kept while they stream in, only the readouts refresh.
+  const ordered = useMemo(() => (sortKey === "platinum" || sortKey === "average" ? sortRows(filtered, livePrices, sortKey, desc) : unpriced), [filtered, unpriced, livePrices, sortKey, desc]);
+  const visible = useMemo(() => ordered.filter((r) => passesPlatRange(r, r.slug ? livePrices.get(r.slug) : undefined, range)), [ordered, livePrices, range]);
   const shown = useMemo(() => visible.slice(0, limit), [visible, limit]);
   // Diagnostics: per tab, ms from mount (or the tab switch) to the first rows and to every price answered.
   const lap = useRef({ t0: performance.now(), sorts: sortRowsCalls(), rows: false, prices: false });

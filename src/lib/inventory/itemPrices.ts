@@ -29,9 +29,32 @@ const DAY_MS = 86_400_000;
 const prices = new Map<string, { price: number | null; maxPrice: number | null }>();
 const averages = new Map<string, { avg: number | null; maxAvg: number | null }>();
 const listeners = new Set<() => void>();
-const notify = () => listeners.forEach((l) => l());
+/**
+ * The first change is heard at once; the rest of a burst (price batches, medians, bulk answers) is folded into one more
+ * call at the end of the window, so the last prices always land. A frame (16 ms) would still re-sort 60 times a second.
+ */
+const NOTIFY_MS = 250;
+let notifyWindow: ReturnType<typeof setTimeout> | null = null;
+let dirty = false;
+function notify(): void {
+  if (notifyWindow !== null) {
+    dirty = true;
+    return;
+  }
+  listeners.forEach((l) => l());
+  notifyWindow = setTimeout(() => {
+    notifyWindow = null;
+    if (dirty) {
+      dirty = false;
+      notify();
+    }
+  }, NOTIFY_MS);
+}
 
 export const resetItemPricesForTest = (): void => {
+  if (notifyWindow !== null) clearTimeout(notifyWindow);
+  notifyWindow = null;
+  dirty = false;
   prices.clear();
   averages.clear();
   statsQueue.length = 0;
