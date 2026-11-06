@@ -4,6 +4,7 @@ Hotkey: `riven_rescan` (default F6, configurable). Models: `pnpm game-data` + th
 
 1. Warframe in borderless, English UI. Open a riven in Inventory (Mods > Riven) so its card is centred.
 2. Press F6. A "Scanning..." chip appears, then the card: weapon + overall grade, each stat with value and grade, the sheet's best attributes, and (a moment later) up to 5 similar warframe.market listings.
+2b. Open a riven on the cycle screen and do not press F6: the first read happens by itself and, while the card is still drawing, retries every 0.4 s (up to 4 times) before showing "Couldn't read the riven".
 3. Check: the game keeps focus and keys still reach it; the overlay is click-through.
 4. Press F6 again with the same card open: same window, the old card stays under the chip, then updates. Open a different riven and press it again: the new riven replaces the old.
 5. Chat link and roll screens: the backend takes a layout (`riven_overlay_scan` with `chat` or `roll`); the hotkey always uses the centred card.
