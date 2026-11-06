@@ -33,6 +33,7 @@ import { useInventory } from "../../stores/inventory";
 import { useItemDatabase } from "../../stores/items";
 import { openItemBy } from "../../stores/modals";
 import { useClock, useCollapsedSections } from "../../stores/world";
+import { worldView } from "../../stores/worldView";
 import { ChevronDown, ExternalLink, Minus, Plus, X } from "lucide-react";
 import { Badge, Button, Checkbox, IconButton, Input, Progress, SearchInput, Select } from "../ui";
 import WorldCard from "./WorldCard";
@@ -109,7 +110,7 @@ export default function DailiesTracker({ wd, tr }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [draftLabel, setDraftLabel] = useState("");
   const [draftPeriod, setDraftPeriod] = useState<TrackerUserPeriod>("daily");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = worldView.useField("dailiesQuery");
 
   useEffect(() => {
     const refresh = () => setTracker(loadTracker());

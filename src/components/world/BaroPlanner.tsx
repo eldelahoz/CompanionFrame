@@ -7,6 +7,7 @@ import { useInventory } from "../../stores/inventory";
 import { useItemDatabase } from "../../stores/items";
 import { useBaroHistory, useBaroWishlist } from "../../stores/baro";
 import { useWorldState, useClock } from "../../stores/world";
+import { worldView } from "../../stores/worldView";
 import { usePersisted } from "../../lib/usePersisted";
 import { Button, Card, CardBody, CardHeader, Checkbox, Chip, EmptyState, Input, Readout, SearchInput, Select, Table } from "../ui";
 import BaroLastSeen from "./BaroLastSeen";
@@ -34,8 +35,8 @@ export default function BaroPlanner({ tr, locale }: Props) {
   const [alerts, setAlerts] = usePersisted("baro-wishlist-alerts", ["0", "1"] as const, "0");
 
   const [filter, setFilter] = useState<Filter>("all");
-  const [search, setSearch] = useState("");
-  const [unowned, setUnowned] = useState(false);
+  const [search, setSearch] = worldView.useField("baroSearch");
+  const [unowned, setUnowned] = worldView.useField("baroUnowned");
   const [selectedVisit, setSelectedVisit] = useState("");
   const [addSearch, setAddSearch] = useState("");
   const [limit, setLimit] = useState(PAGE);
