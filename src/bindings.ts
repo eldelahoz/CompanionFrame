@@ -1849,6 +1849,8 @@ export type MarketAlertEngineStatus_Deserialize = {
 	lastTickAt?: string | null,
 	requestsLastHour: number,
 	lastError?: string | null,
+	/**  Item alerts are fed by the warframe.market new-orders socket (polling is only a backup). */
+	live: boolean,
 };
 
 export type MarketAlertEngineStatus_Serialize = {
@@ -1858,6 +1860,8 @@ export type MarketAlertEngineStatus_Serialize = {
 	lastTickAt: string | null,
 	requestsLastHour: number,
 	lastError: string | null,
+	/**  Item alerts are fed by the warframe.market new-orders socket (polling is only a backup). */
+	live: boolean,
 };
 
 export type MarketAlertEntry = MarketAlertEntry_Serialize | MarketAlertEntry_Deserialize;

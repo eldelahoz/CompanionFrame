@@ -882,3 +882,111 @@ async fn status_counts_rules() {
     r.engine.arm();
     assert!(r.engine.status(&r.db).running);
 }
+
+// --- live feed --------------------------------------------------------------------------------
+
+fn catalog_item(id: &str, slug: &str) -> crate::services::wfm::types::CatalogItem {
+    crate::services::wfm::types::CatalogItem {
+        id: id.into(),
+        slug: slug.into(),
+        name: slug.into(),
+        thumb: None,
+        icon: None,
+        max_rank: None,
+        game_ref: None,
+    }
+}
+
+fn watch(r: &Rig) {
+    let slugs = ["nekros_prime_set".to_owned()].into_iter().collect();
+    r.engine
+        .set_watch(&slugs, &[catalog_item("id1", "nekros_prime_set")]);
+}
+
+impl Rig {
+    fn live_order(&self, o: crate::services::wfm::orders::BookOrder, now: i64) {
+        let cx = Ctx {
+            client: &self.client,
+            db: &self.db,
+            notifier: &self.sink,
+            own_name: self.own.clone(),
+            changed: &|| {},
+        };
+        let slug = self.engine.watched_slug("id1").unwrap();
+        self.engine.on_new_order(&cx, &slug, o, now);
+    }
+}
+
+#[tokio::test]
+async fn a_live_order_hits_and_the_next_poll_does_not_repeat_it() {
+    let body = json!({"data": [{"id": "o1", "type": "sell", "platinum": 40, "quantity": 1,
+        "user": {"ingameName": "Other", "status": "ingame"}}]});
+    let r = rig(vec![reply(200, &body.to_string())]);
+    save(&r.db, item(json!({})));
+    watch(&r);
+    r.live_order(order(json!({})), 0);
+    assert_eq!(r.fired(), 1);
+    assert_eq!(r.hits()[0].detail, "WTS Nekros Prime Set 40p x1");
+    // The cooldown is over, but the order is already seen.
+    r.engine.reset_rule("i1");
+    r.tick(0).await;
+    assert_eq!(r.fired(), 1);
+    assert_eq!(r.hits().len(), 1);
+}
+
+#[test]
+fn live_orders_use_the_poll_filters() {
+    let r = rig(vec![]);
+    let mut own = rig(vec![]);
+    own.own = Some("other".into());
+    for rg in [&r, &own] {
+        save(&rg.db, item(json!({})));
+        watch(rg);
+    }
+    r.live_order(order(json!({"platinum": 99})), 0);
+    r.live_order(order(json!({"visible": false})), 0);
+    r.live_order(
+        order(json!({"user": {"ingameName": "X", "status": "ingame", "platform": "xbox"}})),
+        0,
+    );
+    own.live_order(order(json!({})), 0);
+    assert_eq!(r.fired() + own.fired(), 0);
+}
+
+#[test]
+fn events_for_unwatched_items_do_nothing() {
+    let r = rig(vec![]);
+    save(&r.db, item(json!({})));
+    watch(&r);
+    assert!(r.engine.watched_slug("other_id").is_none());
+    assert_eq!(r.fired(), 0);
+}
+
+#[test]
+fn live_needs_the_feed_and_a_catalog_that_covers_every_rule() {
+    let r = rig(vec![]);
+    let slugs: std::collections::HashSet<String> =
+        ["nekros_prime_set".to_owned(), "unknown_slug".to_owned()]
+            .into_iter()
+            .collect();
+    r.engine.set_subscribed(true);
+    r.engine
+        .set_watch(&slugs, &[catalog_item("id1", "nekros_prime_set")]);
+    assert!(!r.engine.is_live() && !r.engine.status(&r.db).live);
+    watch(&r);
+    assert!(r.engine.status(&r.db).live);
+    r.engine.set_subscribed(false);
+    assert!(!r.engine.is_live());
+}
+
+#[test]
+fn item_rules_recheck_every_five_minutes_only_while_live() {
+    let r = rig(vec![]);
+    let item_ms = |r: &Rig| r.engine.eval_interval_ms(MarketAlertKind::Item);
+    let before = item_ms(&r);
+    assert_eq!(before, 3 * MIN);
+    watch(&r);
+    r.engine.set_subscribed(true);
+    assert_eq!(item_ms(&r), 5 * MIN);
+    assert_eq!(r.engine.eval_interval_ms(MarketAlertKind::Riven), before);
+}

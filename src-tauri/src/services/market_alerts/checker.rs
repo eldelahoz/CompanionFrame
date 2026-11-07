@@ -12,7 +12,7 @@ use reqwest::Method;
 use serde::Serialize;
 
 use super::rules::{
-    Auction, MarketAlertBinding, MarketAlertHit, MarketAlertKind, MarketAlertRule,
+    Auction, ItemAlertMatch, MarketAlertBinding, MarketAlertHit, MarketAlertKind, MarketAlertRule,
     item_display_name, item_hit, match_item_order, match_riven, parse_auctions, riven_hit,
     riven_search_path,
 };
@@ -22,12 +22,15 @@ use crate::services::notify::channels::NotificationSource;
 use crate::services::notify::{NotificationDispatch, Notifier};
 use crate::services::wfm::client::{Api, WfmClient};
 use crate::services::wfm::errors::WfmError;
-use crate::services::wfm::orders::orders_item;
+use crate::services::wfm::orders::{BookOrder, orders_item};
 use crate::services::wfm::scheduler::{self, Priority};
+use crate::services::wfm::types::CatalogItem;
 
 pub const TICK_SECS: u64 = 60;
 pub const INITIAL_DELAY_SECS: u64 = 30;
 const RULE_EVAL_INTERVAL_MS: i64 = 3 * 60_000;
+/// Item rules while the new-orders feed is on: existing orders only need a backup check.
+const LIVE_EVAL_INTERVAL_MS: i64 = 5 * 60_000;
 const MAX_REQUESTS_PER_TICK: usize = 4;
 const FAILURE_BASE_MS: i64 = 5 * 60_000;
 const FAILURE_CEILING_MS: i64 = 60 * 60_000;
@@ -73,6 +76,10 @@ pub struct Engine {
     rt: Mutex<Runtime>,
     busy: AtomicBool,
     armed: AtomicBool,
+    /// `newOrders` confirmed by the server on the current connection.
+    subscribed: AtomicBool,
+    /// Item id -> slug of the enabled item rules; `None` until the catalog covers all of them.
+    watch: Mutex<Option<HashMap<String, String>>>,
 }
 
 struct Outcome {
@@ -90,6 +97,8 @@ pub struct MarketAlertEngineStatus {
     pub last_tick_at: Option<String>,
     pub requests_last_hour: u32,
     pub last_error: Option<String>,
+    /// Item alerts are fed by the warframe.market new-orders socket (polling is only a backup).
+    pub live: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, specta::Type)]
@@ -102,6 +111,53 @@ pub struct MarketAlertTestFire {
 fn seen_key(id: &str, platinum: f64) -> String {
     // The price is in the key so a real price drop on the same listing may fire again.
     format!("{id}:{platinum}")
+}
+
+/// The item-rule matching shared by the poll (a whole order book) and the live feed (one new
+/// order): visible, PC-compatible seller, not the signed-in user's own, `match_item_order`, then
+/// the unseen filter.
+fn item_outcome(
+    cx: &Ctx<'_>,
+    rule: &MarketAlertRule,
+    m: &ItemAlertMatch,
+    orders: Vec<BookOrder>,
+    fresh: &dyn Fn(&[String]) -> HashSet<String>,
+) -> Outcome {
+    let owned = cx.db(|c| store::owned(c, &m.item_url_name));
+    let orders: Vec<_> = orders
+        .into_iter()
+        .filter(|o| {
+            let user = o.user.as_ref();
+            // Only crossplay-off sellers on another platform cannot trade with PC.
+            // shortcut: crossplay flag is not modelled by BookUser, so any non-pc seller is skipped.
+            let foreign = user
+                .and_then(|u| u.platform.as_deref())
+                .is_some_and(|p| !p.eq_ignore_ascii_case("pc"));
+            !o.id.is_empty()
+                && o.visible != Some(false)
+                && !foreign
+                && !cx.is_own(user.and_then(|u| u.ingame_name.as_deref()).unwrap_or(""))
+                && match_item_order(m, o, owned)
+        })
+        .collect();
+    let keys: Vec<String> = orders
+        .iter()
+        .map(|o| seen_key(&o.id, f64::from(o.platinum)))
+        .collect();
+    let new = fresh(&keys);
+    let name = item_display_name(&m.item_url_name);
+    let mut out = Outcome {
+        hits: vec![],
+        keys: vec![],
+        candidates: orders.len(),
+    };
+    for (o, k) in orders.iter().zip(keys) {
+        if new.contains(&k) {
+            out.hits.push(item_hit(rule, m, o, &name));
+            out.keys.push(k);
+        }
+    }
+    out
 }
 
 impl Engine {
@@ -179,41 +235,7 @@ impl Engine {
                     orders_item(cx.client, &m.item_url_name, false, None, None)
                 })
                 .await?;
-            let owned = cx.db(|c| store::owned(c, &m.item_url_name));
-            let orders: Vec<_> = orders
-                .into_iter()
-                .filter(|o| {
-                    let user = o.user.as_ref();
-                    // Only crossplay-off sellers on another platform cannot trade with PC.
-                    // shortcut: crossplay flag is not modelled by BookUser, so any non-pc seller is skipped.
-                    let foreign = user
-                        .and_then(|u| u.platform.as_deref())
-                        .is_some_and(|p| !p.eq_ignore_ascii_case("pc"));
-                    !o.id.is_empty()
-                        && o.visible != Some(false)
-                        && !foreign
-                        && !cx.is_own(user.and_then(|u| u.ingame_name.as_deref()).unwrap_or(""))
-                        && match_item_order(m, o, owned)
-                })
-                .collect();
-            let keys: Vec<String> = orders
-                .iter()
-                .map(|o| seen_key(&o.id, f64::from(o.platinum)))
-                .collect();
-            let new = fresh(&keys);
-            let name = item_display_name(&m.item_url_name);
-            let mut out = Outcome {
-                hits: vec![],
-                keys: vec![],
-                candidates: orders.len(),
-            };
-            for (o, k) in orders.iter().zip(keys) {
-                if new.contains(&k) {
-                    out.hits.push(item_hit(rule, m, o, &name));
-                    out.keys.push(k);
-                }
-            }
-            return Ok(out);
+            return Ok(item_outcome(cx, rule, m, orders, &fresh));
         }
         Ok(Outcome {
             hits: vec![],
@@ -231,6 +253,125 @@ impl Engine {
         };
         if changed {
             (cx.changed)();
+        }
+    }
+
+    /// Records, notifies and starts the cooldown for an outcome that has hits (poll and live feed).
+    fn deliver(
+        &self,
+        cx: &Ctx<'_>,
+        rule: &MarketAlertRule,
+        binding: &MarketAlertBinding,
+        out: &Outcome,
+        now: i64,
+    ) {
+        if out.hits.is_empty() {
+            return;
+        }
+        cx.db(|c| {
+            let _ = store::mark_seen(c, &rule.id, &out.keys, now);
+            let _ = store::record_hits(c, &out.hits);
+        });
+        let first = &out.hits[0];
+        let extra = if out.hits.len() > 1 {
+            format!(" (+{} more)", out.hits.len() - 1)
+        } else {
+            String::new()
+        };
+        let mut d = NotificationDispatch::new(
+            NotificationSource::MarketAlerts,
+            first.title.clone(),
+            format!("{}{extra}", first.detail),
+        );
+        d.native_enabled = binding.native;
+        cx.notifier.notify(d);
+        if !rule.no_cooldown {
+            self.rt().cooldown_until.insert(
+                rule.id.clone(),
+                now + i64::from(rule.cooldown_minutes) * 60_000,
+            );
+        }
+        (cx.changed)();
+    }
+
+    /// Re-check interval of a rule: item rules lean on the live feed while it is on.
+    pub fn eval_interval_ms(&self, kind: MarketAlertKind) -> i64 {
+        if kind == MarketAlertKind::Item && self.is_live() {
+            LIVE_EVAL_INTERVAL_MS
+        } else {
+            RULE_EVAL_INTERVAL_MS
+        }
+    }
+
+    pub fn has_watch(&self) -> bool {
+        self.watch.lock().unwrap().is_some()
+    }
+
+    pub fn is_live(&self) -> bool {
+        self.subscribed.load(Ordering::SeqCst) && self.watch.lock().unwrap().is_some()
+    }
+
+    /// The feed was confirmed on or switched off. Returns whether `is_live` changed.
+    pub fn set_subscribed(&self, on: bool) -> bool {
+        let before = self.is_live();
+        self.subscribed.store(on, Ordering::SeqCst);
+        before != self.is_live()
+    }
+
+    /// Item id -> slug for the enabled item rules, or `None` when some slug is unknown to the
+    /// catalog (the feed then cannot cover every rule, so the engine is not "live").
+    pub fn set_watch(&self, slugs: &HashSet<String>, catalog: &[CatalogItem]) -> bool {
+        let before = self.is_live();
+        let map: HashMap<String, String> = catalog
+            .iter()
+            .filter(|i| slugs.contains(&i.slug))
+            .map(|i| (i.id.clone(), i.slug.clone()))
+            .collect();
+        let covered = slugs.iter().all(|s| map.values().any(|v| v == s));
+        *self.watch.lock().unwrap() = covered.then_some(map);
+        before != self.is_live()
+    }
+
+    /// A rule change that adds a slug the map does not cover drops the map until it is rebuilt.
+    pub fn unwatch_unless_covered(&self, slugs: &HashSet<String>) -> bool {
+        let before = self.is_live();
+        let mut w = self.watch.lock().unwrap();
+        if w.as_ref()
+            .is_some_and(|m| !slugs.iter().all(|s| m.values().any(|v| v == s)))
+        {
+            *w = None;
+        }
+        drop(w);
+        before != self.is_live()
+    }
+
+    /// Slug of a watched item id; everything else is dropped by the caller at once.
+    pub fn watched_slug(&self, item_id: &str) -> Option<String> {
+        self.watch.lock().unwrap().as_ref()?.get(item_id).cloned()
+    }
+
+    /// One new order from the feed, for a watched item. Same matching, seen keys, cooldown and
+    /// hit history as the poll, so the next poll does not notify it again.
+    pub fn on_new_order(&self, cx: &Ctx<'_>, slug: &str, order: BookOrder, now: i64) {
+        let rules = cx.db(store::load).unwrap_or_default();
+        for (rule, binding) in rules {
+            let Some(m) = rule.item.as_ref().filter(|m| {
+                rule.enabled && rule.kind == MarketAlertKind::Item && m.item_url_name == slug
+            }) else {
+                continue;
+            };
+            if self.cooldown_until(&rule.id, now).is_some() {
+                continue;
+            }
+            let fresh = |keys: &[String]| -> HashSet<String> {
+                let seen = cx.db(|c| store::seen(c, &rule.id)).unwrap_or_default();
+                keys.iter()
+                    .filter(|k| !seen.contains(*k))
+                    .cloned()
+                    .collect()
+            };
+            let out = item_outcome(cx, &rule, m, vec![order.clone()], &fresh);
+            self.deliver(cx, &rule, &binding, &out, now);
         }
     }
 
@@ -255,36 +396,10 @@ impl Engine {
                     let mut rt = self.rt();
                     rt.failures.remove(&rule.id);
                     rt.next_eval
-                        .insert(rule.id.clone(), now + RULE_EVAL_INTERVAL_MS);
+                        .insert(rule.id.clone(), now + self.eval_interval_ms(rule.kind));
                 }
                 self.set_error(cx, None);
-                if out.hits.is_empty() {
-                    return;
-                }
-                cx.db(|c| {
-                    let _ = store::mark_seen(c, &rule.id, &out.keys, now);
-                    let _ = store::record_hits(c, &out.hits);
-                });
-                let first = &out.hits[0];
-                let extra = if out.hits.len() > 1 {
-                    format!(" (+{} more)", out.hits.len() - 1)
-                } else {
-                    String::new()
-                };
-                let mut d = NotificationDispatch::new(
-                    NotificationSource::MarketAlerts,
-                    first.title.clone(),
-                    format!("{}{extra}", first.detail),
-                );
-                d.native_enabled = binding.native;
-                cx.notifier.notify(d);
-                if !rule.no_cooldown {
-                    self.rt().cooldown_until.insert(
-                        rule.id.clone(),
-                        now + i64::from(rule.cooldown_minutes) * 60_000,
-                    );
-                }
-                (cx.changed)();
+                self.deliver(cx, &rule, &binding, &out, now);
             }
             Err(e) => {
                 {
@@ -398,6 +513,7 @@ impl Engine {
             last_tick_at: rt.last_tick_at.clone(),
             requests_last_hour: rt.requests.len() as u32,
             last_error: rt.last_error.as_ref().map(|(_, m)| m.clone()),
+            live: self.is_live(),
         }
     }
 }

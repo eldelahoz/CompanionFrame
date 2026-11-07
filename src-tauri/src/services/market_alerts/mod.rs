@@ -9,6 +9,7 @@ pub mod store;
 #[cfg(test)]
 mod tests;
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,9 @@ use self::rules::{
 use crate::db::{Db, db_err};
 use crate::services::clock::now_ms;
 use crate::services::notify::Notifications;
+use crate::services::wfm::catalog;
+use crate::services::wfm::live::Live;
+use crate::services::wfm::orders::BookOrder;
 use crate::services::wfm::session::Session;
 
 const CHANGED_EVENT: &str = "market-alerts-changed";
@@ -43,11 +47,98 @@ pub struct MarketAlertSave {
     pub owned_count: Option<u32>,
 }
 
+fn enabled_item_slugs(db: &Db) -> HashSet<String> {
+    store::load(&db.lock())
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(r, _)| r.enabled)
+        .filter_map(|(r, _)| r.item.map(|m| m.item_url_name))
+        .collect()
+}
+
+/// Keeps the live new-orders feed in step with the rules and the session: on while signed in
+/// with at least one enabled item rule, off otherwise. Cheap; called on every rule change, token
+/// change and tick. The catalog is only asked when the item-id map has to be rebuilt.
+pub fn sync_subscription(app: &AppHandle, signed_in: bool) {
+    let (Some(engine), Some(live)) = (app.try_state::<Engine>(), app.try_state::<Live>()) else {
+        return;
+    };
+    let slugs = enabled_item_slugs(&app.state::<Db>());
+    live.listener.set_feed(signed_in && !slugs.is_empty());
+    let mut changed = engine.unwatch_unless_covered(&slugs);
+    if slugs.is_empty() {
+        changed |= engine.set_watch(&slugs, &[]);
+    } else if signed_in && !engine.has_watch() {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let (engine, db, session) = (
+                app.state::<Engine>(),
+                app.state::<Db>(),
+                app.state::<Session>(),
+            );
+            let Ok(items) = catalog::items(session.client(), &db).await else {
+                return;
+            };
+            if engine.set_watch(&enabled_item_slugs(&db), &items) {
+                emit_changed(&app);
+            }
+        });
+    }
+    if changed {
+        emit_changed(app);
+    }
+}
+
+/// The socket confirmed (or dropped) the `newOrders` subscription.
+pub fn set_live(app: &AppHandle, on: bool) {
+    if let Some(engine) = app.try_state::<Engine>()
+        && engine.set_subscribed(on)
+    {
+        emit_changed(app);
+    }
+}
+
+/// One `newOrder` event from the feed. Busy by nature: anything not watched is dropped before any
+/// parsing, and nothing from the payload is logged.
+pub fn on_new_order(app: &AppHandle, payload: serde_json::Value) {
+    let Some(engine) = app.try_state::<Engine>() else {
+        return;
+    };
+    let Some(slug) = payload
+        .get("itemId")
+        .and_then(|v| v.as_str())
+        .and_then(|id| engine.watched_slug(id))
+    else {
+        return;
+    };
+    let Ok(order) = serde_json::from_value::<BookOrder>(payload) else {
+        return;
+    };
+    let (db, session, notif) = (
+        app.state::<Db>(),
+        app.state::<Session>(),
+        app.state::<Notifications>(),
+    );
+    let changed = || emit_changed(app);
+    let cx = Ctx {
+        client: session.client(),
+        db: &db,
+        notifier: &*notif,
+        own_name: session.status().user_name,
+        changed: &changed,
+    };
+    engine.on_new_order(&cx, &slug, order, now_ms());
+}
+
 /// Arms the engine: first tick after a short delay, then once a minute. The task reads its
 /// dependencies from managed state each tick, so it only needs `Engine` managed here.
 pub fn setup(app: &tauri::App) {
     app.manage(Engine::default());
     app.state::<Engine>().arm();
+    sync_subscription(
+        app.handle(),
+        app.state::<Session>().client().token().is_some(),
+    );
     let h = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_secs(checker::INITIAL_DELAY_SECS)).await;
@@ -60,6 +151,7 @@ pub fn setup(app: &tauri::App) {
                 h.state::<Session>(),
                 h.state::<Notifications>(),
             );
+            sync_subscription(&h, session.client().token().is_some());
             let h2 = h.clone();
             let changed = move || {
                 let _ = h2.emit(CHANGED_EVENT, ());
@@ -74,6 +166,10 @@ pub fn setup(app: &tauri::App) {
             engine.tick(&cx, now_ms()).await;
         }
     });
+}
+
+fn signed_in(app: &AppHandle) -> bool {
+    app.state::<Session>().client().token().is_some()
 }
 
 fn emit_changed(app: &AppHandle) {
@@ -116,6 +212,7 @@ pub fn market_alerts_set(
     drop(conn);
     // An edited rule re-evaluates at once instead of waiting out the old timers.
     engine.reset_rule(&rule.id);
+    sync_subscription(&app, signed_in(&app));
     emit_changed(&app);
     Ok(rule)
 }
@@ -130,6 +227,7 @@ pub fn market_alerts_delete(
 ) -> Result<bool, String> {
     let gone = store::delete(&db.lock(), &id).map_err(db_err)?;
     engine.forget_rule(&id);
+    sync_subscription(&app, signed_in(&app));
     emit_changed(&app);
     Ok(gone)
 }
@@ -149,6 +247,7 @@ pub fn market_alerts_set_enabled(
     } else {
         engine.forget_rule(&id);
     }
+    sync_subscription(&app, signed_in(&app));
     emit_changed(&app);
     Ok(found)
 }

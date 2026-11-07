@@ -32,6 +32,7 @@ impl Pusher for SocketPusher {
 }
 
 pub struct Live {
+    pub(crate) listener: Arc<Listener>,
     presence: Arc<Presence<SocketPusher>>,
     ws_status: Mutex<WsStatus>,
 }
@@ -69,7 +70,11 @@ pub fn setup(app: &tauri::App) {
         session.client().token(),
         Timing::default(),
         move |out| match out {
+            Out::Subscribed(on) => crate::services::market_alerts::set_live(&h, on),
             Out::Status(st) => {
+                if st != WsStatus::Connected {
+                    crate::services::market_alerts::set_live(&h, false);
+                }
                 r.store(st == WsStatus::Connected, Ordering::SeqCst);
                 *h.state::<Live>().ws_status.lock().unwrap() = st;
                 let _ = h.emit("wfm-ws-status", st);
@@ -78,6 +83,10 @@ pub fn setup(app: &tauri::App) {
                 {
                     tauri::async_runtime::spawn(async move { p.resync().await });
                 }
+            }
+            // The new-orders feed is for the alert engine only: it is busy and the UI never reads it.
+            Out::Event(e) if e.route.ends_with("subscriptions/newOrder") => {
+                crate::services::market_alerts::on_new_order(&h, e.payload);
             }
             Out::Event(e) => {
                 if e.route.contains("status/set")
@@ -105,14 +114,17 @@ pub fn setup(app: &tauri::App) {
     ));
     let _ = slot.set(presence.clone());
     app.manage(Live {
+        listener: listener.clone(),
         presence: presence.clone(),
         ws_status: Mutex::new(WsStatus::Stopped),
     });
 
     // Rotated tokens reach the next reconnect; sign-out/expiry also forgets the account state.
-    let (l, p) = (listener, presence.clone());
+    let (l, p, h) = (listener, presence.clone(), handle.clone());
     session.on_token(Box::new(move |t| {
         l.set_token(t.map(str::to_owned));
+        // Signed out: the live socket stays up, so switch the feed off explicitly.
+        crate::services::market_alerts::sync_subscription(&h, t.is_some());
         if t.is_none() {
             let p = p.clone();
             tauri::async_runtime::spawn(async move { p.reset().await });
