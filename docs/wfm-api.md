@@ -86,7 +86,7 @@ Sources: https://docs.warframe.market/docs/api/overview/ · https://docs.warfram
 | WebSocket rate limits | UNKNOWN |
 | `Retry-After` header | UNKNOWN (not documented) |
 
-In the app one scheduler (`wfm/scheduler.rs`) spends this budget for every request: 2.5/s overall, and a separate 12/min bucket for contract and auction searches. A 429 raises one gate for everything.
+In the app one scheduler (`wfm/scheduler.rs`) spends this budget for every request: 2.5/s overall, and a separate 12/min bucket for contract and auction searches. A 429 (or a 509, too many connections) raises one gate for everything; without `Retry-After` it lasts 30s.
 
 Rules doc: limits may change without notice. Clients should cache, avoid tight polling, and prefer WebSocket subscriptions.
 
