@@ -5,13 +5,14 @@ import { logTiming, msSince } from "../lib/timing";
 import InventorySourceBar from "../components/inventory/InventorySourceBar";
 import InventoryCard from "../components/inventory/InventoryCard";
 import InventoryList from "../components/inventory/InventoryList";
+import VirtualCards from "../components/inventory/VirtualCards";
 import InventoryOrderBookPanel from "../components/inventory/InventoryOrderBookPanel";
 import InventorySelectionBar from "../components/inventory/InventorySelectionBar";
 import InventoryValueStrip from "../components/inventory/InventoryValueStrip";
 import PetsInventory from "../components/inventory/PetsInventory";
 import SetExtra, { useRelicDb } from "../components/inventory/SetsPanel";
 import BulkSellModal from "../components/workbench/BulkSellModal";
-import { Button, Chip, EmptyState, IconButton, Input, PageHeader, Segmented, SearchInput, Select, ShowMore, Skeleton, Tabs, useBatch } from "../components/ui";
+import { Button, Chip, EmptyState, IconButton, Input, PageHeader, Segmented, SearchInput, Select, Skeleton, Tabs } from "../components/ui";
 import type { MessageKey, Translator } from "../lib/i18n";
 import type { ItemDatabase, Language } from "../lib/ipc";
 import { useItemPriceProgress, useItemPrices, type PriceInfo } from "../lib/inventory/itemPrices";
@@ -82,6 +83,8 @@ const MODES = ["cards", "list"] as const;
 const FLAG = ["0", "1"] as const;
 /** Rows whose weekly median is fetched; the history endpoint is one request per item. */
 const AVERAGE_CAP = 120;
+/** The rows asked first: the top of the list, what the first screen shows. */
+const HEAD_ROWS = 60;
 /** Descending reads naturally for the figures, ascending for the name. */
 const NO_PRICES: ReadonlyMap<string, PriceInfo> = new Map();
 const defaultDesc = (key: SortKey) => key !== "name";
@@ -214,7 +217,6 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [inTab, tradableOnly, ducatsFilter, copies, modFilter, surplusOnly, sellable, primeFilter, saleFilter, onSale, masteryFilter, masteryIndex, items],
   );
-  const { limit, more } = useBatch(`${tab}|${query}|${sortKey}|${desc}|${tradableOnly}|${ducatsFilter}|${modFilter.duplicates}|${modFilter.notMax}|${modFilter.notEquipped}|${surplusOnly}|${primeFilter}|${saleFilter}|${masteryFilter}|${range.min}|${range.max}|${mode}`);
 
   // Prices: the rows on screen first, then the rest of the tab and every row the value strip counts, in the background.
   // Missing parts of incomplete sets are priced like any row: through the same queue.
@@ -233,7 +235,8 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
     return [...wanted];
   }, [filtered, rows, partSlugs]);
   // Price order is unknown before the prices are, so the first rows asked are the head of the unpriced order.
-  const head = useMemo(() => sortRows(filtered, NO_PRICES, sortKey, desc).slice(0, limit), [filtered, sortKey, desc, limit]);
+  const unpriced = useMemo(() => sortRows(filtered, NO_PRICES, sortKey, desc), [filtered, sortKey, desc]);
+  const head = useMemo(() => unpriced.slice(0, HEAD_ROWS), [unpriced]);
   const headSlugs = useMemo(() => [...head.flatMap((r) => (r.slug ? [r.slug] : [])), ...partSlugs(head)], [head, partSlugs]);
   // The weekly median costs one request per item, so only the first rows on screen and the picked ones get it.
   const [loadedAvg, setLoadedAvg] = useState<ReadonlySet<string>>(new Set());
@@ -246,11 +249,9 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
   const livePrices = useItemPrices(headSlugs, listed ? avgSlugs : [], allSlugs);
   const progress = useItemPriceProgress(allSlugs);
   // The platinum range filters the list: with a bound set, no market price hides the row; rows still loading stay.
-  const visible = useMemo(
-    () => sortRows(filtered, livePrices, sortKey, desc).filter((r) => passesPlatRange(r, r.slug ? livePrices.get(r.slug) : undefined, range)),
-    [filtered, livePrices, sortKey, desc, range],
-  );
-  const shown = useMemo(() => visible.slice(0, limit), [visible, limit]);
+  // Only the price sorts depend on the prices: any other order is kept while they stream in, only the readouts refresh.
+  const ordered = useMemo(() => (sortKey === "platinum" || sortKey === "average" ? sortRows(filtered, livePrices, sortKey, desc) : unpriced), [filtered, unpriced, livePrices, sortKey, desc]);
+  const visible = useMemo(() => ordered.filter((r) => passesPlatRange(r, r.slug ? livePrices.get(r.slug) : undefined, range)), [ordered, livePrices, range]);
   // Diagnostics: per tab, ms from mount (or the tab switch) to the first rows and to every price answered.
   const lap = useRef({ t0: performance.now(), sorts: sortRowsCalls(), rows: false, prices: false });
   useEffect(() => {
@@ -258,17 +259,17 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
   }, [tab]);
   useEffect(() => {
     const l = lap.current;
-    if (!l.rows && shown.length > 0) {
+    if (!l.rows && visible.length > 0) {
       l.rows = true;
-      logTiming("inventory_first_rows", { tab, rows: shown.length, ms: msSince(l.t0) });
+      logTiming("inventory_first_rows", { tab, rows: visible.length, ms: msSince(l.t0) });
     }
     if (!l.prices && progress.total > 0 && progress.done + progress.failed >= progress.total) {
       l.prices = true;
       logTiming("inventory_prices_done", { tab, slugs: progress.total, failed: progress.failed, sorts: sortRowsCalls() - l.sorts, ms: msSince(l.t0) });
     }
-  }, [tab, shown, progress]);
-  const pickRange = useRangeSelect(shown.map((r) => r.key));
-  // Shift+click takes every shown row between the last click and this one.
+  }, [tab, visible, progress]);
+  const pickRange = useRangeSelect(visible.map((r) => r.key));
+  // Shift+click takes every listed row between the last click and this one.
   const pickRow = (key: string, shift: boolean) => selectKeys(applyIds(selection, pickRange(key, shift), !selection.has(key)));
   // Relic sources only for the sets on screen: each one walks the whole relic database.
   const relicDb = useRelicDb(showIncomplete);
@@ -277,18 +278,18 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
   const setEntries = useMemo(
     () =>
       new Map(
-        buildIncompleteSets(shown.filter((r) => r.item.inventoryGroup === "incomplete_sets").map((r) => r.item), relicIndex, ownedRelics, undefined, (part, set) =>
+        buildIncompleteSets(visible.filter((r) => r.item.inventoryGroup === "incomplete_sets").map((r) => r.item), relicIndex, ownedRelics, undefined, (part, set) =>
           partSlug(part, set, (n) => catalog?.byName(n) ?? null),
         ).map((e) => [e.set, e]),
       ),
-    [shown, relicIndex, ownedRelics, catalog],
+    [visible, relicIndex, ownedRelics, catalog],
   );
   const extraOf = (row: InvRow) => {
     const entry = setEntries.get(row.item);
     return entry ? <SetExtra entry={entry} prices={livePrices} itemDb={items as unknown as Record<string, ItemDbEntry>} tr={tr} /> : null;
   };
 
-  // Every filtered row counts, not just the ones the scroll has shown.
+  // Every filtered row counts, not just the ones in the window.
   const filteredTotals = useMemo(() => computeInventoryValueTotals(valueEntries(visible.filter((r) => r.canTrade), livePrices), "tradable"), [visible, livePrices]);
   const allTradableTotals = useMemo(() => computeInventoryValueTotals(valueEntries(rows.filter((r) => r.canTrade), livePrices), "tradable"), [rows, livePrices]);
   const picked = useMemo(() => rows.filter((r) => selection.has(r.key)), [rows, selection]);
@@ -524,8 +525,9 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
         <div className="inv-layout">
           <div className="min-w-0">
             {mode === "cards" ? (
-              <div className="inv-grid">
-                {shown.map((row) => (
+              <VirtualCards
+                rows={visible}
+                render={(row) => (
                   <InventoryCard
                     key={row.key}
                     row={row}
@@ -544,12 +546,11 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
                     onSale={onSale.get(row.item)}
                     tr={tr}
                   />
-                ))}
-              </div>
+                )}
+              />
             ) : (
-              <InventoryList rows={shown} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r, shift) => pickRow(r.key, shift)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} onSaleOf={(r) => onSale.get(r.item)} tr={tr} />
+              <InventoryList rows={visible} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r, shift) => pickRow(r.key, shift)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} onSaleOf={(r) => onSale.get(r.item)} tr={tr} />
             )}
-            <ShowMore shown={shown.length} total={visible.length} onMore={more} tr={tr} />
           </div>
           {book && <InventoryOrderBookPanel key={book.key} row={book} onClose={() => setBook(null)} tr={tr} />}
         </div>

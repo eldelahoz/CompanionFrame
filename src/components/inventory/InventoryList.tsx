@@ -1,5 +1,5 @@
 import { Scale } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import ItemThumb from "../market/ItemThumb";
 import { Badge, Checkbox, IconButton, Table } from "../ui";
 import { formatNumber } from "../../lib/format";
@@ -14,6 +14,7 @@ import EquippedPopover from "./EquippedOn";
 import type { Sellable } from "../../lib/inventory/sellable";
 import { AverageValue, DucatValue, OwnedBadge, PlatinumValue, PriceTrend, RankIndicator } from "./ItemValue";
 import { shiftOf } from "../../lib/useRangeSelect";
+import { useVirtualRows } from "./useVirtualRows";
 
 interface Props {
   rows: readonly InvRow[];
@@ -37,6 +38,18 @@ interface Props {
 /** Rows turn into labelled cards in a narrow container (Table mode="stack"). */
 export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, sellableOf, showEquipped, onSaleOf, tr }: Props) {
   const anySale = !!onSaleOf && rows.some((r) => onSaleOf(r));
+  const body = useRef<HTMLTableSectionElement>(null);
+  const v = useVirtualRows(rows.length, "list", body);
+  const items = v.getVirtualItems();
+  // Spacer rows stand for the rows out of the window, so the table keeps its real height and column widths.
+  const above = items.length ? items[0].start - v.options.scrollMargin : 0;
+  const below = items.length ? v.getTotalSize() - items[items.length - 1].end : 0;
+  const columns = 7 + (anySale ? 1 : 0) + (showEquipped ? 1 : 0);
+  const spacer = (h: number) => (
+    <tr aria-hidden="true" style={{ height: h, padding: 0, border: 0 }}>
+      <td colSpan={columns} style={{ height: h, padding: 0, border: 0 }} />
+    </tr>
+  );
   return (
     <Table mode="stack" label={tr("inventory.viewList")} className="inv-list">
       <thead>
@@ -52,12 +65,14 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
           <th aria-hidden="true" />
         </tr>
       </thead>
-      <tbody data-inventory-list>
-        {rows.map((row) => {
+      <tbody data-inventory-list ref={body}>
+        {above > 0 && spacer(above)}
+        {items.map((it) => {
+          const row = rows[it.index];
           const info = row.slug ? prices.get(row.slug) : undefined;
           const picked = selection.has(row.key);
           return (
-            <tr key={row.key} data-inventory-card={row.item.internalName} data-selected={picked || undefined}>
+            <tr key={row.key} ref={v.measureElement} data-index={it.index} data-inventory-card={row.item.internalName} data-selected={picked || undefined}>
               <td data-primary>
                 <div className="ui-item">
                   {selecting && <Checkbox checked={picked} onChange={(e) => onToggle(row, shiftOf(e))} aria-label={tr("inventory.selectItem", { name: row.label })} />}
@@ -118,6 +133,7 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
             </tr>
           );
         })}
+        {below > 0 && spacer(below)}
       </tbody>
     </Table>
   );
