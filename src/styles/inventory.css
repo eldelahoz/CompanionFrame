@@ -458,19 +458,6 @@
   .inv-muted {
     color: var(--text-muted);
   }
-  .inv-load {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--text-muted);
-    font: inherit;
-    font-size: var(--text-xs, 0.75rem);
-    text-decoration: underline dotted;
-    cursor: pointer;
-  }
-  .inv-load:hover {
-    color: var(--text-primary);
-  }
   .inv-link {
     min-width: 0;
     overflow: hidden;

@@ -2617,6 +2617,10 @@ export type PriceEntry_Deserialize = {
 	maxPrice?: number | null,
 	/**  The rank `max_price` is for. */
 	maxRank?: number | null,
+	/**  Median of the last 7 days of daily medians (rank 0); `None` without sales in the window. */
+	avg?: number | null,
+	/**  The same median over the item's highest-rank history rows; `None` for unranked items or without sales there. */
+	maxAvg?: number | null,
 	/**  Served from a cache entry past its freshness window (a refresh is under way or WFM was unreachable). */
 	stale: boolean,
 	/**  When the price was fetched (ms since epoch); `None` when nothing was cached. */
@@ -2631,6 +2635,10 @@ export type PriceEntry_Serialize = {
 	maxPrice: number | null,
 	/**  The rank `max_price` is for. */
 	maxRank: number | null,
+	/**  Median of the last 7 days of daily medians (rank 0); `None` without sales in the window. */
+	avg: number | null,
+	/**  The same median over the item's highest-rank history rows; `None` for unranked items or without sales there. */
+	maxAvg: number | null,
 	/**  Served from a cache entry past its freshness window (a refresh is under way or WFM was unreachable). */
 	stale: boolean,
 	/**  When the price was fetched (ms since epoch); `None` when nothing was cached. */

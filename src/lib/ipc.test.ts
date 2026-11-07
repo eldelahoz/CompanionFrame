@@ -17,7 +17,7 @@ test("mock app info", async () => {
 });
 
 test("mock prices: a known slug is ok, an unknown one is no_data, bulk dedupes", async () => {
-  expect(await wfmPrice("serration")).toEqual({ slug: "serration", status: "ok", price: 22, maxPrice: 48, maxRank: 10, stale: false, updatedAt: null });
+  expect(await wfmPrice("serration")).toEqual({ slug: "serration", status: "ok", price: 22, maxPrice: 48, maxRank: 10, stale: false, updatedAt: null, avg: 22, maxAvg: 48 });
   expect(await wfmPrice("nope")).toMatchObject({ status: "no_data", price: null });
   expect(await wfmPricesBulk(["serration", "serration", "nope"])).toHaveLength(2);
   expect(await wfmStatsHistory("serration")).toHaveLength(90);

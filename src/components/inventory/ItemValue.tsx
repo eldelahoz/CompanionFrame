@@ -21,15 +21,9 @@ export function PlatinumValue({ row, info, tr, showNotTradable = false }: { row:
   );
 }
 
-/** Median of the last week (muted, the label comes from the column or the card row), requested only for the rows the view lists first; the others get a Load button. */
-export function AverageValue({ row, info, wanted, onLoad, tr }: { row: InvRow; info?: PriceInfo; wanted: boolean; onLoad?: (slug: string) => void; tr: Translator }): ReactNode {
+/** Median of the last week (muted, the label comes from the column or the card row); it arrives with the price. */
+export function AverageValue({ row, info, tr }: { row: InvRow; info?: PriceInfo; tr: Translator }): ReactNode {
   if (!row.slug) return null;
-  if (!wanted)
-    return onLoad ? (
-      <button type="button" className="inv-load" title={tr("inventory.averageHint")} aria-label={tr("inventory.loadAverageAria")} onClick={() => onLoad(row.slug!)}>
-        {tr("inventory.loadAverage")}
-      </button>
-    ) : null;
   if (!info || info.avgState === "loading") return <Skeleton width="3.5rem" height="1.25rem" />;
   return (
     <span title={tr("inventory.averageHint")}>

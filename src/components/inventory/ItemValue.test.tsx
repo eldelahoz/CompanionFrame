@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, expect, test } from "vitest";
 import { translator } from "../../lib/i18n";
 import type { InvRow } from "../../lib/inventory/inventoryRows";
 import type { PriceInfo } from "../../lib/inventory/itemPrices";
@@ -18,15 +18,11 @@ test("not tradable says so in the list and stays empty in the grid", () => {
   expect(container.textContent).toBe("");
 });
 
-test("the weekly median is unlabelled and muted (its label is the column or card row), or offers a Load button that asks for that row", () => {
-  const onLoad = vi.fn();
-  const { container, rerender } = render(<AverageValue row={row("volt")} info={info} wanted tr={tr} />);
+test("the weekly median is unlabelled and muted (its label is the column or card row)", () => {
+  const { container } = render(<AverageValue row={row("volt")} info={info} tr={tr} />);
   expect(container.textContent).toBe("10");
   expect(container.querySelector(".inv-median")).not.toBeNull();
   expect(container.querySelector("[title]")?.getAttribute("title")).toContain("warframe.market");
-  rerender(<AverageValue row={row("volt")} wanted={false} onLoad={onLoad} tr={tr} />);
-  fireEvent.click(screen.getByRole("button", { name: "Load the 7-day median" }));
-  expect(onLoad).toHaveBeenCalledWith("volt");
 });
 
 test("the 48h price says where it comes from", () => {

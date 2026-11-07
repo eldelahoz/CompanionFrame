@@ -12,10 +12,11 @@ import MasteryPlanner from "../components/mastery/MasteryPlanner";
 import MasteryRoadmap from "../components/mastery/MasteryRoadmap";
 import { Badge, Button, Card, EmptyState, Field, IconButton, PageHeader, Readout, SearchInput, Segmented, Select, ShowMore, Skeleton, StatStrip, Tabs, useBatch, type StatItem } from "../components/ui";
 import { parseArchonShards, summarizeArchonShards } from "../lib/inventory/archonShards";
-import { getRelicDatabase, wfmPricesBulk, type MasteryProgress } from "../lib/ipc";
+import { getRelicDatabase, type MasteryProgress } from "../lib/ipc";
 import NoInventoryState from "../components/inventory/NoInventoryState";
 import type { MessageKey, Translator } from "../lib/i18n";
 import { buildMasteryPlan, type PlannerPin, type PlannerSort } from "../lib/masteryPlanner";
+import { useItemPriceProgress, useItemPrices } from "../lib/inventory/itemPrices";
 import { catalogLookup, hydrateMasteryItems, roadmapPriceSlugs, type PriceMap } from "../lib/masteryHydrate";
 import { masteryProjectionSubtext } from "../lib/masteryProjection";
 import { buildMasteryRoadmap } from "../lib/masteryRoadmap";
@@ -59,7 +60,6 @@ const SORTS: Array<[string, MessageKey]> = [
 const PLANNER_SORTS = ["mastery_xp", "completeness", "name"] as const;
 const RING_R = 52;
 const RING_C = 2 * Math.PI * RING_R;
-const PRICE_CHUNK = 100;
 
 const label = (i: Pick<Item, "name" | "displayName" | "uniqueName">) => sanitizeDisplayName(i.displayName || i.name);
 
@@ -201,7 +201,6 @@ export default function MasteryView({ tr, locale }: Props) {
   const keepPinned = useMasteryPinKeep();
   const [notices, setNotices] = useState<Array<{ id: number; dropped: string[]; text: string }>>([]);
   const { catalog } = useWfmCatalog();
-  const [prices, setPrices] = useState<{ map: PriceMap; done: boolean }>({ map: new Map(), done: false });
   const [relicDb, setRelicDb] = useState<RelicDatabase | null>(null);
 
   const lookup = useMemo(() => catalogLookup(catalog), [catalog]);
@@ -209,30 +208,25 @@ export default function MasteryView({ tr, locale }: Props) {
 
   // Platinum estimates need market prices; fetch them only once the roadmap is opened.
   const priceSlugs = useMemo(() => (viewTab === "roadmap" && data ? roadmapPriceSlugs(data.items, lookup) : []), [viewTab, data, lookup]);
+  // The shared price store loads them (one backend request, the Prices job in the titlebar pill) and keeps them across remounts.
+  const livePrices = useItemPrices(priceSlugs);
+  const priceProgress = useItemPriceProgress(priceSlugs);
+  const priceMap = useMemo<PriceMap>(() => new Map([...livePrices].flatMap(([slug, i]) => (i.price != null && i.price > 0 ? [[slug, i.price] as const] : []))), [livePrices]);
   useEffect(() => {
     if (viewTab !== "roadmap" || !catalog) return;
     let live = true;
     void getRelicDatabase().then((db) => live && setRelicDb(db)).catch(() => undefined);
-    void (async () => {
-      const map = new Map<string, number>();
-      for (let i = 0; i < priceSlugs.length && live; i += PRICE_CHUNK) {
-        const entries = await wfmPricesBulk(priceSlugs.slice(i, i + PRICE_CHUNK)).catch(() => []);
-        for (const e of entries) if (e.status === "ok" && e.price != null && e.price > 0) map.set(e.slug, e.price);
-        if (live) setPrices({ map: new Map(map), done: false });
-      }
-      if (live) setPrices({ map, done: true });
-    })();
     return () => {
       live = false;
     };
-  }, [viewTab, catalog, priceSlugs]);
+  }, [viewTab, catalog]);
 
   const roadmap = useMemo(() => {
     if (viewTab !== "roadmap" || !data) return null;
     const building = inventory.data && Object.keys(itemDb).length ? foundryFor(inventory.data, itemDbRaw).building : [];
-    const items = hydrateMasteryItems(data.items, { building, ownership, db: itemDb, lookup, prices: prices.map, now: Date.now() });
+    const items = hydrateMasteryItems(data.items, { building, ownership, db: itemDb, lookup, prices: priceMap, now: Date.now() });
     return buildMasteryRoadmap(items, relicDb, parseOwnedRelics(inventory.data, relicDb));
-  }, [viewTab, data, inventory.data, itemDb, ownership, lookup, prices.map, relicDb]);
+  }, [viewTab, data, inventory.data, itemDb, ownership, lookup, priceMap, relicDb]);
 
   const plan = useMemo(() => {
     if (viewTab !== "planned" || pins.length === 0) return null;
@@ -350,7 +344,7 @@ export default function MasteryView({ tr, locale }: Props) {
             totalXp={data.stats.profileMastery?.totalXp ?? null}
             currentRank={data.stats.profileMastery?.rank ?? null}
             pins={pins}
-            pricing={!prices.done}
+            pricing={priceProgress.done + priceProgress.failed < priceProgress.total}
             onOpen={openItem}
             onTogglePin={toggleMasteryPin}
           />

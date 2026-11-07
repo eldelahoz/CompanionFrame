@@ -19,8 +19,6 @@ import { useVirtualRows } from "./useVirtualRows";
 interface Props {
   rows: readonly InvRow[];
   prices: ReadonlyMap<string, PriceInfo>;
-  avgWanted: ReadonlySet<string>;
-  onLoadAverage: (slug: string) => void;
   selecting: boolean;
   selection: ReadonlySet<string>;
   onOpen: (row: InvRow) => void;
@@ -36,7 +34,7 @@ interface Props {
 }
 
 /** Rows turn into labelled cards in a narrow container (Table mode="stack"). */
-export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, sellableOf, showEquipped, onSaleOf, tr }: Props) {
+export default function InventoryList({ rows, prices, selecting, selection, onOpen, onToggle, onBook, extraOf, masteryOf, sellableOf, showEquipped, onSaleOf, tr }: Props) {
   const anySale = !!onSaleOf && rows.some((r) => onSaleOf(r));
   const body = useRef<HTMLTableSectionElement>(null);
   const v = useVirtualRows(rows.length, "list", body);
@@ -105,7 +103,7 @@ export default function InventoryList({ rows, prices, avgWanted, onLoadAverage, 
                 </span>
               </td>
               <td className="ui-num" data-label={tr("inventory.col.average")}>
-                <AverageValue row={row} info={info} wanted={!!row.slug && avgWanted.has(row.slug)} onLoad={onLoadAverage} tr={tr} />
+                <AverageValue row={row} info={info} tr={tr} />
               </td>
               <td className="ui-num" data-label={tr("inventory.col.ducats")}>
                 <DucatValue row={row} />

@@ -60,6 +60,10 @@ pub struct PriceEntry {
     pub max_price: Option<u32>,
     /// The rank `max_price` is for.
     pub max_rank: Option<u32>,
+    /// Median of the last 7 days of daily medians (rank 0); `None` without sales in the window.
+    pub avg: Option<f64>,
+    /// The same median over the item's highest-rank history rows; `None` for unranked items or without sales there.
+    pub max_avg: Option<f64>,
     /// Served from a cache entry past its freshness window (a refresh is under way or WFM was unreachable).
     pub stale: bool,
     /// When the price was fetched (ms since epoch); `None` when nothing was cached.
@@ -75,13 +79,19 @@ struct Cached {
     max_price: Option<u32>,
     #[serde(default)]
     max_rank: Option<u32>,
+    /// 7-day medians from the history riding on the same response; absent before `CACHE_V` 3.
+    #[serde(default)]
+    avg: Option<f64>,
+    #[serde(default)]
+    max_avg: Option<f64>,
     ts: i64,
     /// Schema version; entries from before `max_price` read as 0 and are revalidated first.
     #[serde(default)]
     v: u8,
 }
 
-const CACHE_V: u8 = 2;
+const CACHE_V: u8 = 3;
+const AVG_DAYS: f64 = 7.0;
 
 impl Cached {
     fn no_data(ts: i64) -> Self {
@@ -90,6 +100,8 @@ impl Cached {
             price: None,
             max_price: None,
             max_rank: None,
+            avg: None,
+            max_avg: None,
             ts,
             v: CACHE_V,
         }
@@ -125,6 +137,8 @@ fn failed_entry(slug: &str) -> PriceEntry {
         price: None,
         max_price: None,
         max_rank: None,
+        avg: None,
+        max_avg: None,
         stale: false,
         updated_at: None,
     }
@@ -137,9 +151,43 @@ fn entry(slug: &str, c: &Cached, stale: bool) -> PriceEntry {
         price: c.price,
         max_price: c.max_price,
         max_rank: c.max_rank,
+        avg: c.avg,
+        max_avg: c.max_avg,
         stale,
         updated_at: Some(c.ts as f64),
     }
+}
+
+/// Median of the daily medians of the last `AVG_DAYS` days for one rank.
+fn median_of_recent(points: &[MarketStatPoint], now: f64, rank: u32) -> Option<f64> {
+    let mut v: Vec<f64> = points
+        .iter()
+        .filter(|p| now - p.time <= AVG_DAYS * 86_400_000.0 && p.rank.unwrap_or(0) == rank)
+        .map(|p| p.median)
+        .collect();
+    v.sort_by(f64::total_cmp);
+    let mid = v.len() / 2;
+    match v.len() {
+        0 => None,
+        n if n % 2 == 1 => Some(v[mid]),
+        _ => Some((v[mid - 1] + v[mid]) / 2.0),
+    }
+}
+
+/// Medians for rank 0 and for the highest rank the recent history has rows for.
+fn medians_of_recent(points: &[MarketStatPoint], now: f64) -> (Option<f64>, Option<f64>) {
+    let top = points
+        .iter()
+        .filter(|p| now - p.time <= AVG_DAYS * 86_400_000.0)
+        .filter_map(|p| p.rank)
+        .max()
+        .unwrap_or(0);
+    (
+        median_of_recent(points, now, 0),
+        (top > 0)
+            .then(|| median_of_recent(points, now, top))
+            .flatten(),
+    )
 }
 
 /// `"Ash Prime Set"` -> `ash_prime_set`; anything that could change the URL route is refused.
@@ -223,6 +271,7 @@ impl Prices {
         match fetched {
             Ok(Some(body)) => {
                 let history = stats_history::points_from_payload(&body, now as f64);
+                let (week, max_week) = medians_of_recent(&history, now as f64);
                 if let Err(e) = stats_history::record(db, slug, history, MergeMode::Replace) {
                     tracing::warn!(error = %e, slug, "wfm price history write failed");
                 }
@@ -234,6 +283,8 @@ impl Prices {
                             price: Some(avg.average),
                             max_price: max.as_ref().map(|(_, a)| a.average),
                             max_rank: max.map(|(r, _)| r),
+                            avg: week,
+                            max_avg: max_week,
                             ts: now,
                             v: CACHE_V,
                         };
@@ -669,6 +720,84 @@ mod tests {
         assert_eq!(hits(&m), 1);
     }
 
+    fn day_row(days_ago: i64, median: f64, rank: Option<u32>) -> String {
+        let t = chrono::DateTime::from_timestamp_millis(now_ms() - days_ago * 86_400_000)
+            .unwrap()
+            .to_rfc3339();
+        let rank = rank.map_or(String::new(), |r| format!(r#","mod_rank":{r}"#));
+        format!(r#"{{"datetime":"{t}","median":{median},"volume":3{rank}}}"#)
+    }
+
+    /// Same fixture as the former frontend tests: last week only, rank 0 and the highest rank apart.
+    #[tokio::test]
+    async fn the_entry_carries_the_seven_day_medians_from_the_same_response() {
+        let rows = [
+            day_row(1, 4.0, Some(0)),
+            day_row(2, 6.0, Some(0)),
+            day_row(20, 999.0, Some(0)),
+            day_row(1, 40.0, Some(10)),
+            day_row(3, 60.0, Some(10)),
+        ]
+        .join(",");
+        let t = chrono::DateTime::from_timestamp_millis(now_ms() - 3_600_000)
+            .unwrap()
+            .to_rfc3339();
+        let body = format!(
+            r#"{{"payload":{{"statistics_closed":{{
+              "48hours":[{{"datetime":"{t}","wa_price":4.0,"volume":3,"order_type":"sell","mod_rank":0}}],
+              "90days":[{rows}]}}}}}}"#
+        );
+        let m = spawn(vec![reply(200, &body)]);
+        let (c, db, p) = (client(&m), mem_db(), Prices::default());
+        let e = price(&p, &c, &db, "adaptation").await.unwrap();
+        assert_eq!((e.avg, e.max_avg), (Some(5.0), Some(50.0)));
+        // The cache returns them, to a single call and to the whole-inventory load, with no second request.
+        assert_eq!(
+            price(&p, &c, &db, "adaptation").await.unwrap().avg,
+            Some(5.0)
+        );
+        let (served, todo) = p.load(&db, vec!["adaptation".into()]).unwrap();
+        assert_eq!((served[0].avg, served[0].max_avg), (Some(5.0), Some(50.0)));
+        assert!(todo.is_empty());
+        assert_eq!(hits(&m), 1);
+    }
+
+    #[test]
+    fn medians_use_the_last_week_and_stay_empty_without_sales_or_a_second_rank() {
+        let now = now_ms() as f64;
+        let pt = |days: f64, median: f64, rank: Option<u32>| MarketStatPoint {
+            source: stats_history::StatSource::Wfm,
+            time: now - days * 86_400_000.0,
+            volume: None,
+            median,
+            moving_avg: None,
+            avg_price: None,
+            open_price: None,
+            closed_price: None,
+            min_price: None,
+            max_price: None,
+            donch_top: None,
+            donch_bot: None,
+            rank,
+        };
+        let m = |v: &[MarketStatPoint]| medians_of_recent(v, now);
+        assert_eq!(
+            m(&[
+                pt(1.0, 10.0, None),
+                pt(2.0, 30.0, None),
+                pt(3.0, 20.0, None),
+                pt(20.0, 999.0, None)
+            ]),
+            (Some(20.0), None)
+        );
+        assert_eq!(
+            m(&[pt(1.0, 10.0, None), pt(2.0, 20.0, None)]),
+            (Some(15.0), None)
+        );
+        assert_eq!(m(&[pt(30.0, 10.0, None)]), (None, None));
+        assert_eq!(m(&[pt(1.0, 4.0, None)]), (Some(4.0), None));
+    }
+
     #[tokio::test]
     async fn concurrent_callers_share_one_request() {
         let m = spawn(vec![reply(200, &stats_body(64.0))]);
@@ -967,6 +1096,8 @@ mod tests {
                     price: Some(9),
                     max_price: None,
                     max_rank: None,
+                    avg: None,
+                    max_avg: None,
                     ts,
                     v,
                 },

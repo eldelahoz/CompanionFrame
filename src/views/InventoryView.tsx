@@ -82,7 +82,6 @@ const SORT_LABEL: Record<SortKey, MessageKey> = {
 const MODES = ["cards", "list"] as const;
 const FLAG = ["0", "1"] as const;
 /** Rows whose weekly median is fetched; the history endpoint is one request per item. */
-const AVERAGE_CAP = 120;
 /** The rows asked first: the top of the list, what the first screen shows. */
 const HEAD_ROWS = 60;
 /** Descending reads naturally for the figures, ascending for the name. */
@@ -238,15 +237,7 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
   const unpriced = useMemo(() => sortRows(filtered, NO_PRICES, sortKey, desc), [filtered, sortKey, desc]);
   const head = useMemo(() => unpriced.slice(0, HEAD_ROWS), [unpriced]);
   const headSlugs = useMemo(() => [...head.flatMap((r) => (r.slug ? [r.slug] : [])), ...partSlugs(head)], [head, partSlugs]);
-  // The weekly median costs one request per item, so only the first rows on screen and the picked ones get it.
-  const [loadedAvg, setLoadedAvg] = useState<ReadonlySet<string>>(new Set());
-  const loadAverage = useCallback((slug: string) => setLoadedAvg((s) => new Set(s).add(slug)), []);
-  const avgSlugs = useMemo(
-    () => [...new Set([...head.slice(0, AVERAGE_CAP), ...rows.filter((r) => selection.has(r.key))].flatMap((r) => (r.slug ? [r.slug] : [])).concat([...loadedAvg]))],
-    [head, rows, selection, loadedAvg],
-  );
-  const avgWanted = useMemo(() => new Set(avgSlugs), [avgSlugs]);
-  const livePrices = useItemPrices(headSlugs, listed ? avgSlugs : [], allSlugs);
+  const livePrices = useItemPrices(headSlugs, allSlugs);
   const progress = useItemPriceProgress(allSlugs);
   // The platinum range filters the list: with a bound set, no market price hides the row; rows still loading stay.
   // Only the price sorts depend on the prices: any other order is kept while they stream in, only the readouts refresh.
@@ -532,8 +523,6 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
                     key={row.key}
                     row={row}
                     info={row.slug ? livePrices.get(row.slug) : undefined}
-                    avgWanted={!!row.slug && avgWanted.has(row.slug)}
-                    onLoadAverage={loadAverage}
                     selecting={selecting}
                     selected={selection.has(row.key)}
                     onOpen={() => open(row)}
@@ -549,7 +538,7 @@ export default function InventoryView({ items, tr, locale = "en", wfmLoggedIn = 
                 )}
               />
             ) : (
-              <InventoryList rows={visible} prices={livePrices} avgWanted={avgWanted} onLoadAverage={loadAverage} selecting={selecting} selection={selection} onOpen={open} onToggle={(r, shift) => pickRow(r.key, shift)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} onSaleOf={(r) => onSale.get(r.item)} tr={tr} />
+              <InventoryList rows={visible} prices={livePrices} selecting={selecting} selection={selection} onOpen={open} onToggle={(r, shift) => pickRow(r.key, shift)} onBook={setBook} extraOf={extraOf} masteryOf={masteryOf} sellableOf={sellableOf} showEquipped={showEquipped} onSaleOf={(r) => onSale.get(r.item)} tr={tr} />
             )}
           </div>
           {book && <InventoryOrderBookPanel key={book.key} row={book} onClose={() => setBook(null)} tr={tr} />}
