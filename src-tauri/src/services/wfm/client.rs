@@ -122,7 +122,8 @@ impl WfmClient {
         if status.is_success() {
             return Ok(res);
         }
-        if status.as_u16() == 429 {
+        // 509 is "too many concurrent connections from one IP": back off like a 429.
+        if matches!(status.as_u16(), 429 | 509) {
             let retry_after_secs = res
                 .headers()
                 .get(header::RETRY_AFTER)
@@ -470,6 +471,19 @@ mod tests {
             }
         );
         assert_eq!(err.class(), Class::Transient);
+    }
+
+    #[tokio::test]
+    async fn too_many_connections_509_is_a_rate_limit() {
+        let m = spawn(vec![reply(509, "")]);
+        let (c, _) = client(&m.url);
+        let err = get(&c, Api::V2, "/items").await.unwrap_err();
+        assert_eq!(
+            err,
+            WfmError::RateLimited {
+                retry_after_secs: None
+            }
+        );
     }
 
     #[tokio::test]
