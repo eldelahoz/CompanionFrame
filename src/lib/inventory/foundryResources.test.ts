@@ -459,3 +459,44 @@ describe("foundry set readiness", () => {
     });
   });
 });
+
+describe("foundry doubled ingredient", () => {
+  const TWIN = "/Lotus/Weapons/Test/TwinTest";
+  const TWIN_BP = "/Lotus/Types/Recipes/Weapons/TwinTestBlueprint";
+  const BASE = "/Lotus/Weapons/Test/BaseTest";
+  // DE lists a doubled ingredient as two rows of one.
+  const db = itemDbOf({
+    [TWIN]: {
+      name: "Twin Test",
+      recipe: {
+        buildPrice: 0,
+        buildTime: 0,
+        num: 1,
+        blueprintUniqueName: TWIN_BP,
+        ingredients: [
+          { uniqueName: BASE, count: 1 },
+          { uniqueName: BASE, count: 1 },
+        ],
+      },
+    } as ItemDbEntry,
+  });
+
+  function twin(baseCopies: number) {
+    const inventory = {
+      Recipes: [{ ItemType: TWIN_BP, ItemCount: 1 }],
+      MiscItems: [{ ItemType: BASE, ItemCount: baseCopies }],
+    } as RawInventoryData;
+    const recipe = parseFoundry(inventory, db).recipes.find((r) => r.uniqueName === TWIN_BP)!;
+    const owned = aggregateComponentOwnership(inventory);
+    return { recipe, ready: isFoundryRecipeReady(recipe, owned, new Set()) };
+  }
+
+  it("merges the two rows into one ingredient of count 2", () => {
+    expect(twin(1).recipe.ingredients).toEqual([{ uniqueName: BASE, count: 2 }]);
+  });
+
+  it("is not ready with one copy and ready with two", () => {
+    expect(twin(1).ready).toBe(false);
+    expect(twin(2).ready).toBe(true);
+  });
+});
