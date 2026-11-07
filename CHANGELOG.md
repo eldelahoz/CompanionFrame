@@ -2,6 +2,31 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.0 (2026-11-07)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Added
+* feat(inventory): find surplus copies and where mods and arcanes are equipped by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/23
+* feat(overlay): close matched listings automatically and copy a thank-you after a sale by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/25
+* feat(market): sort and bulk-edit orders, and tag inventory items you have on sale by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/27
+* feat(jobs): run long actions as background jobs with a titlebar pill, stop, continue, retry and an offline pause by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/34
+* feat(frontend): keep each view's filters, search, tab and selection when switching views by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/33
+### Fixed
+* fix(eelog): translate localized trade names that carry a rank suffix by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/24
+* fix(stats): show trade item thumbnails from local art instead of the blocked warframe.market host by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/29
+* fix(overlay): retry the first riven read and fill relic planner ducats from the item database by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/32
+### Performance
+* perf(db): WAL, a writer plus three readers, batched price reads and a backup before migrating by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/28
+* perf(wfm): one gateway for every warframe.market request, catalog in memory and cached orders by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/31
+* perf(inventory): one shared inventory parse, coalesced price updates and virtualized cards and list by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/35
+* perf(prices): the worker computes the 7-day median and Relics, Mastery and Inventory share one price store by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/36
+* perf(cards): virtualized Relics, Mastery and Foundry grids with same-height cards by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/37
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.4.1...v0.5.0
+
 ## 0.4.1 (2026-11-05)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
