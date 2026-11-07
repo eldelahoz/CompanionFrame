@@ -4,9 +4,10 @@
 </h1>
 
 <p align="center">
-CompanionFrame is a free, open-source desktop companion for Warframe. It tracks your inventory, mastery, warframe.market prices and world state, and puts in-game overlays on relic rewards and rivens. Not affiliated with Digital Extremes.
+CompanionFrame is a free, open-source Warframe companion app for Windows: warframe.market trading and prices, a relic reward overlay, riven scans, and an inventory and mastery tracker. Everything runs on your PC. Not affiliated with Digital Extremes.
 </p>
 <p align="center">
+<a href="https://github.com/eldelahoz/CompanionFrame/releases/latest"><img src="https://img.shields.io/badge/Download%20for%20Windows-0078D4?style=flat-square&logo=windows11&logoColor=white" alt="Download for Windows"></a>
 <a href="https://github.com/eldelahoz/CompanionFrame/releases/latest"><img src="https://img.shields.io/github/v/release/eldelahoz/CompanionFrame?style=flat-square&label=release" alt="Latest release"></a>
 <a href="https://ko-fi.com/eldelahoz"><img src="https://img.shields.io/badge/Ko--fi-support-FF5E5B?style=flat-square&logo=kofi&logoColor=white" alt="Support on Ko-fi"></a>
 </p>
@@ -47,13 +48,13 @@ Everything runs locally on your PC: there is no CompanionFrame server. The app r
   - Filter any tab by surplus copies, with how many can be sold (one copy of each mod and arcane is kept, plus what recipes, sets and goals need).
   - Filter mods and arcanes by duplicates, not max rank and not equipped, and optionally see where each is equipped.
   - A tag marks items you have on sale, with On sale and Not on sale filters.
-- **Relics and drops**
+- **Relics, drops and ducats**
   - Relic and drop-table search with ducat and platinum values.
   - A Wiki view.
 - **World state**
   - Cycles, fissures and the arbitration schedule.
   - Baro, with a planner and wishlist, and Varzia alerts.
-- **warframe.market**
+- **warframe.market trading**
   - Your orders: sort them by name, price, quantity, date or visibility, and select several (Shift+click for a range) to hide, show, reprice or delete them, or hide or show a whole side at once.
   - Long actions run in the background with progress, stop and retry.
   - Riven auctions, including your decoded owned rivens.
@@ -65,8 +66,8 @@ Everything runs locally on your PC: there is no CompanionFrame server. The app r
 - **Run analysis**
   - Arbitrations and Profit-Taker.
   - A missions view.
-- **Overlays** (Windows)
-  - Relic reward scan and planner.
+- **In-game overlays** (Windows)
+  - Relic reward overlay: scan and planner, with platinum and ducat values.
   - Riven scan and grading.
   - Arbitration counter.
   - Trade notice: the listing a trade matches, closed with one click, and an optional thank-you message copied to the clipboard after a sale.
@@ -85,6 +86,32 @@ Everything runs locally on your PC: there is no CompanionFrame server. The app r
 > This project is not affiliated with or endorsed by Digital Extremes. Using tools that read game client memory may violate the Warframe Terms of Service and could result in action against your account. You use this software at your own risk.
 
 CompanionFrame is a third-party tool. DE does not officially approve third-party software and reserves the right to act against tools it considers suspicious. The default mode lowers the risk (nothing reads the game's memory) but does not remove it.
+
+## FAQ
+
+### Can I get banned for using it?
+
+DE does not officially approve third-party software. The default mode never reads game memory and never modifies the game, which lowers the risk but does not remove it. See [Data modes](#data-modes).
+
+### Does it read game memory?
+
+Only in the opt-in memory mode, which is off until you tick the box under the disclaimer.
+
+### Does it post or trade on warframe.market for me?
+
+Every write is a click of yours. The only exception is one opt-in setting, off by default, that closes the listings a finished trade matches.
+
+### Is it free? Do I need an account?
+
+It is free and MIT-licensed, with no CompanionFrame account, no telemetry and no server. See [Privacy](#privacy).
+
+### Why does Windows show "Unknown publisher"?
+
+The installer is not code-signed yet. See [Download / Install](#download--install).
+
+### Does it work on Linux?
+
+Partly. See [Requirements](#requirements).
 
 ## Requirements
 
