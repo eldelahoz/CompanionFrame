@@ -3,13 +3,14 @@ import ImportNote from "../components/inventory/ImportNote";
 import { useEffect, useMemo, useState } from "react";
 import HeaderTabs from "../components/HeaderTabs";
 import SortControl from "../components/SortControl";
+import VirtualCards from "../components/inventory/VirtualCards";
 import RelicCompactCard from "../components/relics/RelicCompactCard";
 import { RelicIcon, type RelicTier } from "../components/icons";
 import EditLayoutBar from "../components/layout/EditLayoutBar";
 import LayoutGrid from "../components/layout/LayoutGrid";
 import OpenInWindowButton from "../components/layout/OpenInWindowButton";
 import { relicDataLabel } from "../components/settings/AboutCard";
-import { Badge, Button, EmptyState, Field, IconButton, PageHeader, SearchInput, Select as UiSelect, ShowMore, Skeleton, useBatch } from "../components/ui";
+import { Badge, Button, EmptyState, Field, IconButton, PageHeader, SearchInput, Select as UiSelect, Skeleton } from "../components/ui";
 import { ownedComponentCount } from "../../config/shared/componentNames";
 import type { MessageKey, Translator } from "../lib/i18n";
 import { foundryBuildProducts, parseFoundry } from "../lib/inventory/foundryResources";
@@ -195,9 +196,6 @@ export default function RelicsView({ tr, locale = "en", items, inventory = null 
     }).map((row) => row.group);
   }, [db, view, hasInventory, ownedCounts, pinned, qualityLabels, neededKeys, priceRev]);
 
-  const { limit, more } = useBatch(JSON.stringify(view));
-  const shownGroups = groups.slice(0, limit);
-
   const previewRewards = (group: RelicGroup): RelicReward[] => {
     for (const quality of ["intact", ...QUALITY_MODES]) {
       const rewards = group.qualities[quality]?.rewards ?? [];
@@ -332,9 +330,11 @@ export default function RelicsView({ tr, locale = "en", items, inventory = null 
           <EmptyState icon={<SearchX />} title={tr("relics.empty")} />
         </div>
       ) : (
-        <>
-          <div className="relic-grid">
-          {shownGroups.map((group) => (
+        <VirtualCards
+          rows={groups}
+          gridClass="relic-grid"
+          kind="relics"
+          render={(group) => (
             <RelicCompactCard
               key={group.key}
               group={group}
@@ -350,10 +350,8 @@ export default function RelicsView({ tr, locale = "en", items, inventory = null 
               openRelic={openRelicDetailed}
               tr={tr}
             />
-          ))}
-          </div>
-          <ShowMore shown={shownGroups.length} total={groups.length} onMore={more} tr={tr} />
-        </>
+          )}
+        />
       )}
     </>
   );

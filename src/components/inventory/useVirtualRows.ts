@@ -2,7 +2,8 @@ import { elementScroll, useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 
 /** Used until a row has been measured; the real size comes from the CSS (fixed card and row heights). */
-const DEFAULT_SIZE = { cards: 266, list: 41 };
+const DEFAULT_SIZE = { cards: 266, list: 41, relics: 240, mastery: 264, foundry: 200 };
+export type RowKind = keyof typeof DEFAULT_SIZE;
 /** The last measured row size per kind: a view that comes back estimates exactly, so the scroll offset App restores lands on the same rows. */
 const measured = new Map<string, number>();
 
@@ -12,7 +13,7 @@ const scroller = () => document.getElementById("content");
  * Windows `count` equal-height rows over App's main scroll element (`#content`), not a scroll box of its own.
  * `anchor` is the element the first row starts at; its offset inside the scroller is the virtualizer's `scrollMargin`.
  */
-export function useVirtualRows(count: number, kind: keyof typeof DEFAULT_SIZE, anchor: RefObject<HTMLElement | null>, gap = 0) {
+export function useVirtualRows(count: number, kind: RowKind, anchor: RefObject<HTMLElement | null>, gap = 0) {
   const [margin, setMargin] = useState(0);
   const measureMargin = () => {
     const sc = scroller();
@@ -21,7 +22,7 @@ export function useVirtualRows(count: number, kind: keyof typeof DEFAULT_SIZE, a
   };
   useLayoutEffect(measureMargin); // every render: a banner or a wrapped toolbar above moves the list
   useEffect(() => {
-    const view = anchor.current?.closest(".inventory-view");
+    const view = anchor.current?.closest(".inventory-view") ?? anchor.current?.parentElement;
     if (!view || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(measureMargin);
     ro.observe(view);

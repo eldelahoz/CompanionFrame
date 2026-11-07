@@ -47,20 +47,3 @@ test("pinning a blueprint totals its missing resources and persists", async () =
   expect(screen.getAllByText("Missing").length).toBeGreaterThan(0);
   expect(JSON.parse(localStorage.getItem("foundry.pinnedRecipes") ?? "[]")).toEqual([`${P}Blueprint`]);
 });
-
-test("a 2.6k blueprint inventory renders one batch of cards and loads more", async () => {
-  history.pushState({}, "", "/?bigFoundry=2617");
-  resetMock();
-  try {
-    render(<FoundryView items={await getItemDatabase()} tr={tr} />);
-    const cards = () => document.querySelectorAll("[data-foundry-card]").length;
-    await waitFor(() => expect(cards()).toBeGreaterThan(0));
-    expect(cards()).toBeLessThanOrEqual(60);
-    expect(document.querySelector("[data-inventory-more]")?.textContent).toMatch(/of 26\d\d/);
-    fireEvent.click(screen.getByRole("button", { name: /Show \d+ more/ }));
-    expect(cards()).toBeGreaterThan(60);
-    expect(cards()).toBeLessThanOrEqual(120);
-  } finally {
-    history.pushState({}, "", "/");
-  }
-});

@@ -107,3 +107,13 @@ export const MOCK_MASTERY: MasteryProgress = {
   },
   fromProfile: false,
 };
+
+/** Item `i` of `?bigMastery=N`: unowned, with a varying number of parts. */
+export const bulkMasteryItem = (i: number): MasteryItem => ({
+  ...items[3],
+  name: `Bulk Item ${i}`,
+  uniqueName: `/Lotus/Mock/Bulk${i}`,
+  category: ["Warframes", "Primary", "Secondary", "Melee"][i % 4],
+  imageUrl: svg(`hsl(${(i * 37) % 360} 45% 48%)`),
+  components: Array.from({ length: i % 9 }, (_, n) => ({ name: `Part ${n}`, uniqueName: `/Lotus/Mock/Bulk${i}/Part${n}`, tradable: true, itemCount: 1, ownedCount: n % 2, owned: n % 2 === 1, drops: [] })),
+});

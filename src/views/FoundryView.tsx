@@ -1,9 +1,11 @@
-import { Check, CircleDot, Clock, Pin, PinOff, SearchX, X } from "lucide-react";
+import { Clock, Pin, PinOff, SearchX } from "lucide-react";
 import ImportNote from "../components/inventory/ImportNote";
 import { useEffect, useMemo, useState } from "react";
+import IngredientChips, { type Chip } from "../components/foundry/IngredientChips";
+import VirtualCards from "../components/inventory/VirtualCards";
 import ItemImage from "../components/ItemImage";
 import SortControl from "../components/SortControl";
-import { Badge, Button, Card, EmptyState, Field, IconButton, PageHeader, Readout, SearchInput, Select as UiSelect, ShowMore, StatStrip, Tabs, useBatch, type Tone } from "../components/ui";
+import { Badge, Button, Card, EmptyState, Field, IconButton, PageHeader, Readout, SearchInput, Select as UiSelect, StatStrip, Tabs, type Tone } from "../components/ui";
 import { buildPartState, collectRecipeMaterialNames } from "../lib/craftingTree";
 import { DEFAULT_FILTERS, STATE_BY_STATUS, defaultSortDir, matches, sortRows, statusOf, toEntries, type FoundryFilters, type ItemStatus, type Row, type SortKey } from "../lib/foundryView";
 import { formatBuildTime, formatNumber, formatTimeRemaining } from "../lib/format";
@@ -121,9 +123,6 @@ export default function FoundryView({ items, tr }: Props) {
     );
   }, [rows, tab, filters, db, pinnedSet, now]);
 
-  const { limit, more } = useBatch(`${tab}|${JSON.stringify(filters)}`);
-  const shown = visible.slice(0, limit);
-
   const name = (un: string) => db[un]?.name ?? un.split("/").pop() ?? un;
   const image = (un: string) => (db[un]?.imageUrl as string | null | undefined) ?? null;
   const open = (un: string | null) => {
@@ -141,6 +140,13 @@ export default function FoundryView({ items, tr }: Props) {
   const count = (status: ItemStatus) => rows.filter((r) => r.status === status).length;
   const tabs = [...STATUS_TABS.map(([key, label]) => ({ key: key as string, label: tr(label) })), ...EQUIPMENT_CATEGORY_ORDER.map((c) => ({ key: `cat:${c}`, label: c }))];
 
+  const chipsOf = (ingredients: Row["e"]["ingredients"]): Chip[] =>
+    ingredients.map((ing, n) => {
+      const have = owned.get(ing.uniqueName) ?? 0;
+      const ok = have >= ing.count;
+      return { key: `${ing.uniqueName}:${n}`, uniqueName: ing.uniqueName, name: name(ing.uniqueName), image: image(ing.uniqueName), have, need: ing.count, state: ok ? "owned" : buildPartState(ing, owned, db) === "blueprint" ? "blueprint" : "missing" };
+    });
+
   const card = (row: Row, i: number) => {
     const { e, status } = row;
     const owns = e.productUniqueName ? (owned.get(e.productUniqueName) ?? 0) : 0;
@@ -156,38 +162,20 @@ export default function FoundryView({ items, tr }: Props) {
             </span>
             <div className="grid min-w-0 flex-1 gap-1">
               <span className="ms-name">
-                <span className="truncate">{title}</span>
+                <span className="truncate" title={title}>{title}</span>
                 {e.source === "blueprint" && <b className="text-accent">×{e.count}</b>}
               </span>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
                 <span className={`ms-eyebrow fd-state--${STATE_BY_STATUS[status]}`}>{status === "in-progress" && e.endDate ? formatTimeRemaining(e.endDate, now) : tr(STATUS_LABEL[status])}</span>
                 {e.source === "blueprint" && e.isIngredient && <Badge>{tr("foundry.usedInCrafting")}</Badge>}
               </div>
             </div>
           </div>
-          {e.ingredients.length > 0 && (
-            <div className="fd-ingredients">
-              {e.ingredients.map((ing, n) => {
-                const have = owned.get(ing.uniqueName) ?? 0;
-                const ok = have >= ing.count;
-                const bp = !ok && buildPartState(ing, owned, db) === "blueprint";
-                const state = ok ? "owned" : bp ? "blueprint" : "missing";
-                return (
-                  <div key={`${ing.uniqueName}:${n}`} className="fd-ingredient" title={bp ? `${name(ing.uniqueName)}: ${tr("common.blueprintOwnedNotBuilt")}` : name(ing.uniqueName)} data-ingredient={ing.uniqueName} data-part-state={state}>
-                    <span className="ms-thumb">
-                      <ItemImage src={image(ing.uniqueName)} alt={name(ing.uniqueName)} cls="max-h-full max-w-full object-contain" tr={tr} />
-                    </span>
-                    <span className={`truncate tabular-nums ${ok ? "text-text-secondary" : "text-text-muted"}`}>
-                      {formatNumber(have)}/{formatNumber(ing.count)}
-                    </span>
-                    {ok ? <Check className="text-success" aria-label={tr("common.owned")} /> : bp ? <CircleDot className="text-warning" aria-label={tr("common.blueprintOwnedNotBuilt")} /> : <X className="text-danger" aria-label={tr("common.missing")} />}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <div className="fd-chips-slot">
+            {e.ingredients.length > 0 ? <IngredientChips chips={chipsOf(e.ingredients)} tr={tr} /> : e.source === "blueprint" && <span className="italic text-text-muted">{tr("foundry.noRecipeData")}</span>}
+          </div>
           <div className="fd-card-foot">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3 overflow-hidden">
               {e.buildPrice > 0 && <Readout currency="credits" value={e.buildPrice} />}
               {e.source === "blueprint" && e.buildTime > 0 && (
                 <span className="inline-flex items-center gap-1 tabular-nums">
@@ -195,9 +183,8 @@ export default function FoundryView({ items, tr }: Props) {
                   {formatBuildTime(e.buildTime)}
                 </span>
               )}
-              {e.source === "blueprint" && e.ingredients.length === 0 && <span className="italic text-text-muted">{tr("foundry.noRecipeData")}</span>}
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <div className="flex shrink-0 items-center justify-end gap-1.5">
               <Badge tone={owns > 0 ? "success" : "neutral"} title={tr("foundry.ownedCopies", { count: owns })}>
                 {tr("foundry.ownedCount", { count: owns })}
               </Badge>
@@ -289,10 +276,7 @@ export default function FoundryView({ items, tr }: Props) {
           <EmptyState icon={<SearchX />} title={tr(rows.length === 0 ? "foundry.noItems" : "foundry.noItemsMatch")} />
         </Card>
       ) : (
-        <>
-          <div className="fd-grid">{shown.map(card)}</div>
-          <ShowMore shown={shown.length} total={visible.length} onMore={more} tr={tr} />
-        </>
+        <VirtualCards rows={visible} render={card} gridClass="fd-grid" kind="foundry" />
       )}
     </div>
   );

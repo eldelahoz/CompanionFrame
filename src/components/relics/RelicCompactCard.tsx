@@ -58,14 +58,14 @@ export default function RelicCompactCard({
       <button type="button" className="relic-compact-head" onClick={() => openRelic?.(group)} disabled={!openRelic}>
         <RelicIcon tier={tier} refinement={selectedOwned ?? (qualityMode === "owned" ? "intact" : qualityMode)} label={group.tier} className="relic-card-icon" />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="relic-row-name">{group.name}</span>
-          <span className="text-xs text-text-muted">{total > 0 ? tr("browse.owned", { count: String(total) }) : tr("relics.detail.noneOwned")}</span>
+          <span className="relic-row-name" title={group.name}>
+            {group.name}
+          </span>
+          <span className="relic-row-meta">
+            <span className="truncate text-xs text-text-muted">{total > 0 ? tr("browse.owned", { count: String(total) }) : tr("relics.detail.noneOwned")}</span>
+            {group.vaulted ? <Badge icon={<Lock aria-hidden="true" />}>{tr("common.vaulted")}</Badge> : <Badge tone="accent">{tr("common.unvaulted")}</Badge>}
+          </span>
         </span>
-        {group.vaulted ? (
-          <Badge icon={<Lock aria-hidden="true" />}>{tr("common.vaulted")}</Badge>
-        ) : (
-          <Badge tone="accent">{tr("common.unvaulted")}</Badge>
-        )}
       </button>
 
       <div className="flex flex-col gap-1">
