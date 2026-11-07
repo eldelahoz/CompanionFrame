@@ -1647,6 +1647,8 @@
   "marketAlerts.requestsLastHour": "最近一小时 {count} 次请求",
   "marketAlerts.engineStopped": "警报引擎已停止",
   "marketAlerts.healthOk": "正在监控市场",
+  "marketAlerts.live": "实时",
+  "marketAlerts.liveHint": "物品提醒会在新订单发布时立即收到。现有订单每 5 分钟检查一次。",
   "marketAlerts.section.watch": "监控对象",
   "marketAlerts.section.delivery": "通知方式",
   "marketAlerts.cooldownShort": "冷却 {minutes} 分钟",

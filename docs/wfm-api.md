@@ -227,6 +227,8 @@ Envelope: `{ route: string, payload?: any, id?: string, meta?: { stream?: string
 | `@wfm|event/status/set` | Stream event | — | Committed status (after sign-in, own changes, timer expiry) | `RichStatus`; `meta.stream = status:{userId}`, `meta.revision` monotonic |
 | `@wfm|event/reports/online` | Event (server) | — | Connection and authorized-user counts | `{ connections: int, authorizedUsers: int }`, sent on connect and about every 30 s |
 
+We use `subscribe/newOrders` with `{ platform: "pc", crossplay: false }` for item market alerts (`ws.rs` sends it after every sign-in while an enabled item rule exists, and `unsubscribe/newOrders` when the last one goes). Success replies `...:ok`; `app.errors.alreadySubscribed` counts as on, `app.errors.notSubscribed` on unsubscribe is ignored. The feed only carries **new** visible orders from non-offline users: a price change on an existing order never arrives, so polling stays as a backup.
+
 Not implemented (do not rely on): item and profile order subscriptions.
 
 ---

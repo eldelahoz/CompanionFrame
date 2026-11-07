@@ -1664,6 +1664,8 @@
   "marketAlerts.requestsLastHour": "{count} requests in the last hour",
   "marketAlerts.engineStopped": "Alert engine stopped",
   "marketAlerts.healthOk": "Watching the market",
+  "marketAlerts.live": "Live",
+  "marketAlerts.liveHint": "Item alerts get new orders as soon as they are posted. Existing orders are checked every 5 minutes.",
   "marketAlerts.section.watch": "What to watch",
   "marketAlerts.section.delivery": "Delivery",
   "marketAlerts.cooldownShort": "Cooldown {minutes}m",
