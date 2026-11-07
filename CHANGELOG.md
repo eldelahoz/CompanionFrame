@@ -2,6 +2,14 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.1 (2026-11-07)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.5.0...v0.5.1
+
 ## 0.5.0 (2026-11-07)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
