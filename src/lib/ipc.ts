@@ -616,7 +616,7 @@ const MOCK_PRICES: Record<string, number> = {
 const MOCK_MAX_PRICES: Record<string, number> = { serration: 48 };
 const mockPrice = (slug: string): PriceEntry => {
   const price = MOCK_PRICES[slug] ?? (slug.startsWith("bulk_mod_") ? bigPrice(slug) : null);
-  return { slug, status: price == null ? "no_data" : "ok", price, maxPrice: MOCK_MAX_PRICES[slug] ?? null, maxRank: MOCK_MAX_PRICES[slug] ? 10 : null, stale: false, updatedAt: null };
+  return { slug, status: price == null ? "no_data" : "ok", price, maxPrice: MOCK_MAX_PRICES[slug] ?? null, maxRank: MOCK_MAX_PRICES[slug] ? 10 : null, avg: price, maxAvg: MOCK_MAX_PRICES[slug] ?? null, stale: false, updatedAt: null };
 };
 export const wfmPrice = async (slug: string): Promise<PriceEntry> =>
   inTauri() ? unwrap(await commands.wfmPrice(slug)) : mockPrice(slug);

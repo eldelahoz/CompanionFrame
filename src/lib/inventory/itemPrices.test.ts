@@ -2,19 +2,10 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import type { ParsedItem } from "../../types/inventory";
 import { computeInventoryValueTotals } from "./valueTotals";
-import { medianOfRecent, mediansOfRecent, resetItemPricesForTest, type PriceInfo } from "./itemPrices";
+import { resetItemPricesForTest, type PriceInfo } from "./itemPrices";
 import { rowAvg, rowPrice, sortRows, valueEntries, type InvRow } from "./inventoryRows";
 
 beforeEach(resetItemPricesForTest);
-
-const day = 86_400_000;
-const pt = (daysAgo: number, median: number, rank?: number | null) => ({ time: Date.now() - daysAgo * day, median, rank }) as never;
-
-test("the average is the median of the last week, rank-less or rank 0 only", () => {
-  expect(medianOfRecent([pt(1, 10), pt(2, 30), pt(3, 20), pt(20, 999), pt(1, 500, 10)])).toBe(20);
-  expect(medianOfRecent([pt(1, 10), pt(2, 20)])).toBe(15);
-  expect(medianOfRecent([pt(30, 10)])).toBeNull();
-});
 
 const row = (name: string, slug: string | null, amount = 1, ducats: number | null = null): InvRow => ({
   item: { name, internalName: name, amount, ducats } as unknown as ParsedItem,
@@ -51,7 +42,6 @@ async function withBackend(load: (slugs: string[]) => Promise<unknown[]>) {
   let send: (e: unknown[]) => void = () => {};
   vi.doMock("../ipc", () => ({
     wfmPricesLoad: load,
-    wfmStatsHistory: async () => [],
     onPricesRefreshed: async (cb: (e: unknown[]) => void) => ((send = cb), () => {}),
   }));
   const { renderHook, waitFor, act } = await import("@testing-library/react");
@@ -62,7 +52,7 @@ test("one request carries every slug, the rows on screen first; the cache answer
   const calls: string[][] = [];
   const b = await withBackend(async (slugs) => (calls.push(slugs), [entry("a", "ok", 7)]));
   const visible = ["b"], later = ["a", "none", "b"];
-  const hook = b.renderHook(() => b.mod.useItemPrices(visible, [], later));
+  const hook = b.renderHook(() => b.mod.useItemPrices(visible, later));
   await b.waitFor(() => expect(hook.result.current.get("a")?.price).toBe(7));
   expect(calls).toEqual([["b", "a", "none"]]);
   expect(hook.result.current.get("b")?.state).toBe("loading");
@@ -81,7 +71,7 @@ test("a slug the backend gave up on shows a retry state, and retrying asks again
   const calls: string[][] = [];
   const b = await withBackend(async (slugs) => (calls.push(slugs), []));
   const slugs = ["a", "x"];
-  const hook = b.renderHook(() => ({ prices: b.mod.useItemPrices(slugs, []), progress: b.mod.useItemPriceProgress(slugs) }));
+  const hook = b.renderHook(() => ({ prices: b.mod.useItemPrices(slugs), progress: b.mod.useItemPriceProgress(slugs) }));
   await b.waitFor(() => expect(calls).toHaveLength(1));
   b.act(() => b.send([entry("a", "ok", 3), entry("x", "failed")]));
   await b.waitFor(() => expect(hook.result.current.progress).toMatchObject({ done: 1, failed: 1, total: 2 }));
@@ -100,8 +90,8 @@ test("a dropped call is retried once and concurrent hooks share one request", as
     return slugs.map((s) => entry(s, "ok", 7));
   });
   const slugs = ["a"];
-  const one = b.renderHook(() => b.mod.useItemPrices(slugs, []));
-  const two = b.renderHook(() => b.mod.useItemPrices(slugs, []));
+  const one = b.renderHook(() => b.mod.useItemPrices(slugs));
+  const two = b.renderHook(() => b.mod.useItemPrices(slugs));
   await b.waitFor(() => expect(one.result.current.get("a")?.price).toBe(7));
   expect(two.result.current.get("a")?.price).toBe(7);
   expect(calls).toBeLessThanOrEqual(3); // the failed try and its retry, plus at most the second hook's own ask
@@ -132,12 +122,8 @@ test("the rank copies of one mod stay adjacent, lowest rank first, whatever the 
   expect(keys("platinum", false)).toEqual(["Other", "adaptation#0", "adaptation#5", "adaptation#10"]);
 });
 
-test("a mod with rank 0 and rank 10 history gets two medians; a 10/10 and a 0/10 copy show different 48h and 7-day values", () => {
-  const history = [pt(1, 4, 0), pt(2, 6, 0), pt(1, 40, 10), pt(3, 60, 10)];
-  const m = mediansOfRecent(history);
-  expect(m).toEqual({ avg: 5, maxAvg: 50 });
-  expect(mediansOfRecent([pt(1, 4)])).toEqual({ avg: 4, maxAvg: null });
-  const info: PriceInfo = { state: "ok", price: 4, maxPrice: 30, avg: m.avg, maxAvg: m.maxAvg, avgState: "ok" };
+test("a mod's 7-day medians come from the price entry: a 10/10 and a 0/10 copy show different values", () => {
+  const info: PriceInfo = { state: "ok", price: 4, maxPrice: 30, avg: 5, maxAvg: 50, avgState: "ok" };
   const copy = (rank: number) => ({ item: { rank }, maxRank: 10, slug: "adaptation" }) as unknown as InvRow;
   expect([rowPrice(copy(10), info).price, rowAvg(copy(10), info)]).toEqual([30, 50]);
   expect([rowPrice(copy(0), info).price, rowAvg(copy(0), info)]).toEqual([4, 5]);
@@ -147,13 +133,12 @@ test("a refresh event replaces the cached price; cached answers are known at onc
   vi.resetModules();
   vi.doMock("../ipc", () => ({
     wfmPricesLoad: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: "ok", price: 5, maxPrice: null, stale: true, updatedAt: 1 })),
-    wfmStatsHistory: async () => [],
     onPricesRefreshed: async () => () => {},
   }));
   const { act, renderHook, waitFor } = await import("@testing-library/react");
   const mod = await import("./itemPrices");
   const slugs = ["a", "b"];
-  const hook = renderHook(() => mod.useItemPrices(slugs, []));
+  const hook = renderHook(() => mod.useItemPrices(slugs));
   await waitFor(() => expect(hook.result.current.get("a")?.price).toBe(5));
   expect(hook.result.current.get("a")?.state).toBe("ok"); // stale-but-cached is not "loading"
   act(() => mod.applyRefreshed([{ slug: "a", status: "ok", price: 9, maxPrice: 20, stale: false }, { slug: "b", status: "failed", price: null, stale: false }] as never));
@@ -162,29 +147,29 @@ test("a refresh event replaces the cached price; cached answers are known at onc
   vi.doUnmock("../ipc");
 });
 
-test("a refresh event recomputes the weekly median of slugs already shown, without a request for the rest", async () => {
+test("the weekly median rides on the price entry: no history request, a refresh replaces it, an entry without one is a settled none", async () => {
   vi.resetModules();
-  let median = 10;
-  const asked: string[] = [];
+  const history = vi.fn();
   vi.doMock("../ipc", () => ({
-    wfmPricesLoad: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: "ok", price: 5, maxPrice: null, stale: false, updatedAt: 1 })),
-    wfmStatsHistory: async (slug: string) => (asked.push(slug), [pt(1, median)]),
+    wfmPricesLoad: async (slugs: string[]) => slugs.map((slug) => ({ slug, status: "ok", price: 5, maxPrice: 20, avg: 10, maxAvg: 18, stale: false, updatedAt: 1 })),
+    wfmStatsHistory: history,
     onPricesRefreshed: async () => () => {},
   }));
   const { act, renderHook, waitFor } = await import("@testing-library/react");
   const mod = await import("./itemPrices");
-  const hook = renderHook(() => mod.useItemPrices(["a"], ["a"]));
-  await waitFor(() => expect(hook.result.current.get("a")?.avg).toBe(10));
-  median = 14;
-  await act(async () => mod.applyRefreshed([{ slug: "a", status: "ok", price: 9, stale: false }, { slug: "z", status: "ok", price: 1, stale: false }] as never));
-  await waitFor(() => expect(hook.result.current.get("a")?.avg).toBe(14));
-  expect(asked).toEqual(["a", "a"]);
+  const hook = renderHook(() => mod.useItemPrices(["a", "b"]));
+  await waitFor(() => expect(hook.result.current.get("a")).toMatchObject({ avg: 10, maxAvg: 18, avgState: "ok" }));
+  act(() => mod.applyRefreshed([{ slug: "a", status: "ok", price: 9, avg: 14, stale: false }] as never));
+  await waitFor(() => expect(hook.result.current.get("a")).toMatchObject({ avg: 14, maxAvg: null }));
+  act(() => mod.applyRefreshed([{ slug: "b", status: "ok", price: 9, stale: false }] as never));
+  await waitFor(() => expect(hook.result.current.get("b")).toMatchObject({ avg: null, avgState: "none" }));
+  expect(history).not.toHaveBeenCalled();
   vi.doUnmock("../ipc");
 });
 
 test("a burst of price batches and medians is heard twice at most: at once, and once more when the window ends with the last prices", async () => {
   vi.resetModules();
-  vi.doMock("../ipc", () => ({ wfmPricesLoad: () => new Promise(() => {}), wfmStatsHistory: async () => [], onPricesRefreshed: async () => () => {} }));
+  vi.doMock("../ipc", () => ({ wfmPricesLoad: () => new Promise(() => {}), onPricesRefreshed: async () => () => {} }));
   const { act, renderHook } = await import("@testing-library/react");
   const mod = await import("./itemPrices");
   vi.useFakeTimers();
@@ -192,7 +177,7 @@ test("a burst of price batches and medians is heard twice at most: at once, and 
     let maps = 0;
     const hook = renderHook(() => (maps++, mod.useItemPrices(["a"], [])));
     maps = 0;
-    const batch = (price: number) => act(() => mod.applyRefreshed([{ slug: "a", status: "ok", price, stale: false }] as never, false));
+    const batch = (price: number) => act(() => mod.applyRefreshed([{ slug: "a", status: "ok", price, stale: false }] as never));
     for (let i = 1; i <= 20; i++) batch(i);
     expect(maps).toBe(1); // the first one went through, the other 19 wait
     expect(hook.result.current.get("a")?.price).toBe(1);
