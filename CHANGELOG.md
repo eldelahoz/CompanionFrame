@@ -2,6 +2,18 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.1 (2026-11-07)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Fixed
+* fix(wfm): treat 509 too many connections like a 429 rate limit by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/41
+* fix(alerts): item alerts react to new orders from the warframe.market socket feed, with a Live badge by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/43
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.5.0...v0.5.1
+
 ## 0.5.0 (2026-11-07)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
