@@ -1646,6 +1646,8 @@
   "marketAlerts.requestsLastHour": "{count} Anfragen in der letzten Stunde",
   "marketAlerts.engineStopped": "Alarm-Engine gestoppt",
   "marketAlerts.healthOk": "Beobachtet den Markt",
+  "marketAlerts.live": "Live",
+  "marketAlerts.liveHint": "Gegenstands-Alarme erhalten neue Angebote, sobald sie eingestellt werden. Bestehende Angebote werden alle 5 Minuten geprüft.",
   "marketAlerts.section.watch": "Was überwacht wird",
   "marketAlerts.section.delivery": "Zustellung",
   "marketAlerts.cooldownShort": "Abklingzeit {minutes} Min.",

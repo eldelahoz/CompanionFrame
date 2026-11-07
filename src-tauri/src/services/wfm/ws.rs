@@ -70,6 +70,9 @@ pub struct WsEvent {
 pub enum Out {
     Status(WsStatus),
     Event(WsEvent),
+    /// The `newOrders` feed is confirmed on (`true`) or was switched off (`false`). A dropped
+    /// connection is a `Status` change, not a `Subscribed(false)`.
+    Subscribed(bool),
 }
 
 type SetReply = oneshot::Sender<Result<Option<String>, String>>;
@@ -84,6 +87,8 @@ enum Cmd {
 
 pub struct Listener {
     token: watch::Sender<Option<String>>,
+    /// Whether the `newOrders` feed should be on; the socket re-applies it after every sign-in.
+    feed: watch::Sender<bool>,
     cmd: mpsc::Sender<Cmd>,
     task: JoinHandle<()>,
 }
@@ -124,16 +129,19 @@ impl Listener {
     ) -> Self {
         let (token_tx, token_rx) = watch::channel(token);
         let (cmd, cmd_rx) = mpsc::channel(8);
+        let (feed, feed_rx) = watch::channel(false);
         let task = spawn(run(
             url.to_owned(),
             origin.map(str::to_owned),
             token_rx,
+            feed_rx,
             cmd_rx,
             timing,
             out,
         ));
         Self {
             token: token_tx,
+            feed,
             cmd,
             task,
         }
@@ -146,6 +154,12 @@ impl Listener {
             *cur = token;
             changed
         });
+    }
+
+    /// Turn the live new-orders feed on or off (sent once signed in, and again after a reconnect).
+    pub fn set_feed(&self, on: bool) {
+        self.feed
+            .send_if_modified(|cur| std::mem::replace(cur, on) != on);
     }
 
     /// Ask WFM to set the account status; resolves with the server-side expiry, if any.
@@ -179,6 +193,7 @@ async fn run(
     url: String,
     origin: Option<String>,
     mut token: watch::Receiver<Option<String>>,
+    mut feed: watch::Receiver<bool>,
     mut cmd: mpsc::Receiver<Cmd>,
     t: Timing,
     out: impl Fn(Out),
@@ -197,6 +212,7 @@ async fn run(
             &url,
             origin.as_deref(),
             &tok,
+            &mut feed,
             &mut cmd,
             &t,
             &out,
@@ -228,10 +244,12 @@ async fn run(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // the per-connection channels and state; a struct would only rename them
 async fn session(
     url: &str,
     origin: Option<&str>,
     token: &str,
+    feed: &mut watch::Receiver<bool>,
     cmd: &mut mpsc::Receiver<Cmd>,
     t: &Timing,
     out: &impl Fn(Out),
@@ -265,6 +283,7 @@ async fn session(
 
     let mut authed_at: Option<Instant> = None;
     let mut pending: Option<SetReply> = None;
+    let mut feed_sent = false;
     let mut ping = interval(t.ping);
     ping.tick().await;
     let end = loop {
@@ -286,6 +305,10 @@ async fn session(
                     *fails = 0;
                     authed_at = Some(Instant::now());
                     out(Out::Status(WsStatus::Connected));
+                    let want = *feed.borrow_and_update();
+                    if !sync_feed(&mut ws, want, &mut feed_sent).await {
+                        break closed(false);
+                    }
                 } else if route.contains("auth/signIn:error") {
                     *fails += 1;
                     break End::SignInRejected;
@@ -294,6 +317,16 @@ async fn session(
                         let until = payload.get("statusUntil").and_then(Value::as_str);
                         let _ = r.send(Ok(until.map(str::to_owned)));
                     }
+                } else if route.contains("unsubscribe/newOrders") {
+                    // Nothing to learn: `notSubscribed` just means it was already off.
+                } else if route.contains("subscribe/newOrders") {
+                    let ok = route.ends_with(":ok")
+                        || payload.to_string().contains("alreadySubscribed");
+                    if ok && feed_sent {
+                        out(Out::Subscribed(true));
+                    } else if !ok {
+                        tracing::warn!(%route, "wfm ws: newOrders subscribe failed");
+                    }
                 } else if route.ends_with(":error") {
                     tracing::warn!(%route, "wfm ws server error");
                     if let Some(r) = pending.take() {
@@ -301,6 +334,17 @@ async fn session(
                     }
                 } else if !route.contains("auth/") {
                     out(Out::Event(WsEvent { route, payload }));
+                }
+            }
+            Ok(()) = feed.changed() => {
+                let want = *feed.borrow_and_update();
+                if authed_at.is_some() {
+                    if !want && feed_sent {
+                        out(Out::Subscribed(false));
+                    }
+                    if !sync_feed(&mut ws, want, &mut feed_sent).await {
+                        break closed(false);
+                    }
                 }
             }
             Some(c) = cmd.recv() => {
@@ -328,6 +372,30 @@ async fn session(
         End::Closed { .. } => closed(authed_at.is_some_and(|a| a.elapsed() >= t.stable)),
         e => e,
     }
+}
+
+/// Sends subscribe/unsubscribe when the wanted state differs from the one last sent on this
+/// connection. `false` means the socket is gone.
+async fn sync_feed<S: futures_util::Sink<Message> + Unpin>(
+    ws: &mut S,
+    want: bool,
+    sent: &mut bool,
+) -> bool {
+    if want == *sent {
+        return true;
+    }
+    *sent = want;
+    let route = if want {
+        "@wfm|cmd/subscribe/newOrders"
+    } else {
+        "@wfm|cmd/unsubscribe/newOrders"
+    };
+    ws.send(frame(
+        route,
+        json!({ "platform": "pc", "crossplay": false }),
+    ))
+    .await
+    .is_ok()
 }
 
 #[cfg(test)]
@@ -443,6 +511,7 @@ mod tests {
             move |o| match o {
                 Out::Status(s) => l2.lock().unwrap().push(format!("{s:?}")),
                 Out::Event(e) => e2.lock().unwrap().push(e),
+                Out::Subscribed(_) => {}
             },
         );
         (l, log, events)
@@ -589,6 +658,76 @@ mod tests {
         let (l, _, _) = start(&url, Some("t"), None);
         sleep(Duration::from_millis(50)).await;
         assert!(l.set_status("online", None).await.is_err());
+    }
+
+    fn feed_frames(seen: &Arc<Mutex<Seen>>) -> Vec<(usize, String)> {
+        seen.lock()
+            .unwrap()
+            .frames
+            .iter()
+            .filter(|f| f.1.contains("newOrders"))
+            .map(|f| (f.0, f.1.clone()))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn feed_is_subscribed_after_signin_again_after_reconnect_and_unsubscribed_on_off() {
+        let (url, seen) = serve(Arc::new(|conn, route, _| match route {
+            "@wfm|cmd/auth/signIn" => vec![ok()],
+            "@wfm|cmd/subscribe/newOrders" if conn == 0 => vec![
+                Act::Send("@wfm|cmd/subscribe/newOrders:ok", json!({})),
+                Act::Close,
+            ],
+            "@wfm|cmd/subscribe/newOrders" => {
+                vec![Act::Send("@wfm|cmd/subscribe/newOrders:ok", json!({}))]
+            }
+            _ => vec![],
+        }))
+        .await;
+        let (l, _, _) = start(&url, Some("t"), None);
+        l.set_feed(true);
+        until(|| feed_frames(&seen).len() >= 2).await;
+        let f = feed_frames(&seen);
+        assert_eq!(f[0], (0, "@wfm|cmd/subscribe/newOrders".to_owned()));
+        assert_eq!(f[1], (1, "@wfm|cmd/subscribe/newOrders".to_owned()));
+        let payload = seen
+            .lock()
+            .unwrap()
+            .frames
+            .iter()
+            .find(|f| f.1.contains("newOrders"))
+            .unwrap()
+            .2
+            .clone();
+        assert_eq!(payload, json!({ "platform": "pc", "crossplay": false }));
+        l.set_feed(false);
+        until(|| feed_frames(&seen).len() >= 3).await;
+        assert_eq!(feed_frames(&seen)[2].1, "@wfm|cmd/unsubscribe/newOrders");
+    }
+
+    #[tokio::test]
+    async fn feed_off_sends_nothing_and_confirmation_is_reported() {
+        let (url, seen) = serve(Arc::new(|_, route, _| match route {
+            "@wfm|cmd/auth/signIn" => vec![ok()],
+            "@wfm|cmd/subscribe/newOrders" => {
+                vec![Act::Send("@wfm|cmd/subscribe/newOrders:ok", json!({}))]
+            }
+            _ => vec![],
+        }))
+        .await;
+        let subs: Arc<Mutex<Vec<bool>>> = Default::default();
+        let s2 = subs.clone();
+        let l = Listener::start(&url, None, Some("t".into()), fast(), move |o| {
+            if let Out::Subscribed(b) = o {
+                s2.lock().unwrap().push(b);
+            }
+        });
+        sleep(Duration::from_millis(100)).await;
+        assert!(feed_frames(&seen).is_empty());
+        l.set_feed(true);
+        until(|| *subs.lock().unwrap() == [true]).await;
+        l.set_feed(false);
+        until(|| *subs.lock().unwrap() == [true, false]).await;
     }
 
     #[test]

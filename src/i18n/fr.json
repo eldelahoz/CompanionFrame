@@ -1662,6 +1662,8 @@
   "marketAlerts.requestsLastHour": "{count} requêtes durant la dernière heure",
   "marketAlerts.engineStopped": "Moteur d'alertes arrêté",
   "marketAlerts.healthOk": "Surveillance du marché",
+  "marketAlerts.live": "En direct",
+  "marketAlerts.liveHint": "Les alertes d'objets reçoivent les nouveaux ordres dès leur publication. Les ordres existants sont vérifiés toutes les 5 minutes.",
   "marketAlerts.section.watch": "Quoi surveiller",
   "marketAlerts.section.delivery": "Livraison",
   "marketAlerts.cooldownShort": "Récupération {minutes} min",

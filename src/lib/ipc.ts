@@ -1386,10 +1386,16 @@ import type {
 export type { MarketAlertEntry, MarketAlertHit, MarketAlertEngineStatus, MarketAlertRule, MarketAlertSave, MarketAlertTestFire };
 
 let mockAlerts: MarketAlertEntry[] = [];
+/** Browser mock only: lets tests flip the live-feed flag. */
+export let mockAlertsLive = false;
+export const setMockAlertsLive = (v: boolean): void => {
+  mockAlertsLive = v;
+};
 let mockAlertSeq = 0;
 let mockAlertHits: MarketAlertHit[] = [];
 const resetMockAlerts = (): void => {
   mockAlerts = [];
+  mockAlertsLive = false;
   mockAlertHits = [];
 };
 
@@ -1449,7 +1455,11 @@ export const marketAlertsHitsClear = async (): Promise<void> => {
 export const marketAlertsStatus = async (): Promise<MarketAlertEngineStatus> =>
   inTauri()
     ? commands.marketAlertsStatus()
-    : { running: true, ruleCount: mockAlerts.length, enabledCount: mockAlerts.filter((a) => a.rule.enabled).length, lastTickAt: null, requestsLastHour: 0, lastError: null };
+    : { running: true, ruleCount: mockAlerts.length, enabledCount: mockAlerts.filter((a) => a.rule.enabled).length, lastTickAt: null, requestsLastHour: 0, lastError: null, live: mockAlertsLive };
+
+/** Fires when rules, hits, errors or the live flag change. */
+export const onMarketAlertsChanged = async (cb: () => void): Promise<UnlistenFn> =>
+  inTauri() ? listen("market-alerts-changed", cb) : () => {};
 
 // --- Trade ledger ---
 export type LedgerPage = { events: TradeEvent[]; total: number };

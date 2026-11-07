@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../../../lib/i18n";
-import { marketAlertsGet, resetMock } from "../../../lib/ipc";
+import { marketAlertsGet, resetMock, setMockAlertsLive } from "../../../lib/ipc";
 import ConfirmHost from "../../shell/ConfirmHost";
 import MarketAlerts from "./MarketAlerts";
 
@@ -79,4 +79,17 @@ test("imports an exported file only after confirming, and the rules arrive disab
   expect(await screen.findByText(/Imported 1 rule/)).toBeTruthy();
   const [added] = await marketAlertsGet();
   expect(added.rule).toMatchObject({ name: "Shared", enabled: false });
+});
+
+test("shows the Live badge only when the engine is live", async () => {
+  const { unmount } = render(<MarketAlerts tr={tr} />);
+  await screen.findByText(/0\/0 rules active/);
+  expect(screen.queryByText("Live")).toBeNull();
+  unmount();
+  setMockAlertsLive(true);
+  render(<MarketAlerts tr={tr} />);
+  const badge = await screen.findByText("Live");
+  expect(badge.getAttribute("title")).toBe(
+    "Item alerts get new orders as soon as they are posted. Existing orders are checked every 5 minutes.",
+  );
 });

@@ -12,6 +12,7 @@ import {
   marketAlertsSetEnabled,
   marketAlertsStatus,
   marketAlertsTest,
+  onMarketAlertsChanged,
   type MarketAlertEngineStatus,
   type MarketAlertEntry,
   type MarketAlertHit,
@@ -46,7 +47,11 @@ export default function MarketAlerts({ tr, locale = "en" }: { tr: Translator; lo
   useEffect(() => {
     void load();
     const t = setInterval(() => !document.hidden && void load(), POLL_MS);
-    return () => clearInterval(t);
+    const off = onMarketAlertsChanged(() => void load());
+    return () => {
+      clearInterval(t);
+      void off.then((f) => f());
+    };
   }, [load]);
 
   const act = (run: () => Promise<unknown>) => async () => {
@@ -97,6 +102,11 @@ export default function MarketAlerts({ tr, locale = "en" }: { tr: Translator; lo
         {status && (
           <span className="flex items-center gap-2 text-xs text-text-muted" data-alerts-status>
             <Badge tone={status.running ? "success" : "danger"}>{status.running ? tr("marketAlerts.healthOk") : tr("marketAlerts.engineStopped")}</Badge>
+            {status.live && (
+              <Badge tone="accent" title={tr("marketAlerts.liveHint")}>
+                {tr("marketAlerts.live")}
+              </Badge>
+            )}
             {tr("marketAlerts.enabledCount", { enabled: status.enabledCount, total: status.ruleCount })}, {tr("marketAlerts.requestsLastHour", { count: status.requestsLastHour })}
           </span>
         )}
