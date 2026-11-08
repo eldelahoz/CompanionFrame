@@ -3,7 +3,7 @@
   "private": true,
   "description": "A free, open-source desktop companion for Warframe.",
   "license": "MIT",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
