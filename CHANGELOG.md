@@ -2,6 +2,17 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.2 (2026-11-08)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Fixed
+* fix(foundry): a doubled ingredient like Twin Krohkur's two Krohkurs needs two owned copies, not one by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/44
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.5.1...v0.5.2
+
 ## 0.5.1 (2026-11-07)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
