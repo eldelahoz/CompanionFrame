@@ -7,6 +7,7 @@ import type {
   RecipeIngredient,
   Resource,
 } from "../../types/inventory.js";
+import { mergeDuplicateIngredients } from "../../../config/shared/recipeRows.js";
 import {
   MODULAR_PART_PATH,
   PET_PART_PATH,
@@ -205,7 +206,11 @@ export function parseFoundry(
     const src = (productUn && itemDb[productUn]?.recipe) || itemDb[blueprintUn]?.recipe || null;
     if (!src) return { ingredients: [], buildPrice: 0, buildTime: 0 };
     return {
-      ingredients: src.ingredients ?? [],
+      ingredients: mergeDuplicateIngredients(
+        src.ingredients ?? [],
+        (row) => row.count,
+        (row, count) => ({ ...row, count }),
+      ),
       buildPrice: typeof src.buildPrice === "number" ? src.buildPrice : 0,
       buildTime: typeof src.buildTime === "number" ? src.buildTime : 0,
     };
