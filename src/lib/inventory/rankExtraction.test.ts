@@ -208,6 +208,18 @@ describe("normalizeRank", () => {
     expect(result).toEqual({ rank: 7, maxRank: 14 });
   });
 
+  it("uses a db cap below the 10 fallback (Augur Reach at 5)", () => {
+    const result = normalizeRank({ Rank: 5 } as RawInventoryEntry, "mods", { maxRank: 5 });
+    expect(result).toEqual({ rank: 5, maxRank: 5 });
+  });
+
+  it("lets a db cap of 0 win for mods and arcanes only", () => {
+    const entry = { Rank: 3 } as RawInventoryEntry;
+    expect(normalizeRank(entry, "mods", { maxRank: 0 })).toEqual({ rank: 0, maxRank: 0 });
+    expect(normalizeRank(entry, "arcanes", { maxRank: 0 })).toEqual({ rank: 0, maxRank: 0 });
+    expect(normalizeRank(entry, "misc", { maxRank: 0 }).maxRank).toBe(30);
+  });
+
   it("prefers explicit entry maxRank over dbEntry maxRank", () => {
     const entry = { Rank: 3, MaxRank: 6 } as RawInventoryEntry;
     const dbEntry: ItemDbEntry = { maxRank: 14 };

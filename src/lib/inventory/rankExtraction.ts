@@ -198,10 +198,12 @@ export function normalizeRank(
       "MaxArcaneLevel",
     ]) ?? deepFindNumericByKeys(entry, MAX_RANK_KEYS);
   const fallbackMaxRank = group === "mods" ? 10 : group === "arcanes" ? 5 : MAX_ITEM_RANK;
+  // A db cap of 0 is real for mods and arcanes (unrankable), so it beats the fallback there.
+  const dbCapWins = dbMaxRank != null && (dbMaxRank > 0 || group === "mods" || group === "arcanes");
   const maxRank =
     explicitMaxRank != null && explicitMaxRank > 0
       ? Math.floor(explicitMaxRank)
-      : dbMaxRank != null && dbMaxRank > 0
+      : dbCapWins
         ? Math.floor(dbMaxRank)
         : fallbackMaxRank;
 

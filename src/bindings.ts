@@ -1473,6 +1473,8 @@ export type ItemDbEntry_Deserialize = {
 	/**  For blueprint entries: uniqueName of the item this blueprint crafts. */
 	buildsProduct?: string | null,
 	reusableBlueprint?: boolean | null,
+	/**  Mods and arcanes: DE's `fusionLimit`, the rank cap (0 for mods that cannot be ranked). */
+	maxRank?: number | null,
 };
 
 /**  One row of the renderer's item lookup (`getRendererLookup`). */
@@ -1507,6 +1509,8 @@ export type ItemDbEntry_Serialize = {
 	/**  For blueprint entries: uniqueName of the item this blueprint crafts. */
 	buildsProduct?: string,
 	reusableBlueprint?: boolean,
+	/**  Mods and arcanes: DE's `fusionLimit`, the rank cap (0 for mods that cannot be ranked). */
+	maxRank?: number,
 };
 
 export type ItemStatus = "pending" | "running" | "done" | "failed" | "skipped";
