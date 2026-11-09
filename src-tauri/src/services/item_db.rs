@@ -267,6 +267,9 @@ pub struct ItemDbEntry {
     pub builds_product: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reusable_blueprint: Option<bool>,
+    /// Mods and arcanes: DE's `fusionLimit`, the rank cap (0 for mods that cannot be ranked).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_rank: Option<u32>,
 }
 
 #[derive(Clone, Default)]
@@ -312,6 +315,7 @@ pub struct Item {
     pub market_buyable: bool,
     pub market_credits: Option<f64>,
     pub dojo_research: bool,
+    pub max_rank: Option<u32>,
 }
 
 /// Everything a build reads, so tests can feed small fixtures instead of the 69 MB bundle.
@@ -721,6 +725,9 @@ impl ItemDb {
                     description: resolve(s(item, "description")).unwrap_or_default(),
                     product_category: s(item, "productCategory").map(Into::into),
                     ducats: n(item, "primeSellingPrice").map(|p| p.max(0.0).round() as u32),
+                    max_rank: matches!(export, "ExportUpgrades" | "ExportArcanes")
+                        .then(|| n(item, "fusionLimit").map(|x| x.max(0.0) as u32))
+                        .flatten(),
                     ..Item::default()
                 };
                 self.set(unique_name, entry);
@@ -1315,6 +1322,7 @@ impl ItemDb {
                         .filter(|r| self.index.contains_key(*r))
                         .cloned(),
                     reusable_blueprint: self.reusable.contains(key).then_some(true),
+                    max_rank: item.max_rank,
                 };
                 (key.clone(), entry)
             })

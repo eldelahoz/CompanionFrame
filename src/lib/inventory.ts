@@ -144,7 +144,9 @@ export function parseInventory(
     // Mods/arcanes have no boolean flag - equipment configs reference the
     // equipped instance's ItemId instead.
     const instanceId = entryInstanceId(entry);
-    const configEquipped = instanceId && equippedOnById.has(instanceId) ? true : undefined;
+    // A rank 0 mod has no ItemId: it stays in RawUpgrades and configs reference its ItemType path.
+    const configKey = instanceId ?? (sourceKey === "RawUpgrades" ? internalName : null);
+    const configEquipped = configKey && equippedOnById.has(configKey) ? true : undefined;
     const inferredEquipped =
       equipped !== undefined
         ? equipped
@@ -220,7 +222,7 @@ export function parseInventory(
     if (favorite !== undefined) nextItem.favorite = favorite;
     if (inferredEquipped !== undefined) nextItem.equipped = inferredEquipped;
     if (equippedIn.length > 0) nextItem.equippedIn = equippedIn;
-    const equippedOn = instanceId && (group === "mods" || group === "arcanes") ? equippedOnById.get(instanceId) : undefined;
+    const equippedOn = configKey && (group === "mods" || group === "arcanes") ? equippedOnById.get(configKey) : undefined;
     if (equippedOn) nextItem.equippedOn = equippedOn;
 
     const existing = itemMap.get(instanceKey);

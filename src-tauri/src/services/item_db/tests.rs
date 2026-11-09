@@ -335,6 +335,40 @@ fn reusable_flag_reaches_the_renderer_on_the_blueprint_entry() {
     assert_eq!(lookup[cell].reusable_blueprint, Some(true));
 }
 
+#[test]
+fn mods_and_arcanes_carry_des_fusion_limit_as_max_rank() {
+    let src = sources(
+        &[
+            (
+                "ExportUpgrades",
+                json!({
+                    "/Lotus/Mods/AugurReach": { "name": "Augur Reach", "fusionLimit": 5 },
+                    "/Lotus/Mods/Serration": { "name": "Serration", "fusionLimit": 10 },
+                    "/Lotus/Mods/Locked": { "name": "Locked", "fusionLimit": 0 },
+                    "/Lotus/Mods/NoLimit": { "name": "No Limit" },
+                }),
+            ),
+            (
+                "ExportArcanes",
+                json!({ "/Lotus/Arcane/Grace": { "name": "Arcane Grace", "fusionLimit": 5 } }),
+            ),
+            (
+                "ExportWarframes",
+                json!({ "/Lotus/Powersuits/Ash": { "name": "Ash", "fusionLimit": 3 } }),
+            ),
+        ],
+        json!([]),
+    );
+    let lookup = ItemDb::build(&src).renderer_lookup(&GameLocale::default());
+    let cap = |k: &str| lookup[k].max_rank;
+    assert_eq!(cap("/Lotus/Mods/AugurReach"), Some(5));
+    assert_eq!(cap("/Lotus/Mods/Serration"), Some(10));
+    assert_eq!(cap("/Lotus/Mods/Locked"), Some(0));
+    assert_eq!(cap("/Lotus/Mods/NoLimit"), None);
+    assert_eq!(cap("/Lotus/Arcane/Grace"), Some(5));
+    assert_eq!(cap("/Lotus/Powersuits/Ash"), None);
+}
+
 // ---- vaulting ----
 
 #[test]
