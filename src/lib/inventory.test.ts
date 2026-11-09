@@ -971,6 +971,50 @@ describe("inventory parsing", () => {
     expect(benchedMod?.equipped).toBeUndefined();
   });
 
+  describe("rank 0 mods equipped by type path", () => {
+    const MOD = "/Lotus/Upgrades/Mods/Warframe/ToxinParkourTwoMod";
+    const db = itemDbOf({
+      [MOD]: { name: "Toxin Resistance", category: "Mods", fusionLimit: 5 },
+      "/Lotus/Weapons/A": { name: "Gear A", category: "Primary" },
+      "/Lotus/Weapons/B": { name: "Gear B", category: "Primary" },
+    });
+    const modRows = (data: unknown) =>
+      parseInventory(data as RawInventoryData, db).filter((item) => item.internalName === MOD);
+
+    it("marks a RawUpgrades mod referenced by path as equipped on that gear", () => {
+      const [row] = modRows({
+        RawUpgrades: [{ ItemType: MOD, ItemCount: 1 }],
+        Suits: [{ ItemType: "/Lotus/Weapons/A", Configs: [{ Upgrades: [MOD] }] }],
+      });
+      expect(row.equipped).toBe(true);
+      expect(row.equippedOn).toEqual([{ name: "Gear A", configs: ["A"] }]);
+    });
+
+    it("splits a rank 5 copy (by id) from a rank 0 copy (by path)", () => {
+      const rows = modRows({
+        Upgrades: [{ ItemType: MOD, ItemId: { $oid: "r5" }, UpgradeFingerprint: '{"lvl":5}' }],
+        RawUpgrades: [{ ItemType: MOD, ItemCount: 1 }],
+        LongGuns: [
+          { ItemType: "/Lotus/Weapons/A", Configs: [{ Upgrades: ["r5"] }] },
+          { ItemType: "/Lotus/Weapons/B", Configs: [{ Upgrades: [MOD] }] },
+        ],
+      });
+      expect(rows).toHaveLength(2);
+      const r5 = rows.find((r) => r.rank === 5);
+      const r0 = rows.find((r) => r.rank === 0);
+      expect(r5?.equippedOn?.map((g) => g.name)).toEqual(["Gear A"]);
+      expect(r0?.equippedOn?.map((g) => g.name)).toEqual(["Gear B"]);
+      expect(r5?.equipped).toBe(true);
+      expect(r0?.equipped).toBe(true);
+    });
+
+    it("leaves an unreferenced RawUpgrades mod not equipped", () => {
+      const [row] = modRows({ RawUpgrades: [{ ItemType: MOD, ItemCount: 1 }] });
+      expect(row.equipped).toBeUndefined();
+      expect(row.equippedOn).toBeUndefined();
+    });
+  });
+
   it("keeps all-parts focused on tradable build components", () => {
     const db = itemDbOf({
       "/Lotus/Powersuits/Volt/VoltPrime": {

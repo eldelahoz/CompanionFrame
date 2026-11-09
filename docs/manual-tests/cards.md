@@ -19,3 +19,4 @@ Per view:
 - **Foundry.** Ingredients are one row of chips (image, have/need, border green when owned, amber when only the blueprint is owned, red when missing, plus the check, dot or x in the corner). Open an item with many ingredients (a Warframe set, a Helminth recipe) and narrow the window: the last chip turns into "+N" and its hover lists the hidden ingredients with their state. A blueprint with no recipe data says so in the chips slot. Pin a blueprint: the pinned totals stay above the grid.
 - **Foundry doubled ingredients.** A Twin or Ak weapon with one base weapon owned is not ready; it needs two.
 - **Mod max rank.** Augur Reach at rank 5 shows 5/5 and the max-rank price (its cap is 5, not 10); the "not max" filter drops it.
+- **Unranked equipped mod.** Equip an unranked mod: its rank 0 row shows Equipped with the gear name.
