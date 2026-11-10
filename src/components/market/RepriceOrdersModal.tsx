@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Translator } from "../../lib/i18n";
-import { jobsStartReprice, type MyOrder } from "../../lib/ipc";
+import { jobsDismiss, jobsMarketBooks, jobsStartMarketLoad, jobsStartReprice, type MyOrder } from "../../lib/ipc";
+import { isActive, useJobs } from "../../stores/jobs";
+import { rowBookOf } from "../../lib/tradeWorkbench/rowBook";
 import { addToast } from "../../stores/toasts";
 import { buildRepriceRows, priceRepriceRow, repriceRowsToSend, repriceTotals, type RepriceRow, type RepriceSkipReason } from "../../lib/market/repriceOrders";
 import { workbenchMedianLoader } from "../../lib/tradeWorkbench/medianReference";
 import { DEFAULT_DAMPING_RULE, isMedianStrategy, type StrategyConfig, type WorkbenchStrategyId } from "../../lib/tradeWorkbench/pricingStrategies";
-import { fetchItemOrderBookBySlug } from "../../lib/wfm/orderBook";
 import SegmentedControl from "../SegmentedControl";
 import { shiftOf, useRangeSelect } from "../../lib/useRangeSelect";
 
@@ -36,7 +37,14 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
   // Bumped when median references land: the loader keeps them outside React state.
   const [medianRev, setMedianRev] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const marketJobs = useJobs().jobs.filter((j) => j.kind.type === "marketLoad");
+  const marketJob = marketJobs[marketJobs.length - 1] ?? null;
+  const busy = marketJob != null && isActive(marketJob);
+  const marketDone = marketJob?.state === "done";
+  const progress = busy ? { done: marketJob.done + marketJob.failed, total: marketJob.total } : null;
+  const booksProbed = useRef(false);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
   const cancelled = useRef(false);
   // reset on mount: StrictMode runs the cleanup once before the real mount
   useEffect(() => {
@@ -57,30 +65,47 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
   const booked = rows.filter((r) => r.sellBook !== null).length;
   // A median strategy needs its reference per priced row: fetch it once the books are in or the strategy changes.
   useEffect(() => {
-    if (!isMedianStrategy(config.id) || booked === 0) return;
+    if (!isMedianStrategy(config.id) || booked === 0 || busy) return;
     const id = config.id;
     let stale = false;
     void workbenchMedianLoader.load(id, rows, () => stale || cancelled.current).then(() => !stale && setMedianRev((n) => n + 1));
     return () => void (stale = true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.id, booked]);
+  }, [config.id, booked, busy]);
   const totals = repriceTotals(priced);
   const shown = priced.filter((r) => filter === "all" || (filter === "changed" ? r.skipReason === null : r.skipReason !== null));
-  const busy = progress !== null;
+
+  // Applies the books the job already loaded to the rows still without one; a failed read leaves the row without a book (no-book).
+  const applyLoadedBooks = async (slugs: string[]) => {
+    const wanted = [...new Set(rowsRef.current.filter((r) => r.sellBook === null && slugs.includes(r.slug)).map((r) => r.slug))];
+    if (wanted.length === 0) return;
+    const books = new Map((await jobsMarketBooks(wanted)).map((b) => [b.slug, b.orders]));
+    if (cancelled.current || books.size === 0) return;
+    setRows((rs) => rs.map((r) => (r.sellBook === null && books.has(r.slug) ? { ...r, sellBook: rowBookOf(books.get(r.slug)!, r).sell } : r)));
+  };
+  // Opening asks for everything already loaded; after that each finished read is applied as the job reports it.
+  const loadedKey = useJobs()
+    .jobs.flatMap((j) => (j.kind.type === "marketLoad" ? j.items.filter((i) => i.status === "done").map((i) => i.id) : []))
+    .join(",");
+  useEffect(() => {
+    const first = !booksProbed.current;
+    booksProbed.current = true;
+    void applyLoadedBooks(first || marketDone ? rowsRef.current.map((r) => r.slug) : loadedKey.split(","));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the job's progress only
+  }, [loadedKey, marketDone]);
 
   const loadBooks = async () => {
     const pending = rows.filter((r) => r.selected && r.sellBook === null);
     if (busy || pending.length === 0) return;
-    setProgress({ done: 0, total: pending.length });
-    let done = 0;
-    for (const row of pending) {
-      if (cancelled.current) return;
-      const res = await fetchItemOrderBookBySlug(row.slug, { rank: row.rank, subtype: row.subtype });
-      const book = res.status === "ok" ? res.data.sell : null;
-      setRows((rs) => rs.map((r) => (r.rowId === row.rowId ? { ...r, sellBook: book } : r)));
-      setProgress({ done: ++done, total: pending.length });
+    // An earlier load that ended is replaced by this one, not left beside it.
+    for (const old of marketJobs) if (!isActive(old)) void jobsDismiss(old.id).catch(() => {});
+    // The job takes 500 items; whatever is left stays without a book for the next click.
+    const unique = [...new Map(pending.map((r) => [r.slug, { slug: r.slug, name: r.label }])).values()].slice(0, 500);
+    try {
+      await jobsStartMarketLoad(unique);
+    } catch (e) {
+      addToast({ level: "error", message: (e as Error).message });
     }
-    setProgress(null);
   };
 
   // The backend runs the prices one by one; progress, Stop and Retry live in the jobs pill.
