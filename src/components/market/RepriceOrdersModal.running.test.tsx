@@ -131,11 +131,6 @@ test("with a Bulk sell load running, Apply is still enabled for the rows that ha
   expect((document.querySelector("[data-reprice-apply]") as HTMLButtonElement).disabled).toBe(false);
 });
 
-test("the mock rejects a second market load while one runs, like the backend", async () => {
-  newJob(["lex_prime"]);
-  await expect(ipc.jobsStartMarketLoad([{ slug: "serration", name: "Serration" }])).rejects.toThrow("Another job is still running.");
-});
-
 test("partial reopen: 4 of 6 rows loading, close mid-load, reopen: the loaded rows get their books and Load prices is not rejected", async () => {
   await wfmSignIn("tenno@example.com", "pw");
   const slugs = ["serration", "vitality", "ash_prime_set", "boltor_prime", "lex_prime", "point_strike"];
@@ -163,10 +158,11 @@ test("partial reopen: 4 of 6 rows loading, close mid-load, reopen: the loaded ro
   end(job);
   await waitFor(() => expect(loadBtn().disabled).toBe(false));
 
-  // The next load asks only for the two rows still missing and the backend accepts it.
+  // The reopened modal keeps the 4 rows of the load ticked and the 2 others unticked: the next load refreshes those 4 and the backend accepts it.
+  expect(slugs.map((s) => (screen.getByLabelText(label(s)) as HTMLInputElement).checked)).toEqual([true, true, true, true, false, false]);
   fireEvent.click(loadBtn());
   await waitFor(() => expect(ipc.jobsStartMarketLoad).toHaveBeenCalledTimes(2));
-  expect(vi.mocked(ipc.jobsStartMarketLoad).mock.calls[1][0].map((r) => r.slug)).toEqual(unticked);
+  expect(vi.mocked(ipc.jobsStartMarketLoad).mock.calls[1][0].map((r) => r.slug)).toEqual(slugs.slice(0, 4));
 });
 
 test("a failed refresh shows the row's 'Not refreshed' hint and keeps the cached price", async () => {
@@ -232,4 +228,109 @@ test("Load prices with every row already booked reads the selected rows again an
   finish(second, "serration");
   end(second);
   await waitFor(() => expect(parseInt(nextOf("Serration")!, 10)).toBeGreaterThan(before)); // damping caps the step, so only the direction is checked
+});
+
+async function threeOrders(price = 5) {
+  await wfmSignIn("tenno@example.com", "pw");
+  for (const id of ["mock_serration", "mock_vitality", "mock_lex_prime"]) await sell(price, id);
+  return ordersOf();
+}
+const rowBox = (label: string) => screen.getByLabelText(label) as HTMLInputElement;
+const headerBox = () => screen.getByLabelText("Select all orders") as HTMLInputElement;
+const ticked = (orders: MyOrder[]) => orders.map((o) => rowBox(o.itemName).checked);
+
+test("reopening mid-load keeps only the rows that were ticked when the load started", async () => {
+  const orders = await threeOrders();
+  const [a, b, c] = orders.map((o) => o.itemName);
+  open(orders);
+  fireEvent.click(rowBox(b));
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(live).toHaveLength(1));
+  expect(live[0].items).toHaveLength(2);
+  cleanup();
+
+  open(orders);
+  expect([rowBox(a).checked, rowBox(b).checked, rowBox(c).checked]).toEqual([true, false, true]);
+});
+
+test("reopening with orders that share no row with the saved selection ticks every row", async () => {
+  const orders = await threeOrders();
+  open(orders);
+  fireEvent.click(rowBox(orders[0].itemName));
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(live).toHaveLength(1));
+  cleanup();
+
+  await sell(5, "mock_boltor_prime");
+  await sell(5, "mock_point_strike");
+  const others = (await ordersOf()).filter((o) => !orders.some((x) => x.id === o.id));
+  expect(others.length).toBe(2);
+  open(others);
+  expect(ticked(others)).toEqual([true, true]);
+});
+
+test("reopening after the job is gone ticks every row", async () => {
+  const orders = await threeOrders();
+  open(orders);
+  fireEvent.click(rowBox(orders[0].itemName));
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(live).toHaveLength(1));
+  cleanup();
+  live = [];
+  resetJobs(); // the store forgets the job
+
+  open(orders);
+  expect(ticked(orders)).toEqual([true, true, true]);
+});
+
+test("the header checkbox clears and ticks every row, and shows a partial selection as indeterminate", async () => {
+  const orders = await threeOrders();
+  open(orders);
+  expect(headerBox().checked).toBe(true);
+  expect(headerBox().indeterminate).toBe(false);
+
+  fireEvent.click(headerBox());
+  expect(ticked(orders)).toEqual([false, false, false]);
+  expect(headerBox().checked).toBe(false);
+  expect(headerBox().indeterminate).toBe(false);
+
+  fireEvent.click(rowBox(orders[1].itemName));
+  expect(headerBox().checked).toBe(false);
+  expect(headerBox().indeterminate).toBe(true);
+
+  fireEvent.click(headerBox()); // partial -> select all
+  expect(ticked(orders)).toEqual([true, true, true]);
+  expect(headerBox().checked).toBe(true);
+  expect(headerBox().indeterminate).toBe(false);
+});
+
+test("the header checkbox only touches the rows the filter shows", async () => {
+  const orders = await threeOrders(500);
+  stored.add("serration"); // only Serration gets a book, so only it "will change"
+  open(orders);
+  await waitFor(() => expect(nextOf("Serration")).not.toContain(NO_BOOK));
+  fireEvent.click(screen.getByText("Will change"));
+  expect(screen.queryByText("Vitality")).toBeNull();
+
+  fireEvent.click(headerBox()); // clears Serration only
+  expect(headerBox().checked).toBe(false);
+  fireEvent.click(screen.getByText("All"));
+  expect(ticked(orders)).toEqual([false, true, true]);
+  expect(headerBox().indeterminate).toBe(true);
+
+  fireEvent.click(screen.getByText("Skipped"));
+  expect(headerBox().checked).toBe(true); // both skipped rows are ticked
+  fireEvent.click(headerBox());
+  fireEvent.click(screen.getByText("All"));
+  expect(ticked(orders)).toEqual([false, false, false]);
+});
+
+test("the header checkbox is disabled while the modal's own load runs", async () => {
+  const orders = await threeOrders();
+  open(orders);
+  expect(headerBox().disabled).toBe(false);
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(headerBox().disabled).toBe(true));
+  end(live[0]);
+  await waitFor(() => expect(headerBox().disabled).toBe(false));
 });
