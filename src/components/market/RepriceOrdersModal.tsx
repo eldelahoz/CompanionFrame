@@ -24,6 +24,8 @@ const SKIP_KEY = {
 
 // Id of the last load a Reprice modal started, so a reopened modal finds its own job.
 let repriceLoadId: string | null = null;
+// The rows that were ticked when that load started: a reopened modal keeps them ticked.
+let repriceLoadRows: ReadonlySet<string> = new Set();
 
 interface Props {
   orders: readonly MyOrder[];
@@ -33,14 +35,19 @@ interface Props {
 }
 
 export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }: Props) {
-  const [rows, setRows] = useState<RepriceRow[]>(() => buildRepriceRows(orders));
+  const { jobs } = useJobs();
+  const [rows, setRows] = useState<RepriceRow[]>(() => {
+    const all = buildRepriceRows(orders);
+    // Without any of the saved rows here the default (all ticked) stays.
+    if (!jobs.some((j) => j.id === repriceLoadId) || !all.some((r) => repriceLoadRows.has(r.rowId))) return all;
+    return all.map((r) => ({ ...r, selected: repriceLoadRows.has(r.rowId) }));
+  });
   const [strategyId, setStrategyId] = useState<StrategyId>("cheapest-minus-one");
   const [percent, setPercent] = useState(-1);
   const [medianOffset, setMedianOffset] = useState(0);
   // Bumped when median references land: the loader keeps them outside React state.
   const [medianRev, setMedianRev] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
-  const { jobs } = useJobs();
   // Only the load a Reprice modal started (never a Bulk sell one), found again on reopen while the job still exists.
   const [jobId, setJobId] = useState<string | null>(() => (jobs.some((j) => j.id === repriceLoadId) ? repriceLoadId : null));
   const marketJob = jobs.find((j) => j.id === jobId) ?? null;
@@ -119,6 +126,7 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
     const unique = [...new Map(pending.map((r) => [r.slug, { slug: r.slug, name: r.label }])).values()].slice(0, 500);
     try {
       repriceLoadId = await jobsStartMarketLoad(unique);
+      repriceLoadRows = new Set(selectedRows.map((r) => r.rowId));
       setJobId(repriceLoadId);
     } catch (e) {
       refreshing.current.clear();
@@ -146,7 +154,12 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
     const ids = new Set(range(id, shift));
     setRows((rs) => rs.map((r) => (ids.has(r.rowId) ? { ...r, selected: on } : r)));
   };
-  const inputCls = "w-20 rounded-md border border-border bg-surface-input px-2 py-1 text-sm text-text-primary outline-none focus:border-accent/70";
+  const pickedShown = shown.filter((r) => r.selected).length;
+  const toggleShown = (on: boolean) => {
+    const ids = new Set(shown.map((r) => r.rowId));
+    setRows((rs) => rs.map((r) => (ids.has(r.rowId) ? { ...r, selected: on } : r)));
+  };
+  const inputCls ="w-20 rounded-md border border-border bg-surface-input px-2 py-1 text-sm text-text-primary outline-none focus:border-accent/70";
 
   return (
     <div className="detail-overlay" role="dialog" aria-modal="true" data-reprice-modal>
@@ -197,7 +210,16 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-bg-surface text-left text-xs text-text-muted">
               <tr>
-                <th className="w-8 px-2 py-1" />
+                <th className="w-8 px-2 py-1">
+                  <input
+                    type="checkbox"
+                    checked={shown.length > 0 && pickedShown === shown.length}
+                    ref={(el) => void (el && (el.indeterminate = pickedShown > 0 && pickedShown < shown.length))}
+                    disabled={busy || shown.length === 0}
+                    aria-label={tr("market.selectAllOrders")}
+                    onChange={() => toggleShown(pickedShown < shown.length)}
+                  />
+                </th>
                 <th className="px-2 py-1">{tr("common.name")}</th>
                 <th className="px-2 py-1 text-right">{tr("market.reprice.current")}</th>
                 <th className="px-2 py-1 text-right">{tr("market.reprice.next")}</th>
