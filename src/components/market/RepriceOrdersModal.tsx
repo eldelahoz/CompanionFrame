@@ -37,8 +37,16 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
   // Bumped when median references land: the loader keeps them outside React state.
   const [medianRev, setMedianRev] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
-  const marketJobs = useJobs().jobs.filter((j) => j.kind.type === "marketLoad");
-  const marketJob = marketJobs[marketJobs.length - 1] ?? null;
+  const { jobs } = useJobs();
+  // Only the load this modal started, or the one it found on open covering its rows (never a Bulk sell one it did not start).
+  const [jobId, setJobId] = useState<string | null>(() => {
+    const slugs = new Set(rows.map((r) => r.slug));
+    const found = jobs.filter((j) => j.kind.type === "marketLoad" && [...slugs].every((s) => j.items.some((i) => i.id === s)));
+    return found[found.length - 1]?.id ?? null;
+  });
+  const marketJob = jobs.find((j) => j.id === jobId) ?? null;
+  // Slugs being re-read on purpose: their cached book stays until the new one lands.
+  const refreshing = useRef(new Set<string>());
   const busy = marketJob != null && isActive(marketJob);
   const marketDone = marketJob?.state === "done";
   const progress = busy ? { done: marketJob.done + marketJob.failed, total: marketJob.total } : null;
@@ -77,16 +85,17 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
 
   // Applies the books the job already loaded to the rows still without one; a failed read leaves the row without a book (no-book).
   const applyLoadedBooks = async (slugs: string[]) => {
-    const wanted = [...new Set(rowsRef.current.filter((r) => r.sellBook === null && slugs.includes(r.slug)).map((r) => r.slug))];
+    const take = (r: RepriceRow) => slugs.includes(r.slug) && (r.sellBook === null || refreshing.current.has(r.slug));
+    const wanted = [...new Set(rowsRef.current.filter(take).map((r) => r.slug))];
     if (wanted.length === 0) return;
     const books = new Map((await jobsMarketBooks(wanted)).map((b) => [b.slug, b.orders]));
     if (cancelled.current || books.size === 0) return;
-    setRows((rs) => rs.map((r) => (r.sellBook === null && books.has(r.slug) ? { ...r, sellBook: rowBookOf(books.get(r.slug)!, r).sell } : r)));
+    const redo = new Set(refreshing.current);
+    for (const s of books.keys()) refreshing.current.delete(s);
+    setRows((rs) => rs.map((r) => (books.has(r.slug) && (r.sellBook === null || redo.has(r.slug)) ? { ...r, sellBook: rowBookOf(books.get(r.slug)!, r).sell } : r)));
   };
   // Opening asks for everything already loaded; after that each finished read is applied as the job reports it.
-  const loadedKey = useJobs()
-    .jobs.flatMap((j) => (j.kind.type === "marketLoad" ? j.items.filter((i) => i.status === "done").map((i) => i.id) : []))
-    .join(",");
+  const loadedKey = (marketJob?.items.filter((i) => i.status === "done").map((i) => i.id) ?? []).join(",");
   useEffect(() => {
     const first = !booksProbed.current;
     booksProbed.current = true;
@@ -95,15 +104,20 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
   }, [loadedKey, marketDone]);
 
   const loadBooks = async () => {
-    const pending = rows.filter((r) => r.selected && r.sellBook === null);
+    const selectedRows = rows.filter((r) => r.selected);
+    const missing = selectedRows.filter((r) => r.sellBook === null);
+    // Everything already has a book: read the selected rows again, keeping the cached books until the new ones land.
+    const pending = missing.length > 0 ? missing : selectedRows;
     if (busy || pending.length === 0) return;
-    // An earlier load that ended is replaced by this one, not left beside it.
-    for (const old of marketJobs) if (!isActive(old)) void jobsDismiss(old.id).catch(() => {});
+    if (missing.length === 0) for (const r of pending) refreshing.current.add(r.slug);
+    // This modal's earlier load that ended is replaced by this one, not left beside it.
+    if (marketJob && !isActive(marketJob)) void jobsDismiss(marketJob.id).catch(() => {});
     // The job takes 500 items; whatever is left stays without a book for the next click.
     const unique = [...new Map(pending.map((r) => [r.slug, { slug: r.slug, name: r.label }])).values()].slice(0, 500);
     try {
-      await jobsStartMarketLoad(unique);
+      setJobId(await jobsStartMarketLoad(unique));
     } catch (e) {
+      refreshing.current.clear();
       addToast({ level: "error", message: (e as Error).message });
     }
   };

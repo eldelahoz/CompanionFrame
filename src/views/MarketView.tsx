@@ -48,7 +48,7 @@ interface Props {
 }
 
 /** The view comes back as the user left it (memory only). */
-const market = createViewState({ tab: "sell" as Tab, selected: new Set<string>() as ReadonlySet<string>, search: "" });
+const market = createViewState({ tab: "sell" as Tab, selected: new Set<string>() as ReadonlySet<string> });
 
 export default function MarketView({ tr, items, locale = "en", session, signIn, signInWebview, signOut, presence }: Props) {
   const [tab, setTab] = market.useField("tab");
@@ -61,9 +61,8 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const [sort, setSort] = usePersisted("wf_market_orders_sort", SORTS, "date:desc");
   const [sortKey, sortDir] = sort.split(":") as [OrderSortKey, OrderSortDir];
   const [selected, setSelected] = market.useField("selected");
-  const [search, setSearch] = market.useField("search");
-  // The search outlives a Sell/Buy switch but not leaving Market.
-  useEffect(() => () => setSearch(""), [setSearch]);
+  // Survives a Sell/Buy switch (the view stays mounted), not leaving Market.
+  const [search, setSearch] = useState("");
   // The backend runs one orders job at a time: the bar waits for it.
   const jobRunning = useJobs().jobs.some((j) => isActive(j) && (j.kind.type === "ordersVisibility" || j.kind.type === "ordersDelete" || j.kind.type === "reprice"));
   const { catalog } = useWfmCatalog();
@@ -168,7 +167,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const delSelected = async () => {
     const ids = list.filter((o) => selected.has(o.id)).map((o) => o.id);
     if (!(await askConfirm(tr("market.confirmDeleteOrders", { count: ids.length })))) return;
-    setSelected(new Set());
+    setSelected((cur) => new Set([...cur].filter((id) => !ids.includes(id))));
     await startJob(() => jobsStartOrdersDelete(ids));
   };
   // Shift+click takes every row between the last click and this one, in the sorted order.
@@ -260,7 +259,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
               {tr("market.myOrders")}
             </h2>
             {tab === "sell" && (
-              <Button size="sm" icon={<WandSparkles />} data-market-reprice disabled={sorted.length === 0} onClick={() => setRepricing(orders.sell)}>
+              <Button size="sm" icon={<WandSparkles />} data-market-reprice disabled={list.length === 0} onClick={() => setRepricing(list)}>
                 {tr("market.repriceSelected")}
               </Button>
             )}
@@ -299,16 +298,13 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
                 }
               />
             </Card>
-          ) : list.length === 0 ? (
-            <>
-              {searchBox}
-              <Card>
-                <EmptyState icon={<ShoppingCart />} title={tr("market.noOrdersMatch", { query: search.trim() })} />
-              </Card>
-            </>
           ) : (
+            // one Card for both results and no results, so the search input is never remounted
             <Card className="overflow-hidden">
               {searchBox}
+              {list.length === 0 ? (
+                <EmptyState icon={<ShoppingCart />} title={tr("market.noOrdersMatch", { query: search.trim() })} />
+              ) : (
               <Table mode="stack" label={tr("market.myOrders")}>
                 <thead>
                   <tr>
@@ -354,6 +350,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
                   ))}
                 </tbody>
               </Table>
+              )}
             </Card>
           )}
         </>
