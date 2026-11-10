@@ -141,6 +141,8 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
     if (busy || sending.length === 0) return;
     try {
       await jobsStartReprice(sending.map((r) => ({ id: r.order.id, platinum: r.nextPrice! })));
+      // The finished load is not adopted on reopen any more, so it leaves the jobs panel here.
+      if (marketJob) void jobsDismiss(marketJob.id).catch(() => {});
       repriceLoadId = null;
       repriceLoadRows = new Set();
       addToast({ level: "success", message: tr("market.reprice.started", { count: sending.length }) });
