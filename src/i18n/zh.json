@@ -1609,6 +1609,8 @@
   "marketAlerts.negativeForbidden": "不允许",
   "market.reprice.title": "重新定价",
   "market.reprice.loadPrices": "加载价格",
+  "market.reprice.loadRunning": "已有价格加载正在进行",
+  "market.reprice.staleBook": "未刷新",
   "market.reprice.showLabel": "显示",
   "market.reprice.showChanged": "将变更",
   "market.reprice.showSkipped": "已跳过",

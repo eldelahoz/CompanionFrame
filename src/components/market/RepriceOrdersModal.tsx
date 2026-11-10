@@ -22,6 +22,9 @@ const SKIP_KEY = {
   unchanged: "market.reprice.skip.unchanged",
 } as const satisfies Record<RepriceSkipReason, string>;
 
+// Id of the last load a Reprice modal started, so a reopened modal finds its own job.
+let repriceLoadId: string | null = null;
+
 interface Props {
   orders: readonly MyOrder[];
   ownUserName: string | null;
@@ -38,13 +41,13 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
   const [medianRev, setMedianRev] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
   const { jobs } = useJobs();
-  // Only the load this modal started, or the one it found on open covering its rows (never a Bulk sell one it did not start).
-  const [jobId, setJobId] = useState<string | null>(() => {
-    const slugs = new Set(rows.map((r) => r.slug));
-    const found = jobs.filter((j) => j.kind.type === "marketLoad" && [...slugs].every((s) => j.items.some((i) => i.id === s)));
-    return found[found.length - 1]?.id ?? null;
-  });
+  // Only the load a Reprice modal started (never a Bulk sell one), found again on reopen while the job still exists.
+  const [jobId, setJobId] = useState<string | null>(() => (jobs.some((j) => j.id === repriceLoadId) ? repriceLoadId : null));
   const marketJob = jobs.find((j) => j.id === jobId) ?? null;
+  // The backend runs one marketLoad at a time, whoever started it.
+  const loadRunning = jobs.some((j) => j.kind.type === "marketLoad" && isActive(j));
+  // A finished refresh whose read failed: the row keeps its old book.
+  const staleSlugs = new Set(marketJob && !isActive(marketJob) ? marketJob.items.filter((i) => i.status === "failed").map((i) => i.id) : []);
   // Slugs being re-read on purpose: their cached book stays until the new one lands.
   const refreshing = useRef(new Set<string>());
   const busy = marketJob != null && isActive(marketJob);
@@ -108,14 +111,15 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
     const missing = selectedRows.filter((r) => r.sellBook === null);
     // Everything already has a book: read the selected rows again, keeping the cached books until the new ones land.
     const pending = missing.length > 0 ? missing : selectedRows;
-    if (busy || pending.length === 0) return;
+    if (busy || loadRunning || pending.length === 0) return;
     if (missing.length === 0) for (const r of pending) refreshing.current.add(r.slug);
     // This modal's earlier load that ended is replaced by this one, not left beside it.
     if (marketJob && !isActive(marketJob)) void jobsDismiss(marketJob.id).catch(() => {});
     // The job takes 500 items; whatever is left stays without a book for the next click.
     const unique = [...new Map(pending.map((r) => [r.slug, { slug: r.slug, name: r.label }])).values()].slice(0, 500);
     try {
-      setJobId(await jobsStartMarketLoad(unique));
+      repriceLoadId = await jobsStartMarketLoad(unique);
+      setJobId(repriceLoadId);
     } catch (e) {
       refreshing.current.clear();
       addToast({ level: "error", message: (e as Error).message });
@@ -172,7 +176,7 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
               <input className={inputCls} type="number" step={1} value={medianOffset} disabled={busy} onChange={(e) => setMedianOffset(Number(e.target.value))} />
             </label>
           )}
-          <button className="btn-secondary btn-sm" disabled={busy} data-reprice-load onClick={() => void loadBooks()}>
+          <button className="btn-secondary btn-sm" disabled={busy || loadRunning} title={loadRunning ? tr("market.reprice.loadRunning") : undefined} data-reprice-load onClick={() => void loadBooks()}>
             {tr("market.reprice.loadPrices")}
           </button>
           <span className="ml-auto flex items-center gap-1.5 text-sm text-text-secondary">
@@ -216,6 +220,7 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
                     ) : (
                       <span className="text-xs text-text-muted">{tr(SKIP_KEY[r.skipReason])}</span>
                     )}
+                    {r.sellBook !== null && staleSlugs.has(r.slug) && <span className="ml-1.5 text-xs text-warning">{tr("market.reprice.staleBook")}</span>}
                   </td>
                 </tr>
               ))}

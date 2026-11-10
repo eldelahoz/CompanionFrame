@@ -1624,6 +1624,8 @@
   "marketAlerts.negativeForbidden": "Aucun autorisé",
   "market.reprice.title": "Réajuster les annonces",
   "market.reprice.loadPrices": "Charger les prix",
+  "market.reprice.loadRunning": "Un chargement de prix est déjà en cours",
+  "market.reprice.staleBook": "Non actualisé",
   "market.reprice.showLabel": "Afficher",
   "market.reprice.showChanged": "Seront modifiées",
   "market.reprice.showSkipped": "Ignorées",

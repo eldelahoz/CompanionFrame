@@ -1626,6 +1626,8 @@
   "marketAlerts.negativeForbidden": "None allowed",
   "market.reprice.title": "Reprice listings",
   "market.reprice.loadPrices": "Load prices",
+  "market.reprice.loadRunning": "A price load is already running",
+  "market.reprice.staleBook": "Not refreshed",
   "market.reprice.showLabel": "Show",
   "market.reprice.showChanged": "Will change",
   "market.reprice.showSkipped": "Skipped",

@@ -1608,6 +1608,8 @@
   "marketAlerts.negativeForbidden": "Keins erlaubt",
   "market.reprice.title": "Angebote neu bepreisen",
   "market.reprice.loadPrices": "Preise laden",
+  "market.reprice.loadRunning": "Ein Preisabruf läuft bereits",
+  "market.reprice.staleBook": "Nicht aktualisiert",
   "market.reprice.showLabel": "Anzeigen",
   "market.reprice.showChanged": "Wird geändert",
   "market.reprice.showSkipped": "Übersprungen",
