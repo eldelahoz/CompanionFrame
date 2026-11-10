@@ -2,6 +2,17 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.3 (2026-11-09)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Fixed
+* fix(inventory): mods use the game's max rank, and unranked equipped mods show as equipped by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/46
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.5.2...v0.5.3
+
 ## 0.5.2 (2026-11-08)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
