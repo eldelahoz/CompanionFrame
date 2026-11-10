@@ -2,14 +2,11 @@ import { normalizeWfmSlugKey } from "../../config/shared/wfm";
 import type { DecodedRiven } from "../bindings";
 import type { WfmContract } from "./ipc";
 import type { ListingInventoryMatch } from "./marketListing";
+import { foldName } from "./foldName";
 import { rivenNameSuffix, sameWeapon } from "./marketContract";
 
 type ContractIdentity = Pick<WfmContract, "weaponUrlName" | "rivenSuffix" | "modRank" | "rerolls" | "masteryLevel">;
 type OwnedRiven = Pick<DecodedRiven, "weaponName" | "rivenName" | "currentRank" | "maxRank" | "rerolls" | "masteryReq">;
-
-// WFM stores whatever casing the seller's client sent, and a localized client
-// can add accents, so the comparison key folds both away.
-const foldName = (value: string): string => value.normalize("NFD").replace(/\p{M}/gu, "").replace(/\s+/g, " ").trim().toLowerCase();
 
 /**
  * Whether an active riven listing still lines up with the inventory. Name and

@@ -2,6 +2,7 @@ import { normalizeWfmSlugKey } from "../../config/shared/wfm";
 import { polarityToWfm, tagToWfmUrlName } from "../../config/shared/wfmRivenVocabulary";
 import { VARIANT_PREFIXES, VARIANT_SUFFIXES } from "../../config/shared/weaponVariants";
 import type { DecodedRiven } from "../bindings";
+import { foldName } from "./foldName";
 import type { WfmContract } from "./ipc";
 
 type Attribute = WfmContract["stats"][number];
@@ -18,12 +19,6 @@ type OwnedRiven = Pick<DecodedRiven, "weaponName" | "rivenName" | "currentRank" 
 
 function collapseSpaces(value: string): string {
   return value.replace(/\s+/g, " ").trim();
-}
-
-// WFM stores whatever casing the seller's client sent, and a localized client
-// can add accents, so the comparison key folds both away.
-function foldName(value: string): string {
-  return collapseSpaces(value.normalize("NFD").replace(/\p{M}/gu, "")).toLowerCase();
 }
 
 /**
