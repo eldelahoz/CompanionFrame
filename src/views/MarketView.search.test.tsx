@@ -157,3 +157,38 @@ test("the search text survives Sell to Buy and clears on leaving Market", async 
   await waitFor(() => expect(rows()).toBe(1));
   expect(searchBox().value).toBe("");
 });
+
+test("Update prices in the header sends only the shown orders while a search is active", async () => {
+  for (const id of ["mock_lex_prime", "mock_serration"]) await create(id);
+  await open(2);
+  type("lex");
+  fireEvent.click(document.querySelector("[data-market-reprice]")!);
+  expect(document.querySelectorAll("[data-reprice-row]")).toHaveLength(1);
+  expect(document.querySelector("[data-reprice-modal]")!.textContent).toContain("Lex Prime");
+  expect(document.querySelector("[data-reprice-modal]")!.textContent).not.toContain("Serration");
+});
+
+// user-event is not installed: each keystroke is a change event, and focus is checked after every one.
+test("the search input keeps focus going from matches to no matches and back", async () => {
+  await create("mock_lex_prime");
+  await open(1);
+  searchBox().focus();
+  for (const value of ["l", "le", "lex", "lexz", "lex", "le", "l", ""]) {
+    type(value);
+    expect(searchBox().value).toBe(value);
+    expect(document.activeElement).toBe(searchBox());
+  }
+});
+
+test("deleting the shown orders keeps the selection hidden by the search", async () => {
+  for (const id of ["mock_lex_prime", "mock_boltor_prime", "mock_serration"]) await create(id);
+  await open(3);
+  fireEvent.click(screen.getByLabelText(tr("market.selectAllOrders")));
+  type("lex");
+  fireEvent.click(bar().getByRole("button", { name: "Delete" }));
+  fireEvent.click(await screen.findByText("Confirm"));
+  await waitFor(async () => expect((await wfmOrdersMy()).sell.map((o) => o.itemSlug).sort()).toEqual(["boltor_prime", "serration"]));
+  type("");
+  await waitFor(() => expect(rows()).toBe(2));
+  expect(screen.getByText("2 of 2 selected")).toBeTruthy();
+});
