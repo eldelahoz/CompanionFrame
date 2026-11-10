@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../../lib/i18n";
 import * as ipc from "../../lib/ipc";
 import { resetMock, wfmOrderCreate, wfmOrdersMy, wfmSignIn, type Job, type JobUpdate, type MyOrder } from "../../lib/ipc";
 import { mockBook } from "../../lib/wfm/mockMarket";
 import { resetJobs } from "../../stores/jobs";
+import { clearToasts, useToasts } from "../../stores/toasts";
 import RepriceOrdersModal from "./RepriceOrdersModal";
 
 // The test owns the jobs: it lists them, emits their updates and decides which books the backend "has".
@@ -31,6 +32,7 @@ vi.mock("../../lib/ipc", async (orig) => {
       return () => void (listeners = listeners.filter((l) => l !== cb));
     },
     jobsDismiss: vi.fn(async () => {}),
+    jobsStartReprice: vi.fn(actual.jobsStartReprice),
     jobsMarketBooks: vi.fn(async (slugs: string[]) => slugs.filter((s) => stored.has(s)).map((slug) => ({ slug, orders: mockBook(slug).map((o) => ({ ...o, platinum: o.platinum + bumped })) }))),
     jobsStartMarketLoad: vi.fn(async (rows: { slug: string; name: string }[]) => {
       // Like the backend: one market load at a time.
@@ -63,6 +65,8 @@ beforeEach(() => {
   bumped = 0;
   vi.mocked(ipc.jobsDismiss).mockClear();
   vi.mocked(ipc.jobsStartMarketLoad).mockClear();
+  vi.mocked(ipc.jobsStartReprice).mockClear();
+  clearToasts();
   resetMock();
   resetJobs();
 });
@@ -333,4 +337,80 @@ test("the header checkbox is disabled while the modal's own load runs", async ()
   await waitFor(() => expect(headerBox().disabled).toBe(true));
   end(live[0]);
   await waitFor(() => expect(headerBox().disabled).toBe(false));
+});
+
+const applyBtn = () => document.querySelector("[data-reprice-apply]") as HTMLButtonElement;
+const sentIds = () => vi.mocked(ipc.jobsStartReprice).mock.calls.flatMap((c) => c[0].map((i) => i.id));
+
+test("after Apply, reopening Reprice ticks every row again", async () => {
+  const orders = await threeOrders(500);
+  open(orders);
+  fireEvent.click(rowBox(orders[1].itemName));
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(live).toHaveLength(1));
+  finish(live[0], "serration");
+  finish(live[0], "lex_prime");
+  end(live[0]);
+  await waitFor(() => expect(applyBtn().disabled).toBe(false));
+  fireEvent.click(applyBtn());
+  await waitFor(() => expect(ipc.jobsStartReprice).toHaveBeenCalledTimes(1));
+  cleanup();
+
+  open(orders); // the finished load is still in the store
+  expect(ticked(orders)).toEqual([true, true, true]);
+});
+
+test("Apply sends nothing hidden under the Skipped filter with the header unticked, and the ticked rows under All", async () => {
+  const orders = await threeOrders(500);
+  stored.add("serration"); // only Serration will change
+  open(orders);
+  await waitFor(() => expect(nextOf("Serration")).not.toContain(NO_BOOK));
+  fireEvent.click(screen.getByText("Skipped"));
+  fireEvent.click(headerBox()); // unticks the two shown (skipped) rows
+  expect(headerBox().checked).toBe(false);
+  fireEvent.click(applyBtn());
+  await Promise.resolve();
+  expect(ipc.jobsStartReprice).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByText("All"));
+  fireEvent.click(applyBtn());
+  await waitFor(() => expect(ipc.jobsStartReprice).toHaveBeenCalledTimes(1));
+  expect(sentIds()).toEqual([orders[0].id]);
+});
+
+test("reopening with only some orders in the saved selection ticks those and Apply sends only them", async () => {
+  const orders = await threeOrders(500);
+  open(orders);
+  fireEvent.click(rowBox(orders[1].itemName)); // saved selection: Serration and Lex Prime
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(live).toHaveLength(1));
+  cleanup();
+
+  await sell(500, "mock_boltor_prime");
+  const all = await ordersOf();
+  const reopened = [orders[0], orders[1], all.find((o) => !orders.some((x) => x.id === o.id))!];
+  for (const s of ["serration", "vitality", "boltor_prime"]) stored.add(s);
+  open(reopened);
+  expect(ticked(reopened)).toEqual([true, false, false]);
+  end(live[0]);
+  await waitFor(() => expect(applyBtn().disabled).toBe(false));
+  fireEvent.click(applyBtn());
+  await waitFor(() => expect(ipc.jobsStartReprice).toHaveBeenCalledTimes(1));
+  expect(sentIds()).toEqual([orders[0].id]);
+});
+
+test("a load that fails to start shows the error toast and leaves the modal usable", async () => {
+  const orders = await threeOrders();
+  const { result } = renderHook(() => useToasts());
+  vi.mocked(ipc.jobsStartMarketLoad).mockRejectedValueOnce(new Error("backend down"));
+  open(orders);
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(result.current.some((t) => t.level === "error" && t.message === "backend down")).toBe(true));
+  expect(loadBtn().disabled).toBe(false);
+  expect(headerBox().disabled).toBe(false);
+  expect(screen.queryByRole("status")).toBeNull();
+
+  fireEvent.click(loadBtn()); // a retry goes through
+  await waitFor(() => expect(live).toHaveLength(1));
+  expect(headerBox().disabled).toBe(true);
 });
