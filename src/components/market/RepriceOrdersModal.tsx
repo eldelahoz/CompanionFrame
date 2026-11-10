@@ -90,8 +90,9 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
     return () => void (stale = true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.id, booked, busy]);
-  const totals = repriceTotals(priced);
   const shown = priced.filter((r) => filter === "all" || (filter === "changed" ? r.skipReason === null : r.skipReason !== null));
+  // Like the Market bulk actions: only rows that are both ticked and shown.
+  const totals = repriceTotals(shown);
 
   // Applies the books the job already loaded to the rows still without one; a failed read leaves the row without a book (no-book).
   const applyLoadedBooks = async (slugs: string[]) => {
@@ -136,10 +137,12 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
 
   // The backend runs the prices one by one; progress, Stop and Retry live in the jobs pill.
   const apply = async () => {
-    const sending = repriceRowsToSend(priced);
+    const sending = repriceRowsToSend(shown);
     if (busy || sending.length === 0) return;
     try {
       await jobsStartReprice(sending.map((r) => ({ id: r.order.id, platinum: r.nextPrice! })));
+      repriceLoadId = null;
+      repriceLoadRows = new Set();
       addToast({ level: "success", message: tr("market.reprice.started", { count: sending.length }) });
       onClose();
     } catch (e) {
@@ -159,7 +162,7 @@ export default function RepriceOrdersModal({ orders, ownUserName, onClose, tr }:
     const ids = new Set(shown.map((r) => r.rowId));
     setRows((rs) => rs.map((r) => (ids.has(r.rowId) ? { ...r, selected: on } : r)));
   };
-  const inputCls ="w-20 rounded-md border border-border bg-surface-input px-2 py-1 text-sm text-text-primary outline-none focus:border-accent/70";
+  const inputCls = "w-20 rounded-md border border-border bg-surface-input px-2 py-1 text-sm text-text-primary outline-none focus:border-accent/70";
 
   return (
     <div className="detail-overlay" role="dialog" aria-modal="true" data-reprice-modal>
