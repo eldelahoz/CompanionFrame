@@ -1066,10 +1066,12 @@ export const jobsStartOrdersDelete = async (ids: string[]): Promise<string> =>
 export const jobsStartReprice = async (items: { id: string; platinum: number }[]): Promise<string> =>
   inTauri() ? unwrap(await commands.jobsStartReprice(items)) : mockStartJob({ type: "reprice" }, mockJobItems(items.map((i) => i.id), new Map(items.map((i) => [i.id, i.platinum]))));
 /** Reads the order book of each item in the background (read only); the books wait for `jobsMarketBooks`. */
-export const jobsStartMarketLoad = async (rows: { slug: string; name: string }[]): Promise<string> =>
-  inTauri()
-    ? unwrap(await commands.jobsStartMarketLoad(rows))
-    : mockStartJob({ type: "marketLoad" }, rows.map((r) => ({ id: r.slug, name: r.name, platinum: null, status: "pending", reason: null })));
+export const jobsStartMarketLoad = async (rows: { slug: string; name: string }[]): Promise<string> => {
+  if (inTauri()) return unwrap(await commands.jobsStartMarketLoad(rows));
+  // Like the backend: one market load at a time.
+  if (mockJobs.some((j) => j.kind.type === "marketLoad" && (j.state === "running" || j.state === "stopping"))) throw new Error("Another job is still running.");
+  return mockStartJob({ type: "marketLoad" }, rows.map((r) => ({ id: r.slug, name: r.name, platinum: null, status: "pending", reason: null })));
+};
 /** The raw books already loaded among `slugs` (fresh ones only). */
 export const jobsMarketBooks = async (slugs: string[]): Promise<{ slug: string; orders: BookOrder[] }[]> =>
   inTauri() ? commands.jobsMarketBooks(slugs) : slugs.flatMap((slug) => (mockBooks.has(slug) ? [{ slug, orders: mockBooks.get(slug)! }] : []));

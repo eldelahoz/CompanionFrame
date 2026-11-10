@@ -33,6 +33,8 @@ vi.mock("../../lib/ipc", async (orig) => {
     jobsDismiss: vi.fn(async () => {}),
     jobsMarketBooks: vi.fn(async (slugs: string[]) => slugs.filter((s) => stored.has(s)).map((slug) => ({ slug, orders: mockBook(slug).map((o) => ({ ...o, platinum: o.platinum + bumped })) }))),
     jobsStartMarketLoad: vi.fn(async (rows: { slug: string; name: string }[]) => {
+      // Like the backend: one market load at a time.
+      if (live.some((j) => j.state === "running")) throw new Error("Another job is still running.");
       const job = newJob(rows.map((r) => r.slug));
       emit({ id: job.id, state: job.state, total: job.total, done: 0, failed: 0, item: null, job });
       return job.id;
@@ -100,18 +102,98 @@ test("reopening while the load is still running: the reads that finish afterward
   expect(ipc.jobsStartMarketLoad).toHaveBeenCalledTimes(1);
 });
 
-test("a running Bulk sell load of other items does not make the modal busy", async () => {
+test("a running Bulk sell load is not adopted: Load prices is disabled, the modal is not busy and Apply stays enabled", async () => {
   const orders = await twoOrders();
-  const foreign = newJob(["lex_prime", "boltor_prime"]);
+  const foreign = newJob(["serration", "vitality", "boltor_prime"]); // even one covering every row
   open(orders);
-  await waitFor(() => expect(ipc.jobsList).toHaveBeenCalled());
-  expect(loadBtn().disabled).toBe(false);
+  await waitFor(() => expect(loadBtn().disabled).toBe(true));
+  expect(loadBtn().title).toBe("A price load is already running");
   expect(screen.queryByRole("status")).toBeNull();
   expect((screen.getByLabelText("Strategy") as HTMLSelectElement).disabled).toBe(false);
+  expect((document.querySelector("[data-reprice-apply]") as HTMLButtonElement).disabled).toBe(true); // no books yet: nothing to send, but not because of the load
 
   fireEvent.click(loadBtn());
-  await waitFor(() => expect(ipc.jobsStartMarketLoad).toHaveBeenCalledTimes(1));
-  expect(foreign.state).toBe("running");
+  expect(ipc.jobsStartMarketLoad).not.toHaveBeenCalled();
+
+  // Once the foreign load ends the button is back, and the rows were never fed by it.
+  end(foreign);
+  await waitFor(() => expect(loadBtn().disabled).toBe(false));
+  expect(nextOf("Serration")).toContain(NO_BOOK);
+});
+
+test("with a Bulk sell load running, Apply is still enabled for the rows that have a book", async () => {
+  const orders = await twoOrders();
+  stored.add("serration");
+  newJob(["lex_prime"]);
+  open(orders);
+  await waitFor(() => expect(nextOf("Serration")).not.toContain(NO_BOOK));
+  expect(loadBtn().disabled).toBe(true);
+  expect((document.querySelector("[data-reprice-apply]") as HTMLButtonElement).disabled).toBe(false);
+});
+
+test("the mock rejects a second market load while one runs, like the backend", async () => {
+  newJob(["lex_prime"]);
+  await expect(ipc.jobsStartMarketLoad([{ slug: "serration", name: "Serration" }])).rejects.toThrow("Another job is still running.");
+});
+
+test("partial reopen: 4 of 6 rows loading, close mid-load, reopen: the loaded rows get their books and Load prices is not rejected", async () => {
+  await wfmSignIn("tenno@example.com", "pw");
+  const slugs = ["serration", "vitality", "ash_prime_set", "boltor_prime", "lex_prime", "point_strike"];
+  for (const s of slugs) await sell(5, s === "ash_prime_set" ? "mock_ash_set" : `mock_${s}`);
+  const orders = await ordersOf();
+  const label = (s: string) => orders.find((o) => o.itemId === (s === "ash_prime_set" ? "mock_ash_set" : `mock_${s}`))?.itemName ?? s;
+  const open10 = () => open(orders);
+
+  open10();
+  const unticked = [slugs[4], slugs[5]];
+  for (const s of unticked) fireEvent.click(screen.getByLabelText(label(s)));
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(live).toHaveLength(1));
+  const job = live[0];
+  expect(job.items.map((i) => i.id)).toEqual(slugs.slice(0, 4));
+  finish(job, slugs[0]);
+  cleanup();
+
+  open10(); // reopened mid-load, without the unticked state
+  await waitFor(() => expect(nextOf(label(slugs[0]))).not.toContain(NO_BOOK));
+  expect(loadBtn().disabled).toBe(true);
+  for (const s of slugs.slice(1, 4)) finish(job, s);
+  for (const s of slugs.slice(1, 4)) await waitFor(() => expect(nextOf(label(s))).not.toContain(NO_BOOK));
+  expect(nextOf(label(slugs[4]))).toContain(NO_BOOK);
+  end(job);
+  await waitFor(() => expect(loadBtn().disabled).toBe(false));
+
+  // The next load asks only for the two rows still missing and the backend accepts it.
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(ipc.jobsStartMarketLoad).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(ipc.jobsStartMarketLoad).mock.calls[1][0].map((r) => r.slug)).toEqual(unticked);
+});
+
+test("a failed refresh shows the row's 'Not refreshed' hint and keeps the cached price", async () => {
+  await wfmSignIn("tenno@example.com", "pw");
+  await sell(5, "mock_serration");
+  const orders = await ordersOf();
+  open(orders);
+  fireEvent.change(screen.getByLabelText("Strategy"), { target: { value: "match-cheapest" } });
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(live).toHaveLength(1));
+  finish(live[0], "serration");
+  end(live[0]);
+  await waitFor(() => expect(nextOf("Serration")).not.toContain(NO_BOOK));
+  const before = nextOf("Serration");
+  expect(screen.queryByText("Not refreshed")).toBeNull();
+
+  await waitFor(() => expect(loadBtn().disabled).toBe(false));
+  fireEvent.click(loadBtn());
+  await waitFor(() => expect(live.filter((j) => j.state === "running")).toHaveLength(1));
+  const second = live.find((j) => j.state === "running")!;
+  second.items[0].status = "failed";
+  second.items[0].reason = "HTTP 503";
+  second.failed++;
+  second.state = "done";
+  emit({ id: second.id, state: "done", total: second.total, done: 0, failed: 1, item: { id: "serration", status: "failed", reason: "HTTP 503" }, job: null });
+  await waitFor(() => expect(screen.getByText("Not refreshed")).toBeTruthy());
+  expect(nextOf("Serration")).toContain(before!.replace("Not refreshed", ""));
 });
 
 test("Load prices does not dismiss a finished Bulk sell load with failures", async () => {
