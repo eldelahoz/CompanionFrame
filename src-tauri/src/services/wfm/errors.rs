@@ -59,6 +59,19 @@ impl WfmError {
         }
     }
 
+    /// The request may have reached WFM and been applied: no answer, or a 5xx. A write that ends
+    /// like this has an unknown result and must not be reported as "did not happen".
+    pub fn outcome_unknown(&self) -> bool {
+        matches!(
+            self,
+            Self::Network { .. }
+                | Self::Api {
+                    status: 500..=599,
+                    ..
+                }
+        )
+    }
+
     pub fn invalid(detail: impl ToString) -> Self {
         Self::Invalid {
             detail: detail.to_string(),

@@ -248,6 +248,10 @@ impl<H: WorkbenchHost> Workbench<H> {
                 }
             };
 
+            let creating = !matches!(
+                (&row.order_id, row.mode),
+                (Some(_), WorkbenchRowMode::Update)
+            );
             let sent = match (&row.order_id, row.mode) {
                 (Some(id), WorkbenchRowMode::Update) => {
                     self.host.update_order(id, row.platinum, row.quantity).await
@@ -276,6 +280,13 @@ impl<H: WorkbenchHost> Workbench<H> {
                         p.status = WorkbenchRowStatus::Done;
                         p.order_id = Some(id);
                     });
+                }
+                Err(err) if creating && err.outcome_unknown() => {
+                    // WFM may have created it anyway: no outcome keeps the intent unsettled, so
+                    // reconcile checks our orders and a re-click cannot list it twice.
+                    fail(format!(
+                        "No clear answer from warframe.market ({err}). The order may have been created: check the review before selling it again."
+                    ));
                 }
                 Err(err) => {
                     // A subtype the user never chose is not something a bulk run may guess, so
