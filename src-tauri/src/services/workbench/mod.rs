@@ -248,6 +248,7 @@ impl<H: WorkbenchHost> Workbench<H> {
                 }
             };
 
+            // An update resent is idempotent (same price and quantity), so a lost answer stays Failed.
             let creating = !matches!(
                 (&row.order_id, row.mode),
                 (Some(_), WorkbenchRowMode::Update)

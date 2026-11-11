@@ -164,6 +164,14 @@ fn mutation_order(v: Value) -> Result<MyOrder, WfmError> {
     normalise(raw, &HashMap::new()).ok_or_else(|| WfmError::invalid("unusable order response"))
 }
 
+/// A create whose answer we could not read may still have placed the order: report it as a
+/// network error so its outcome counts as unknown, never as "did not happen".
+fn unknown_outcome(e: WfmError) -> WfmError {
+    WfmError::Network {
+        detail: e.to_string(),
+    }
+}
+
 pub async fn my_orders(client: &WfmClient, db: &Db) -> Result<MyOrders, WfmError> {
     authed(client)?;
     let t = Instant::now();
@@ -242,7 +250,8 @@ pub async fn create(
             .request(Api::V2, Method::POST, "/order", body(b))
             .await
         {
-            Ok(v) => return mutation_order(v),
+            Ok(v) => return mutation_order(v).map_err(unknown_outcome),
+            Err(e @ WfmError::Invalid { .. }) => return Err(unknown_outcome(e)),
             Err(e) => e,
         };
         let msg = err.to_string().to_lowercase();
