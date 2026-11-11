@@ -37,11 +37,11 @@ Linux needs the system packages listed in `.github/workflows/ci.yml` (`libwebkit
 
 Local limits: `vite.config.ts` caps vitest at 50% of the cores; to cap cargo too, set `jobs` in a local, gitignored `.cargo/config.toml`.
 
-CI (`.github/workflows/ci.yml`, Windows and Ubuntu 22.04) runs: `pnpm build`, `pnpm test`, fmt, clippy, `cargo test`, then `pnpm bindings` and `git diff --exit-code src/bindings.ts`. Run the same before pushing.
+CI (`.github/workflows/ci.yml`, Windows and Ubuntu 22.04) runs: `pnpm build`, `pnpm test`, `pnpm game-data`, fmt, clippy, `cargo test`, then `pnpm bindings` and `git diff --exit-code src/bindings.ts`. Run the same before pushing.
 
 ## Testing strategy
 
-- **Rust (`cargo test`)**: logic is kept pure and tested in `tests.rs` or `#[cfg(test)]` beside the module. EE.log parsers are fed fixtures in `src-tauri/tests/fixtures/eelog/` (real log excerpts are the parsers' spec). The overlay manager runs against a fake `Host`. The WFM client is tested against a scripted local HTTP server (`wfm/mock.rs`); nothing in the suite touches the real network. Tests needing `onnxruntime.dll` are `cfg(windows)`. `tests/no_wfhelper_hosts.rs` guards the "no deployed backend" rule.
+- **Rust (`cargo test`)**: logic is kept pure and tested in `tests.rs` or `#[cfg(test)]` beside the module. EE.log parsers are fed fixtures in `src-tauri/tests/fixtures/eelog/` (real log excerpts are the parsers' spec). The overlay manager runs against a fake `Host`. The WFM client is tested against a scripted local HTTP server (`wfm/mock.rs`); nothing in the suite touches the real network. Tests that read the game data are skipped locally without `pnpm game-data`, and fail when `CI` is set. Tests needing `onnxruntime.dll` are `cfg(windows)`. `tests/no_wfhelper_hosts.rs` guards the "no deployed backend" rule.
 - **Frontend (`pnpm test`, vitest + Testing Library)**: tests sit next to the code (`*.test.ts(x)`), run in jsdom against the ipc mocks. `src/lib/i18n.test.tsx` fails if a locale lacks a key from `en.json`.
 - **UI against mocks (Playwright MCP)**: `pnpm dev` serves the app at `http://localhost:1420` without Tauri; `ipc.ts` then returns mock data, so the Playwright MCP tools can drive and screenshot every view. Overlays are not mocked: `overlay.html` uses Tauri events directly, so test them with `pnpm tauri dev` or vitest.
 - **Manual tests with the game**: anything that needs Warframe (overlay focus and click-through, hotkeys, capture, OCR, EE.log trackers, the Linux build) has a checklist in `docs/manual-tests/`, one file per task (e.g. `f6-t1-overlay-manager.md`). Run `pnpm tauri dev` with the game in borderless mode. Add or update the checklist when you change that behaviour.

@@ -9,8 +9,9 @@ fn bundle() -> Option<BundledData> {
 fn catalog(code: &str) -> Option<Vec<SpawnNode>> {
     let b = bundle()?;
     Some(build(
-        &b.export("ExportRegions")?,
-        &b.dict("en")?,
+        &b.export("ExportRegions")
+            .expect("ExportRegions in the bundle"),
+        &b.dict("en").expect("dict.en.json in the bundle"),
         &GameLocale::load(code, &b),
     ))
 }

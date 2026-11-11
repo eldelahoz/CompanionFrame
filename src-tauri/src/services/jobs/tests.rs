@@ -507,6 +507,7 @@ async fn a_lost_connection_pauses_the_job_without_failing_the_item_and_resumes_b
     until("the job to pause", || {
         job_of(&jobs, &id).is_some_and(|j| j.state == JobState::Offline)
             && f.tries.load(Ordering::SeqCst) >= 2
+            && job_of(&jobs, &id).is_some_and(|j| j.items[0].status == ItemStatus::Pending)
     })
     .await;
     let paused = job_of(&jobs, &id).unwrap();

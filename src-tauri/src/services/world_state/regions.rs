@@ -131,7 +131,11 @@ pub(crate) mod test_ctx {
     pub fn bundled() -> Option<Ctx> {
         let root = crate::services::bundled_data::test_root()?;
         let ctx = Ctx::load(&BundledData::new(root), "en");
-        (!ctx.regions.is_empty()).then_some(ctx)
+        assert!(
+            !ctx.regions.is_empty(),
+            "ExportRegions missing from the bundle"
+        );
+        Some(ctx)
     }
 }
 

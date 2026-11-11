@@ -328,12 +328,16 @@ mod tests {
             let b = BundledData::new(root);
             let dicts = ["en", "fr", "es", "de", "zh"]
                 .into_iter()
-                .map(|c| Some((c, b.dict(c)?)))
-                .collect::<Option<_>>()?;
+                .map(|c| (c, b.dict(c).expect("dict missing from the bundle")))
+                .collect();
             Some(Bundle {
                 dicts,
-                weapons: b.export("ExportWeapons")?,
-                upgrades: b.export("ExportUpgrades")?,
+                weapons: b
+                    .export("ExportWeapons")
+                    .expect("ExportWeapons in the bundle"),
+                upgrades: b
+                    .export("ExportUpgrades")
+                    .expect("ExportUpgrades in the bundle"),
             })
         })
         .as_ref()

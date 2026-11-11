@@ -528,7 +528,9 @@ fn pool_is_rebuilt_when_the_game_language_changes() {
 
 fn fr_era_words() -> Option<EraWords> {
     let root = crate::services::bundled_data::test_root()?;
-    let dict = crate::services::bundled_data::BundledData::new(root).dict("fr")?;
+    let dict = crate::services::bundled_data::BundledData::new(root)
+        .dict("fr")
+        .expect("dict.fr.json in the bundle");
     Some(EraWords::build(|k| {
         dict.get(k).and_then(|v| v.as_str()).map(str::to_owned)
     }))
