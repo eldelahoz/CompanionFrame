@@ -77,6 +77,15 @@ impl WfmClient {
         })
     }
 
+    /// `new` for tests against a mock server: no contract-search throttling.
+    #[cfg(test)]
+    pub(crate) fn new_unthrottled(v1: &str, v2: &str, sink: TokenSink) -> Result<Self, WfmError> {
+        Ok(Self {
+            sched: Scheduler::without_contract_limit(),
+            ..Self::new(v1, v2, sink)?
+        })
+    }
+
     #[cfg(test)]
     pub(super) fn lift_gate(&self) {
         self.sched.lift_gate();

@@ -586,7 +586,7 @@ mod tests {
 
     fn mock_client(script: Vec<Reply>) -> (Mock, WfmClient) {
         let m = spawn(script);
-        let c = WfmClient::new(
+        let c = WfmClient::new_unthrottled(
             &format!("{}/v1", m.url),
             &format!("{}/v2", m.url),
             Box::new(|_| {}),

@@ -188,6 +188,9 @@ pub struct Scheduler {
     contracts: Mutex<Bucket>,
     slots: Arc<Mutex<Slots>>,
     queued: AtomicUsize,
+    /// Mock servers in tests skip the contract budget; the budget has its own tests here.
+    #[cfg(test)]
+    free_contracts: bool,
 }
 
 impl Default for Scheduler {
@@ -197,6 +200,8 @@ impl Default for Scheduler {
             contracts: Bucket::new(CONTRACT_BURST),
             slots: Arc::default(),
             queued: AtomicUsize::new(0),
+            #[cfg(test)]
+            free_contracts: false,
         }
     }
 }
@@ -214,6 +219,14 @@ impl Scheduler {
             rx
         };
         rx.await.map_err(|_| WfmError::invalid("scheduler closed"))
+    }
+
+    #[cfg(test)]
+    pub(super) fn without_contract_limit() -> Self {
+        Self {
+            free_contracts: true,
+            ..Self::default()
+        }
     }
 
     /// Tests that script a 429 and then expect the next call to go out.
@@ -295,7 +308,11 @@ impl Scheduler {
         Fut: Future<Output = Result<T, WfmError>>,
     {
         let _slot = self.acquire(priority).await?;
-        if kind == Kind::Contract {
+        #[cfg(test)]
+        let throttle_contracts = !self.free_contracts;
+        #[cfg(not(test))]
+        let throttle_contracts = true;
+        if kind == Kind::Contract && throttle_contracts {
             Self::wait_token(&self.contracts, CONTRACT_RATE, CONTRACT_BURST, priority).await?;
         }
         Self::wait_token(&self.bucket, RATE_PER_SECOND, BURST, priority).await?;
