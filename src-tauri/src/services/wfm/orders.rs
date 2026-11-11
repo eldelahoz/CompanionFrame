@@ -861,6 +861,60 @@ mod tests {
         }
     }
 
+    // A 2xx whose answer we cannot read may still have placed the order: the outcome is unknown.
+    #[tokio::test]
+    async fn a_create_answered_2xx_with_an_unreadable_body_is_an_unknown_outcome() {
+        let rows = [
+            (reply(200, "<html>not json</html>"), "non-json body"),
+            (reply(200, r#"{"data":{"nothing":"here"}}"#), "no order id"),
+            (reply(200, r#"{"data":null}"#), "null data"),
+            (reply(201, r#"{"ok":true}"#), "no data"),
+        ];
+        for (r, label) in rows {
+            let m = spawn(vec![r]);
+            let (c, _) = client(&m);
+            let err = create(&c, &mem_db(), new_order(json!({})), &AtomicBool::new(false))
+                .await
+                .unwrap_err();
+            assert!(err.outcome_unknown(), "{label}: {err}");
+            assert_eq!(m.requests().len(), 1, "{label}: no retry");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_create_rejected_with_a_validation_4xx_is_a_known_failure() {
+        let m = spawn(vec![reply(
+            400,
+            r#"{"error":{"platinum":["app.field.invalid"]}}"#,
+        )]);
+        let (c, _) = client(&m);
+        let err = create(&c, &mem_db(), new_order(json!({})), &AtomicBool::new(false))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, WfmError::Api { status: 400, .. }), "{err}");
+        assert!(!err.outcome_unknown());
+    }
+
+    // Reads can be retried freely, so an unusable body stays Invalid (not an unknown write outcome).
+    #[tokio::test]
+    async fn a_read_with_an_unusable_body_stays_invalid() {
+        let m = spawn(vec![reply(200, "<html>not json</html>")]);
+        let (c, _) = client(&m);
+        let err = my_orders(&c, &mem_db()).await.unwrap_err();
+        assert!(matches!(err, WfmError::Invalid { .. }), "{err}");
+        assert!(!err.outcome_unknown());
+
+        for body in ["<html>not json</html>", r#"{"data":5}"#] {
+            let m = spawn(vec![reply(200, body)]);
+            let (c, _) = client(&m);
+            let err = orders_item(&c, "x_item", false, None, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, WfmError::Invalid { .. }), "{body}: {err}");
+            assert!(!err.outcome_unknown(), "{body}");
+        }
+    }
+
     #[tokio::test]
     async fn close_failures_surface_the_wfm_error() {
         let m = spawn(vec![reply(404, r#"{"error":"app.order.notFound"}"#)]);

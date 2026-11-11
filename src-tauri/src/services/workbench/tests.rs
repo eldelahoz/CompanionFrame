@@ -770,10 +770,17 @@ async fn a_create_that_wfm_rejected_is_failed_and_settled_not_left_for_review() 
     }
 }
 
+// The client turns a 509 (too many connections) into RateLimited, so no Api{509} ever reaches the workbench.
 #[tokio::test]
-async fn a_509_is_a_5xx_so_its_create_is_unsettled_too() {
-    let (_, wb) = run_one_failing_create(api(509)).await;
-    assert!(wb.state().review_required);
+async fn a_509_reaches_the_workbench_as_rate_limited_and_stays_failed_without_review() {
+    let (_, wb) = run_one_failing_create(WfmError::RateLimited {
+        retry_after_secs: None,
+    })
+    .await;
+    assert_eq!(statuses(&wb), [WorkbenchRowStatus::Failed]);
+    let state = wb.state();
+    assert!(!state.review_required);
+    assert_eq!(state.unsettled_count, 0);
 }
 
 fn raw_entry(id: &str, mode: &str, request: &str) -> String {
