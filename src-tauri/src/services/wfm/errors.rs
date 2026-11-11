@@ -160,6 +160,41 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn only_no_answer_and_5xx_leave_a_write_with_an_unknown_outcome() {
+        let api = |status| WfmError::Api {
+            status,
+            detail: String::new(),
+        };
+        let rows = [
+            (WfmError::Network { detail: "x".into() }, true),
+            (api(500), true),
+            (api(502), true),
+            (api(599), true),
+            (api(400), false),
+            (api(404), false),
+            (api(409), false),
+            (api(499), false),
+            (WfmError::Unauthorized { detail: "x".into() }, false),
+            (
+                WfmError::RateLimited {
+                    retry_after_secs: Some(3),
+                },
+                false,
+            ),
+            (WfmError::invalid("x"), false),
+            (
+                WfmError::SubtypeRequired {
+                    subtypes: vec!["intact".into()],
+                },
+                false,
+            ),
+        ];
+        for (err, expected) in rows {
+            assert_eq!(err.outcome_unknown(), expected, "{err}");
+        }
+    }
+
+    #[test]
     fn only_400_and_404_mean_no_data() {
         for s in [400, 404] {
             assert_eq!(classify_status(s), Class::NoData, "{s}");

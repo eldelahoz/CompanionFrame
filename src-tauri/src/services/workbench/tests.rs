@@ -650,6 +650,132 @@ async fn a_crash_between_request_and_response_forces_review_and_classifies_unkno
     );
 }
 
+fn api(status: u16) -> WfmError {
+    WfmError::Api {
+        status,
+        detail: "x".into(),
+    }
+}
+
+fn net() -> WfmError {
+    WfmError::Network { detail: "x".into() }
+}
+
+async fn run_one_failing_create(err: WfmError) -> (Arc<FakeWb>, Arc<Workbench<Arc<FakeWb>>>) {
+    let fake = FakeWb::with(Box::new(move |_, _| fut(Err(err.clone()))));
+    let wb = engine(&fake);
+    let p = plan(vec![row("a")]);
+    wb.execute(p.clone(), &snapshot(&p, 99, 99));
+    wait_finish(&wb).await;
+    (fake, wb)
+}
+
+#[tokio::test]
+async fn a_create_with_an_unknown_result_stays_unsettled_and_blocks_a_new_run() {
+    for err in [net(), api(500), api(503)] {
+        let label = err.to_string();
+        let (fake, wb) = run_one_failing_create(err).await;
+        assert_eq!(statuses(&wb), [WorkbenchRowStatus::Failed], "{label}");
+        let row_error = wb.state().run.unwrap().rows[0].error.clone().unwrap();
+        assert!(
+            row_error.contains("check the review"),
+            "{label}: {row_error}"
+        );
+        assert!(fake.entries()[0].outcome.is_none(), "{label}");
+        let state = wb.state();
+        assert!(state.review_required, "{label}");
+        assert_eq!(state.unsettled_count, 1, "{label}");
+
+        let p = plan(vec![row("a")]);
+        let again = wb.execute(p.clone(), &snapshot(&p, 99, 99));
+        assert!(!again.started, "{label}");
+        assert!(again.error.unwrap().to_lowercase().contains("review"));
+        assert_eq!(fake.calls().len(), 0, "{label}: no second create left");
+
+        // Resolving the review is what unlocks the next run.
+        let report = wb.reconcile().await;
+        wb.resolve_review(&WorkbenchResolveReviewPayload {
+            resolutions: vec![WorkbenchReviewResolution {
+                intent_id: report.rows[0].intent_id.clone(),
+                classification: WorkbenchReviewClassification::Failed,
+            }],
+            reset_corrupt_journal: None,
+        });
+        assert!(!wb.state().review_required, "{label}");
+        assert!(
+            wb.execute(p.clone(), &snapshot(&p, 99, 99)).started,
+            "{label}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn reconcile_of_an_unknown_create_matches_the_order_when_wfm_has_it_and_not_when_it_does_not()
+{
+    for err in [net(), api(500)] {
+        for (server_has_it, expected) in [
+            (true, WorkbenchReviewClassification::Confirmed),
+            (false, WorkbenchReviewClassification::Unknown),
+        ] {
+            let (fake, wb) = run_one_failing_create(err.clone()).await;
+            // row("a") lists slug_a at the plan's price and quantity.
+            let sent = fake.entries()[0].request.clone();
+            if server_has_it {
+                *fake.sell.lock().unwrap() =
+                    vec![live("ord-1", sent.platinum, sent.quantity, &sent.slug)];
+            }
+            let report = wb.reconcile().await;
+            let r = &report.rows[0];
+            assert_eq!(r.classification, expected, "{err} has_it={server_has_it}");
+            assert_eq!(
+                r.matched_order_id.as_deref(),
+                server_has_it.then_some("ord-1")
+            );
+            assert!(wb.state().review_required, "reconcile settles nothing");
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_create_that_wfm_rejected_is_failed_and_settled_not_left_for_review() {
+    let rows = [
+        (api(400), "400"),
+        (api(409), "409"),
+        (WfmError::Unauthorized { detail: "x".into() }, "401"),
+        (
+            WfmError::RateLimited {
+                retry_after_secs: Some(3),
+            },
+            "429",
+        ),
+        (WfmError::invalid("bad input"), "invalid"),
+        (
+            WfmError::SubtypeRequired {
+                subtypes: vec!["intact".into()],
+            },
+            "subtype",
+        ),
+    ];
+    for (err, label) in rows {
+        let (fake, wb) = run_one_failing_create(err).await;
+        assert_eq!(statuses(&wb), [WorkbenchRowStatus::Failed], "{label}");
+        assert_eq!(
+            fake.entries()[0].outcome.as_ref().unwrap().status,
+            OutcomeStatus::Failed,
+            "{label}"
+        );
+        let state = wb.state();
+        assert!(!state.review_required, "{label}");
+        assert_eq!(state.unsettled_count, 0, "{label}");
+    }
+}
+
+#[tokio::test]
+async fn a_509_is_a_5xx_so_its_create_is_unsettled_too() {
+    let (_, wb) = run_one_failing_create(api(509)).await;
+    assert!(wb.state().review_required);
+}
+
 fn raw_entry(id: &str, mode: &str, request: &str) -> String {
     format!(
         r#"{{"intentId":"{id}","planId":"p","rowId":"a","mode":"{mode}","request":{request},"createdAt":1}}"#
