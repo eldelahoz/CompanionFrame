@@ -3,15 +3,15 @@ use serde_json::{Value, json};
 use super::*;
 
 fn bundle() -> Option<BundledData> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
-    root.join("pep").exists().then(|| BundledData::new(root))
+    crate::services::bundled_data::test_root().map(BundledData::new)
 }
 
 fn catalog(code: &str) -> Option<Vec<SpawnNode>> {
     let b = bundle()?;
     Some(build(
-        &b.export("ExportRegions")?,
-        &b.dict("en")?,
+        &b.export("ExportRegions")
+            .expect("ExportRegions in the bundle"),
+        &b.dict("en").expect("dict.en.json in the bundle"),
         &GameLocale::load(code, &b),
     ))
 }

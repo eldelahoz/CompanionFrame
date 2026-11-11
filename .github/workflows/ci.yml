@@ -89,6 +89,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - run: pnpm install --frozen-lockfile
+      # The data-bound cargo tests read this git-ignored bundle and fail in CI without it.
+      - run: pnpm game-data
       # Linux runtime arrives with F7-T4b; the tests that need it are cfg(windows) until then.
       - if: runner.os == 'Windows'
         run: pnpm fetch-onnx

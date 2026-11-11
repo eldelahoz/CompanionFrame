@@ -273,10 +273,9 @@ fn info_reports_the_downloaded_copy_until_it_is_reverted() {
 
 #[test]
 fn bundled_relics_resolve_every_reward_to_the_item_not_the_relic() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
-    if !root.join("pep").exists() {
+    let Some(root) = crate::services::bundled_data::test_root() else {
         return;
-    }
+    };
     let bundled = BundledData::new(&root);
     let items = ItemDb::build(&Sources::load(&bundled, None));
     let locale = GameLocale::default();

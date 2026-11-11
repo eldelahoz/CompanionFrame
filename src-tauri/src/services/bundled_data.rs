@@ -17,6 +17,22 @@ pub struct BundledData {
     root: PathBuf,
 }
 
+/// The `pnpm game-data` bundle for data-bound tests: `None` locally when it was never copied
+/// (the test skips), a panic in CI where skipping would pass without checking anything.
+#[cfg(test)]
+pub(crate) fn test_root() -> Option<PathBuf> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
+    if root.join("pep").exists() {
+        return Some(root);
+    }
+    assert!(
+        std::env::var_os("CI").is_none(),
+        "game data missing at {}: run `pnpm game-data` before `cargo test`",
+        root.display()
+    );
+    None
+}
+
 fn plain_name(s: &str, ok: impl Fn(char) -> bool) -> bool {
     !s.is_empty() && s.chars().all(ok)
 }

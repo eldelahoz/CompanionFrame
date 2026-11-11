@@ -324,16 +324,20 @@ mod tests {
     fn bundle() -> Option<&'static Bundle> {
         static B: OnceLock<Option<Bundle>> = OnceLock::new();
         B.get_or_init(|| {
-            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
+            let root = crate::services::bundled_data::test_root()?;
             let b = BundledData::new(root);
             let dicts = ["en", "fr", "es", "de", "zh"]
                 .into_iter()
-                .map(|c| Some((c, b.dict(c)?)))
-                .collect::<Option<_>>()?;
+                .map(|c| (c, b.dict(c).expect("dict missing from the bundle")))
+                .collect();
             Some(Bundle {
                 dicts,
-                weapons: b.export("ExportWeapons")?,
-                upgrades: b.export("ExportUpgrades")?,
+                weapons: b
+                    .export("ExportWeapons")
+                    .expect("ExportWeapons in the bundle"),
+                upgrades: b
+                    .export("ExportUpgrades")
+                    .expect("ExportUpgrades in the bundle"),
             })
         })
         .as_ref()

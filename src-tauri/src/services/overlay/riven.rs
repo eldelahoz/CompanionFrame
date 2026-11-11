@@ -1166,10 +1166,8 @@ mod tests {
     fn data() -> Option<&'static RivenData> {
         static DATA: OnceLock<Option<RivenData>> = OnceLock::new();
         DATA.get_or_init(|| {
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
-            root.join("pep")
-                .exists()
-                .then(|| RivenData::load(&BundledData::new(root)))
+            crate::services::bundled_data::test_root()
+                .map(|root| RivenData::load(&BundledData::new(root)))
         })
         .as_ref()
     }

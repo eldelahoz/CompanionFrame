@@ -598,7 +598,7 @@ struct Rig {
 
 fn rig(script: Vec<crate::services::wfm::mock::Reply>) -> Rig {
     let mock = spawn(script);
-    let client = WfmClient::new(
+    let client = WfmClient::new_unthrottled(
         &format!("{}/v1", mock.url),
         &format!("{}/v2", mock.url),
         Box::new(|_| {}),

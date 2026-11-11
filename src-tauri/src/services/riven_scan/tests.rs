@@ -410,8 +410,7 @@ fn a_failed_scan_still_counts_the_roll_and_its_kuva() {
 fn game() -> Option<&'static (RivenData, GoodRolls)> {
     static DATA: OnceLock<Option<(RivenData, GoodRolls)>> = OnceLock::new();
     DATA.get_or_init(|| {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
-        root.join("pep").exists().then(|| {
+        crate::services::bundled_data::test_root().map(|root| {
             (
                 RivenData::load(&BundledData::new(root)),
                 GoodRolls::default(),
@@ -567,10 +566,9 @@ fn a_stray_damage_icon_between_the_value_and_the_label_is_ignored() {
 
 #[test]
 fn a_french_poison_line_reads_through_a_stray_icon_glyph() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
-    if !root.join("pep").exists() {
+    let Some(root) = crate::services::bundled_data::test_root() else {
         return;
-    }
+    };
     let labels = super::locale::CardLabels::load(&BundledData::new(root), "fr");
     for icon in ["", " ", "☠", "®", "e", "©", "&", "o", "W", "*", "8"] {
         let text = format!(

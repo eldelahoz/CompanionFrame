@@ -1,7 +1,6 @@
 //! Ports of WFHelper's masteryProgress, masteryCategoryClassification, masteryAcquisitionSources
 //! and recipeRows tests. They run on the real bundle and skip when `pnpm game-data` has not run.
 
-use std::path::Path;
 use std::sync::OnceLock;
 
 use serde_json::{Value, json};
@@ -18,10 +17,7 @@ struct World {
 fn world() -> Option<&'static World> {
     static W: OnceLock<Option<World>> = OnceLock::new();
     W.get_or_init(|| {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
-        if !root.join("pep").exists() {
-            return None;
-        }
+        let root = crate::services::bundled_data::test_root()?;
         let bundled = BundledData::new(&root);
         Some(World {
             db: ItemDb::build(&Sources::load(&bundled, None)),
