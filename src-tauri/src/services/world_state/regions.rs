@@ -129,7 +129,7 @@ pub(crate) mod test_ctx {
 
     /// The real bundled tables (`pnpm game-data`); tests that need names skip without them.
     pub fn bundled() -> Option<Ctx> {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
+        let root = crate::services::bundled_data::test_root()?;
         let ctx = Ctx::load(&BundledData::new(root), "en");
         (!ctx.regions.is_empty()).then_some(ctx)
     }

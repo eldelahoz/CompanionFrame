@@ -781,10 +781,9 @@ fn wfcd_relic_drops_are_rarity_corrected() {
 
 #[test]
 fn bundled_data_builds_and_resolves_known_items() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
-    if !root.join("pep").exists() {
+    let Some(root) = crate::services::bundled_data::test_root() else {
         return;
-    }
+    };
     let bundled = BundledData::new(&root);
     let db = ItemDb::build(&Sources::load(&bundled, None));
     assert!(db.len() > 10_000, "{} items", db.len());
@@ -841,10 +840,9 @@ fn wfcd_art_is_exposed_as_fallback_when_de_icon_wins() {
 
 #[test]
 fn french_trade_dialog_names_map_back_to_english_items() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
-    if !root.join("pep").exists() {
+    let Some(root) = crate::services::bundled_data::test_root() else {
         return;
-    }
+    };
     let bundled = BundledData::new(&root);
     let db = ItemDb::build(&Sources::load(&bundled, None));
     let fr = db.english_by_localized(&GameLocale::load("fr", &bundled));

@@ -324,7 +324,7 @@ mod tests {
     fn bundle() -> Option<&'static Bundle> {
         static B: OnceLock<Option<Bundle>> = OnceLock::new();
         B.get_or_init(|| {
-            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
+            let root = crate::services::bundled_data::test_root()?;
             let b = BundledData::new(root);
             let dicts = ["en", "fr", "es", "de", "zh"]
                 .into_iter()

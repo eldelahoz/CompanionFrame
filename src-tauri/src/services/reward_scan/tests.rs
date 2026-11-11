@@ -527,7 +527,7 @@ fn pool_is_rebuilt_when_the_game_language_changes() {
 }
 
 fn fr_era_words() -> Option<EraWords> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/game-data");
+    let root = crate::services::bundled_data::test_root()?;
     let dict = crate::services::bundled_data::BundledData::new(root).dict("fr")?;
     Some(EraWords::build(|k| {
         dict.get(k).and_then(|v| v.as_str()).map(str::to_owned)
