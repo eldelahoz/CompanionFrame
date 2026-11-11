@@ -3,10 +3,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { translator } from "../../lib/i18n";
 import { resetMock, wfmOrderCreate, wfmOrdersMy, wfmPrice, wfmSignIn, type MyOrder } from "../../lib/ipc";
+import { resetJobs } from "../../stores/jobs";
 import RepriceOrdersModal from "./RepriceOrdersModal";
 
 const tr = translator("en");
-beforeEach(resetMock);
+// The jobs store outlives a test: a finished load from the last one would otherwise apply its books to this one.
+beforeEach(() => {
+  resetMock();
+  resetJobs();
+});
 afterEach(cleanup);
 
 const makeOrders = async (): Promise<MyOrder[]> => {

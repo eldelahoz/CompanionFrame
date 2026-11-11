@@ -8,6 +8,7 @@ import RepriceOrdersModal from "../components/market/RepriceOrdersModal";
 import MarketBrowseView, { type OrderDraft } from "../components/market/MarketBrowseView";
 import MarketOrderRow from "../components/market/MarketOrderRow";
 import MarketBulkBar from "../components/market/MarketBulkBar";
+import { foldName } from "../lib/foldName";
 import { sortOrders, type OrderSortDir, type OrderSortKey } from "../lib/market/sortOrders";
 import { wfmLookup } from "../lib/market/wfmLookup";
 import { usePersisted } from "../lib/usePersisted";
@@ -16,7 +17,7 @@ import { useMarketArt } from "../lib/useMarketArt";
 import OrderModal from "../components/market/OrderModal";
 import SignInForm from "../components/market/SignInForm";
 import WfmPresenceBar, { DOT } from "../components/market/WfmPresenceBar";
-import { Button, Card, EmptyState, IconButton, PageHeader, Skeleton, Table } from "../components/ui";
+import { Button, Card, EmptyState, IconButton, PageHeader, SearchInput, Skeleton, Table } from "../components/ui";
 import { askConfirm } from "../stores/confirm";
 import { addToast } from "../stores/toasts";
 import type { Translator } from "../lib/i18n";
@@ -60,6 +61,8 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const [sort, setSort] = usePersisted("wf_market_orders_sort", SORTS, "date:desc");
   const [sortKey, sortDir] = sort.split(":") as [OrderSortKey, OrderSortDir];
   const [selected, setSelected] = market.useField("selected");
+  // Survives a Sell/Buy switch (the view stays mounted), not leaving Market.
+  const [search, setSearch] = useState("");
   // The backend runs one orders job at a time: the bar waits for it.
   const jobRunning = useJobs().jobs.some((j) => isActive(j) && (j.kind.type === "ordersVisibility" || j.kind.type === "ordersDelete" || j.kind.type === "reprice"));
   const { catalog } = useWfmCatalog();
@@ -164,7 +167,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
   const delSelected = async () => {
     const ids = list.filter((o) => selected.has(o.id)).map((o) => o.id);
     if (!(await askConfirm(tr("market.confirmDeleteOrders", { count: ids.length })))) return;
-    setSelected(new Set());
+    setSelected((cur) => new Set([...cur].filter((id) => !ids.includes(id))));
     await startJob(() => jobsStartOrdersDelete(ids));
   };
   // Shift+click takes every row between the last click and this one, in the sorted order.
@@ -182,7 +185,13 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     { key: "alerts", label: tr("common.alerts") },
   ];
   const isOrders = tab === "sell" || tab === "buy";
-  const list = useMemo(() => (isOrders ? sortOrders(orders[tab], sortKey, sortDir) : []), [isOrders, orders, tab, sortKey, sortDir]);
+  const sorted = useMemo(() => (isOrders ? sortOrders(orders[tab], sortKey, sortDir) : []), [isOrders, orders, tab, sortKey, sortDir]);
+  // Everything below (select all, bulk actions) works on `list`, the orders the search leaves shown.
+  const query = foldName(search);
+  const list = useMemo(
+    () => (query ? sorted.filter((o) => foldName(o.itemName).includes(query) || foldName((o.itemSlug && catalog?.bySlug(o.itemSlug)?.name) || "").includes(query)) : sorted),
+    [sorted, query, catalog],
+  );
   const range = useRangeSelect(list.map((o) => o.id));
   const pickedCount = list.filter((o) => selected.has(o.id)).length;
   const sortHead = (key: OrderSortKey, label: string) => (
@@ -193,6 +202,8 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
       </button>
     </th>
   );
+
+  const searchBox = <SearchInput className="m-3" label={tr("market.searchOrders")} placeholder={tr("market.searchOrders")} value={search} onChange={(e) => setSearch(e.target.value)} data-market-orders-search />;
 
   return (
     <div>
@@ -248,13 +259,13 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
               {tr("market.myOrders")}
             </h2>
             {tab === "sell" && (
-              <Button size="sm" icon={<WandSparkles />} data-market-reprice disabled={list.length === 0} onClick={() => setRepricing(orders.sell)}>
+              <Button size="sm" icon={<WandSparkles />} data-market-reprice disabled={list.length === 0} onClick={() => setRepricing(list)}>
                 {tr("market.repriceSelected")}
               </Button>
             )}
-            {list.length > 0 && (
-              <Button size="sm" icon={list.some((o) => o.visible) ? <EyeOff /> : <Eye />} data-market-side-visibility disabled={busy.size > 0} onClick={() => void setSideVisible(!list.some((o) => o.visible))}>
-                {tr(list.some((o) => o.visible) ? "market.hideAll" : "market.showAll")}
+            {sorted.length > 0 && (
+              <Button size="sm" icon={sorted.some((o) => o.visible) ? <EyeOff /> : <Eye />} data-market-side-visibility title={tr("market.sideVisibilityNote")} disabled={busy.size > 0} onClick={() => void setSideVisible(!sorted.some((o) => o.visible))}>
+                {tr(sorted.some((o) => o.visible) ? "market.hideAll" : "market.showAll")}
               </Button>
             )}
             <IconButton label={tr("common.refresh")} onClick={() => void refresh()} aria-busy={refreshing || undefined}>
@@ -275,7 +286,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
                 <Skeleton key={w} width={`${w}%`} height="1.1rem" />
               ))}
             </Card>
-          ) : list.length === 0 ? (
+          ) : sorted.length === 0 ? (
             <Card>
               <EmptyState
                 icon={<ShoppingCart />}
@@ -288,7 +299,12 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
               />
             </Card>
           ) : (
+            // one Card for both results and no results, so the search input is never remounted
             <Card className="overflow-hidden">
+              {searchBox}
+              {list.length === 0 ? (
+                <EmptyState icon={<ShoppingCart />} title={tr("market.noOrdersMatch", { query: search.trim() })} />
+              ) : (
               <Table mode="stack" label={tr("market.myOrders")}>
                 <thead>
                   <tr>
@@ -334,6 +350,7 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
                   ))}
                 </tbody>
               </Table>
+              )}
             </Card>
           )}
         </>
