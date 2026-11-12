@@ -558,6 +558,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_empty_order_list_is_ok_and_an_unusable_one_is_invalid() {
+        let m = spawn(vec![reply(200, r#"{"data":[]}"#)]);
+        let (c, _) = client(&m);
+        let got = my_orders(&c, &mem_db()).await.unwrap();
+        assert!(got.sell.is_empty() && got.buy.is_empty());
+        for body in [
+            r#"{"data":null}"#,
+            r#"{}"#,
+            r#"{"data":5}"#,
+            r#"{"data":{}}"#,
+        ] {
+            let m = spawn(vec![reply(200, body)]);
+            let (c, _) = client(&m);
+            let err = my_orders(&c, &mem_db()).await.unwrap_err();
+            assert!(matches!(err, WfmError::Invalid { .. }), "{body}: {err:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn only_a_create_with_no_clear_answer_has_an_unknown_outcome() {
+        for (r, unknown) in [
+            (reply(500, "{}"), true),
+            (reply(503, "{}"), true),
+            (dropped(), true),
+            (reply(400, r#"{"error":{"_form":["bad"]}}"#), false),
+            (reply(401, "{}"), false),
+            (reply(429, "{}"), false),
+        ] {
+            let m = spawn(vec![r]);
+            let (c, _) = client(&m);
+            let err = create(&c, &mem_db(), new_order(json!({})), &AtomicBool::new(false))
+                .await
+                .unwrap_err();
+            assert_eq!(err.outcome_unknown(), unknown, "{err:?}");
+        }
+    }
+
+    #[tokio::test]
     async fn my_orders_survive_a_catalog_failure() {
         let m = spawn(vec![
             reply(
