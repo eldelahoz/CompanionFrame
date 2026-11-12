@@ -21,7 +21,7 @@ import { Button, Card, EmptyState, IconButton, PageHeader, SearchInput, Skeleton
 import { askConfirm } from "../stores/confirm";
 import { addToast } from "../stores/toasts";
 import type { Translator } from "../lib/i18n";
-import { wfmMyReputation, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersSetAllVisible, jobsStartOrdersDelete, jobsStartOrdersVisibility, type ItemDatabase, type MyOrder } from "../lib/ipc";
+import { outcomeUnknown, wfmMyReputation, wfmOrderClose, wfmOrderDelete, wfmOrderUpdate, wfmOrdersSetAllVisible, jobsStartOrdersDelete, jobsStartOrdersVisibility, type ItemDatabase, type MyOrder } from "../lib/ipc";
 import type { WfmPresenceState, PresenceOptions, WfmStatus, WfmSession } from "../lib/ipc";
 import { orderInventoryMatch } from "../lib/marketOrderInventory";
 import { useInventory, useParsedInventory } from "../stores/inventory";
@@ -136,7 +136,13 @@ export default function MarketView({ tr, items, locale = "en", session, signIn, 
     const msg = tr(size > 1 ? (bought ? "market.confirmOrderBoughtTrade" : "market.confirmOrderSoldTrade") : bought ? "market.confirmOrderBought" : "market.confirmOrderSold", params);
     if (!(await askConfirm(msg))) return;
     void guarded(o.id, async () => {
-      await wfmOrderClose(o.id, size);
+      try {
+        await wfmOrderClose(o.id, size);
+      } catch (e) {
+        if (!outcomeUnknown(e)) throw e;
+        // Replaces guarded's error toast: one warning, not two.
+        addToast({ level: "warning", message: tr("market.closeUnknown") });
+      }
     });
   };
   const patch = (o: MyOrder, updates: { platinum?: number; quantity?: number; visible?: boolean }) =>

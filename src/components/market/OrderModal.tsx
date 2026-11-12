@@ -2,7 +2,8 @@ import { X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { subtypeChoicesOf } from "../../../config/shared/wfmOrders";
 import type { Translator } from "../../lib/i18n";
-import { wfmOrderCreate, wfmOrderUpdate, type CatalogItem, type MyOrder } from "../../lib/ipc";
+import { outcomeUnknown, wfmOrderCreate, wfmOrderUpdate, type CatalogItem, type MyOrder } from "../../lib/ipc";
+import { addToast } from "../../stores/toasts";
 import { hasRanks, type CatalogIndex } from "../../lib/wfm/catalog";
 import { Button, Checkbox, Field, IconButton, Input, Modal, Readout, SearchInput, Segmented, Select } from "../ui";
 
@@ -54,6 +55,10 @@ export default function OrderModal({ order, defaultType, catalog, draft, onClose
         });
       onSaved();
     } catch (err) {
+      if (!order && outcomeUnknown(err)) {
+        addToast({ level: "warning", message: tr("orderModal.createUnknown") });
+        return onClose();
+      }
       const choices = subtypeChoicesOf(err);
       if (choices) {
         setSubtypes(choices);
