@@ -179,9 +179,10 @@ pub async fn my_orders(client: &WfmClient, db: &Db) -> Result<MyOrders, WfmError
         .request(Api::V2, Method::GET, "/orders/my", None)
         .await?;
     let http_ms = t.elapsed().as_millis();
+    // An answer without a list is not "no orders": review would then invite a second sell.
     let raw = data(v)
         .and_then(|d| d.as_array().cloned())
-        .unwrap_or_default();
+        .ok_or_else(|| WfmError::invalid("unusable order list"))?;
     // Without the catalog the list still renders, just with "(unknown)" names.
     let t = Instant::now();
     let items = if raw.is_empty() {

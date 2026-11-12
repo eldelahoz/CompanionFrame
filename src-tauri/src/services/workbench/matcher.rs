@@ -592,6 +592,13 @@ impl<H: MatchHost> Matcher<H> {
             }
             Err(e) => {
                 tracing::warn!("[Matcher] Failed to close {}: {e}", m.order_id);
+                // The close may have gone through: a duplicate EE.log delivery must not resend it.
+                if e.outcome_unknown() {
+                    self.recently_closed
+                        .lock()
+                        .unwrap()
+                        .insert(m.order_id.clone(), Instant::now());
+                }
                 false
             }
         }
