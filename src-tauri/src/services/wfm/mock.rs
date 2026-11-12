@@ -18,6 +18,11 @@ pub fn reply(status: u16, body: &str) -> Reply {
     }
 }
 
+/// Closes the connection without answering: what a network failure looks like to the client.
+pub fn dropped() -> Reply {
+    reply(0, "")
+}
+
 impl Reply {
     pub fn header(mut self, k: &'static str, v: &str) -> Self {
         self.headers.push((k, v.into()));
@@ -73,6 +78,9 @@ pub fn spawn(script: Vec<Reply>) -> Mock {
             let r = script
                 .next()
                 .unwrap_or_else(|| reply(599, "script exhausted"));
+            if r.status == 0 {
+                continue;
+            }
             let mut head = format!(
                 "HTTP/1.1 {} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n",
                 r.status,

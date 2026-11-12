@@ -164,6 +164,14 @@ fn mutation_order(v: Value) -> Result<MyOrder, WfmError> {
     normalise(raw, &HashMap::new()).ok_or_else(|| WfmError::invalid("unusable order response"))
 }
 
+/// A create whose answer we could not read may still have placed the order: report it as a
+/// network error so its outcome counts as unknown, never as "did not happen".
+fn unknown_outcome(e: WfmError) -> WfmError {
+    WfmError::Network {
+        detail: e.to_string(),
+    }
+}
+
 pub async fn my_orders(client: &WfmClient, db: &Db) -> Result<MyOrders, WfmError> {
     authed(client)?;
     let t = Instant::now();
@@ -242,7 +250,8 @@ pub async fn create(
             .request(Api::V2, Method::POST, "/order", body(b))
             .await
         {
-            Ok(v) => return mutation_order(v),
+            Ok(v) => return mutation_order(v).map_err(unknown_outcome),
+            Err(e @ WfmError::Invalid { .. }) => return Err(unknown_outcome(e)),
             Err(e) => e,
         };
         let msg = err.to_string().to_lowercase();
@@ -456,7 +465,7 @@ mod tests {
     use crate::db::mem_db;
     use std::sync::{Arc, Mutex};
 
-    use super::super::mock::{Mock, reply, spawn};
+    use super::super::mock::{Mock, dropped, reply, spawn};
     use super::*;
 
     const ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaa";
@@ -781,6 +790,129 @@ mod tests {
         }
         assert!(close(&c, "not-an-id", 1, None).await.is_err());
         assert!(m.requests().is_empty());
+    }
+
+    // Writes under faults: today none is retried, and the caller learns only "no clear answer".
+    #[tokio::test]
+    async fn update_with_no_answer_is_one_network_error_and_no_retry() {
+        let m = spawn(vec![dropped()]);
+        let (c, _) = client(&m);
+        let u = OrderUpdates {
+            platinum: Some(5),
+            ..Default::default()
+        };
+        let err = update(&c, ID, u).await.unwrap_err();
+        assert!(matches!(err, WfmError::Network { .. }), "{err}");
+        assert_eq!(m.requests().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn delete_with_no_answer_is_one_network_error_and_no_retry() {
+        let m = spawn(vec![dropped()]);
+        let (c, _) = client(&m);
+        let err = delete(&c, ID).await.unwrap_err();
+        assert!(matches!(err, WfmError::Network { .. }), "{err}");
+        assert_eq!(m.requests().len(), 1);
+    }
+
+    // POST /close is not idempotent: a lost answer is a plain error, and calling again would post again.
+    #[tokio::test]
+    async fn close_with_no_answer_is_a_plain_network_error_and_a_second_call_posts_again() {
+        let m = spawn(vec![dropped(), reply(200, "{}")]);
+        let (c, _) = client(&m);
+        let err = close(&c, ID, 1, None).await.unwrap_err();
+        assert!(matches!(err, WfmError::Network { .. }), "{err}");
+        assert_eq!(m.requests().len(), 1);
+        close(&c, ID, 1, None).await.unwrap();
+        let posts = m
+            .requests()
+            .iter()
+            .filter(|r| r.starts_with(&format!("post /v2/order/{ID}/close ")))
+            .count();
+        assert_eq!(posts, 2);
+    }
+
+    #[tokio::test]
+    async fn a_delete_under_429_5xx_and_a_dropped_connection_maps_to_the_right_error() {
+        let rows = [
+            (dropped(), "network", true),
+            (reply(500, "{}"), "api500", true),
+            (reply(503, "{}"), "api503", true),
+            (
+                reply(429, "{}").header("retry-after", "7"),
+                "limited",
+                false,
+            ),
+            (reply(409, "{}"), "api409", false),
+        ];
+        for (r, expect, unknown) in rows {
+            let m = spawn(vec![r]);
+            let (c, _) = client(&m);
+            let err = delete(&c, ID).await.unwrap_err();
+            let kind = match &err {
+                WfmError::Network { .. } => "network".to_owned(),
+                WfmError::Api { status, .. } => format!("api{status}"),
+                WfmError::RateLimited { .. } => "limited".to_owned(),
+                other => format!("other: {other}"),
+            };
+            assert_eq!(kind, expect, "{err}");
+            assert_eq!(err.outcome_unknown(), unknown, "{expect}");
+            assert_eq!(m.requests().len(), 1, "{expect}: no retry");
+        }
+    }
+
+    // A 2xx whose answer we cannot read may still have placed the order: the outcome is unknown.
+    #[tokio::test]
+    async fn a_create_answered_2xx_with_an_unreadable_body_is_an_unknown_outcome() {
+        let rows = [
+            (reply(200, "<html>not json</html>"), "non-json body"),
+            (reply(200, r#"{"data":{"nothing":"here"}}"#), "no order id"),
+            (reply(200, r#"{"data":null}"#), "null data"),
+            (reply(201, r#"{"ok":true}"#), "no data"),
+        ];
+        for (r, label) in rows {
+            let m = spawn(vec![r]);
+            let (c, _) = client(&m);
+            let err = create(&c, &mem_db(), new_order(json!({})), &AtomicBool::new(false))
+                .await
+                .unwrap_err();
+            assert!(err.outcome_unknown(), "{label}: {err}");
+            assert_eq!(m.requests().len(), 1, "{label}: no retry");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_create_rejected_with_a_validation_4xx_is_a_known_failure() {
+        let m = spawn(vec![reply(
+            400,
+            r#"{"error":{"platinum":["app.field.invalid"]}}"#,
+        )]);
+        let (c, _) = client(&m);
+        let err = create(&c, &mem_db(), new_order(json!({})), &AtomicBool::new(false))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, WfmError::Api { status: 400, .. }), "{err}");
+        assert!(!err.outcome_unknown());
+    }
+
+    // Reads can be retried freely, so an unusable body stays Invalid (not an unknown write outcome).
+    #[tokio::test]
+    async fn a_read_with_an_unusable_body_stays_invalid() {
+        let m = spawn(vec![reply(200, "<html>not json</html>")]);
+        let (c, _) = client(&m);
+        let err = my_orders(&c, &mem_db()).await.unwrap_err();
+        assert!(matches!(err, WfmError::Invalid { .. }), "{err}");
+        assert!(!err.outcome_unknown());
+
+        for body in ["<html>not json</html>", r#"{"data":5}"#] {
+            let m = spawn(vec![reply(200, body)]);
+            let (c, _) = client(&m);
+            let err = orders_item(&c, "x_item", false, None, None)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, WfmError::Invalid { .. }), "{body}: {err}");
+            assert!(!err.outcome_unknown(), "{body}");
+        }
     }
 
     #[tokio::test]

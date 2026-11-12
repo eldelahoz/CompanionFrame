@@ -59,6 +59,19 @@ impl WfmError {
         }
     }
 
+    /// The request may have reached WFM and been applied: no answer, or a 5xx. A write that ends
+    /// like this has an unknown result and must not be reported as "did not happen".
+    pub fn outcome_unknown(&self) -> bool {
+        matches!(
+            self,
+            Self::Network { .. }
+                | Self::Api {
+                    status: 500..=599,
+                    ..
+                }
+        )
+    }
+
     pub fn invalid(detail: impl ToString) -> Self {
         Self::Invalid {
             detail: detail.to_string(),
@@ -145,6 +158,41 @@ pub fn error_detail(body: &Value, object_fallback: Option<&str>) -> Option<Strin
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn only_no_answer_and_5xx_leave_a_write_with_an_unknown_outcome() {
+        let api = |status| WfmError::Api {
+            status,
+            detail: String::new(),
+        };
+        let rows = [
+            (WfmError::Network { detail: "x".into() }, true),
+            (api(500), true),
+            (api(502), true),
+            (api(599), true),
+            (api(400), false),
+            (api(404), false),
+            (api(409), false),
+            (api(499), false),
+            (WfmError::Unauthorized { detail: "x".into() }, false),
+            (
+                WfmError::RateLimited {
+                    retry_after_secs: Some(3),
+                },
+                false,
+            ),
+            (WfmError::invalid("x"), false),
+            (
+                WfmError::SubtypeRequired {
+                    subtypes: vec!["intact".into()],
+                },
+                false,
+            ),
+        ];
+        for (err, expected) in rows {
+            assert_eq!(err.outcome_unknown(), expected, "{err}");
+        }
+    }
 
     #[test]
     fn only_400_and_404_mean_no_data() {
