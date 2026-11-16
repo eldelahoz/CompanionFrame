@@ -11,6 +11,7 @@
     "replay": "cargo run --manifest-path src-tauri/Cargo.toml --example replay && node scripts/replay/render.mjs",
     "game-data": "node scripts/copy-game-data.mjs",
     "fetch-onnx": "node scripts/fetch-onnx.mjs",
+    "downloads": "node scripts/downloads.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
