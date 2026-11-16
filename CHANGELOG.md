@@ -2,6 +2,18 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.4 (2026-11-12)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Fixed
+* fix(market): reprice loads prices in the background, and the orders table gets a search by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/48
+* fix(workbench): a sell order whose create result is unknown waits for review instead of showing as failed by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/51
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.5.3...v0.5.4
+
 ## 0.5.3 (2026-11-09)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
