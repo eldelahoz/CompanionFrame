@@ -9,6 +9,8 @@ CompanionFrame is a free, open-source Warframe companion app for Windows: warfra
 <p align="center">
 <a href="https://github.com/eldelahoz/CompanionFrame/releases/latest"><img src="https://img.shields.io/badge/Download%20for%20Windows-0078D4?style=flat-square&logo=windows11&logoColor=white" alt="Download for Windows"></a>
 <a href="https://github.com/eldelahoz/CompanionFrame/releases/latest"><img src="https://img.shields.io/github/v/release/eldelahoz/CompanionFrame?style=flat-square&label=release" alt="Latest release"></a>
+<a href="https://github.com/eldelahoz/CompanionFrame/releases"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/eldelahoz/CompanionFrame/badges/installs.json&style=flat-square" alt="Installs"></a>
+<a href="https://github.com/eldelahoz/CompanionFrame/releases"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/eldelahoz/CompanionFrame/badges/updates.json&style=flat-square" alt="Auto-updates"></a>
 <a href="https://ko-fi.com/eldelahoz"><img src="https://img.shields.io/badge/Ko--fi-support-FF5E5B?style=flat-square&logo=kofi&logoColor=white" alt="Support on Ko-fi"></a>
 </p>
 
