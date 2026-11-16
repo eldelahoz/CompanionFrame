@@ -36,6 +36,19 @@ describe("rewriteLatest", () => {
     expect(() => rewriteLatest({ platforms: {} }, opts)).toThrow(/no platforms/);
   });
 
+  it("throws on an unknown platform key", () => {
+    const bad = latest();
+    bad.platforms["windows-x86_64-msi"] = { signature: "SIG-C", url: "https://example.com/x.msi" };
+    expect(() => rewriteLatest(bad, opts)).toThrow(/unexpected platform key.*windows-x86_64-msi/);
+  });
+
+  it("accepts each known platform key on its own", () => {
+    for (const key of ["windows-x86_64", "windows-x86_64-nsis"]) {
+      const only = { ...latest(), platforms: { [key]: latest().platforms[key] } };
+      expect(Object.keys(rewriteLatest(only, opts).platforms)).toEqual([key]);
+    }
+  });
+
   it("throws on a platform without a signature", () => {
     const bad = latest();
     bad.platforms["windows-x86_64-nsis"].signature = "";
