@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarize } from "./downloads.mjs";
+import { badgeJson, summarize } from "./downloads.mjs";
 
 const asset = (name, download_count) => ({ name, download_count });
 
@@ -49,4 +49,14 @@ describe("summarize", () => {
 
 it("importing the module does not run the CLI", async () => {
   await expect(import("./downloads.mjs")).resolves.toBeDefined();
+});
+
+describe("badgeJson", () => {
+  it("is a shields endpoint with a string message", () => {
+    expect(badgeJson("installs", 1234)).toEqual({ schemaVersion: 1, label: "installs", message: "1234", color: "blue" });
+  });
+
+  it("renders zero as the string 0", () => {
+    expect(badgeJson("updates", 0).message).toBe("0");
+  });
 });
