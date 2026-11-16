@@ -93,3 +93,10 @@ jobs:
           # Default true; explicit because the app depends on latest.json.
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
+
+      # The updater gets its own -update.exe copy so GitHub's download counters tell installs and updates apart.
+      - name: Add the update installer and repoint latest.json
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/updater-asset.mjs "v${{ steps.meta.outputs.version }}"
