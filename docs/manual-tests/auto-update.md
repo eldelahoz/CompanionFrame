@@ -5,8 +5,8 @@ Source: `src/stores/updater.ts`, `src-tauri/tauri.conf.json` (`plugins.updater`)
 
 ## Release side (after publishing NEW)
 
-1. NEW's assets include `CompanionFrame_<NEW>_x64-setup.exe`, its `.sig` and `latest.json`.
-2. Open `https://github.com/eldelahoz/CompanionFrame/releases/latest/download/latest.json`: `version` is NEW, `platforms.windows-x86_64` has a `url` and a non-empty `signature`.
+1. NEW's assets include `CompanionFrame_<NEW>_x64-setup.exe`, its `.sig`, `CompanionFrame_<NEW>_x64-update.exe` and `latest.json`.
+2. Open `https://github.com/eldelahoz/CompanionFrame/releases/latest/download/latest.json`: `version` is NEW, `platforms.windows-x86_64` has a `url` and a non-empty `signature`. The `url` of both `windows-x86_64` and `windows-x86_64-nsis` ends in `_x64-update.exe`.
 3. While NEW is still a **draft** the same URL must not show NEW (drafts are ignored).
 
 ## App side
