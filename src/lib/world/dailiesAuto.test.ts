@@ -388,6 +388,26 @@ describe("autoTrackerState", () => {
     expect(autoTrackerState(payload, wd, NOW, FRESH)["nw:act3"]).toEqual({ count: 0 });
   });
 
+  it("ticks a live alert whose id is in CompletedAlerts", () => {
+    const wd = world({ alerts: [{ id: "a1" }, { id: "a2" }] });
+    const out = autoTrackerState(inv({ CompletedAlerts: ["a1"] }), wd, NOW, FRESH);
+    expect(out["alert:a1"]).toEqual({ count: 1 });
+    expect(out["alert:a2"]).toBeUndefined();
+  });
+
+  it("adds nothing for a completed id with no live alert", () => {
+    const wd = world({ alerts: [{ id: "a2" }] });
+    expect(autoTrackerState(inv({ CompletedAlerts: ["gone"] }), wd, NOW, FRESH)).toEqual({});
+  });
+
+  it("ignores malformed alert inputs without throwing", () => {
+    const wd = world({ alerts: [{ id: "a1" }, { id: "" }] });
+    for (const completed of ["a1", { 0: "a1" }, [1, null, {}, ""], null]) {
+      expect(autoTrackerState(inv({ CompletedAlerts: completed }), wd, NOW, FRESH)).toEqual({});
+    }
+    expect(autoTrackerState(inv({ CompletedAlerts: ["a1"] }), null, NOW, FRESH)).toEqual({});
+  });
+
   it("survives malformed field shapes without throwing", () => {
     const payload = inv({
       LastSortieReward: "garbage",

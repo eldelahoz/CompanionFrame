@@ -244,5 +244,11 @@ export function autoTrackerState(
 
   if (wd) nightwaveTasks(inv, wd, out);
 
+  // The id names one alert instance, so a match can never be a stale "done".
+  const completedAlerts = new Set(asArray(inv.CompletedAlerts).filter((id) => typeof id === "string"));
+  for (const alert of wd?.alerts ?? []) {
+    if (alert.id && completedAlerts.has(alert.id)) out[`alert:${alert.id}`] = { count: 1 };
+  }
+
   return out;
 }
