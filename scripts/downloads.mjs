@@ -1,6 +1,8 @@
 // Prints GitHub download counts per published release: manual installs (-setup.exe) vs updater downloads (-update.exe).
-// These are download counts, not unique users. Usage: pnpm downloads
+// These are download counts, not unique users. Usage: pnpm downloads [--badge <dir>]
+// --badge writes shields endpoint files installs.json and updates.json into <dir> instead of printing the table.
 import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +18,8 @@ export function summarize(releases) {
     }));
 }
 
+export const badgeJson = (label, value) => ({ schemaVersion: 1, label, message: String(value), color: "blue" });
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const repo =
     process.env.GITHUB_REPOSITORY ??
@@ -23,10 +27,18 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   // --paginate prints one JSON array per page; --slurp merges them.
   const pages = JSON.parse(execFileSync("gh", ["api", `repos/${repo}/releases`, "--paginate", "--slurp"], { encoding: "utf8", maxBuffer: 1 << 26 }));
   const rows = summarize(pages.flat());
+  const sum = (k) => rows.reduce((n, r) => n + (r[k] ?? 0), 0);
+  const badgeAt = process.argv.indexOf("--badge");
+  if (badgeAt > 0) {
+    const dir = process.argv[badgeAt + 1];
+    if (!dir) throw new Error("--badge needs a directory");
+    mkdirSync(dir, { recursive: true });
+    for (const k of ["installs", "updates"]) writeFileSync(path.join(dir, `${k}.json`), JSON.stringify(badgeJson(k, sum(k))) + "\n");
+    process.exit(0);
+  }
   const line = (a, b, c, d) => `${a.padEnd(10)}${b.padEnd(12)}${String(c).padStart(9)}${String(d).padStart(9)}`;
   console.log(line("tag", "published", "installs", "updates"));
   for (const r of rows) console.log(line(r.tag, r.published, r.installs, r.updates ?? "-"));
-  const sum = (k) => rows.reduce((n, r) => n + (r[k] ?? 0), 0);
   console.log(line("total", "", sum("installs"), sum("updates")));
   if (rows.some((r) => r.updates === null)) console.log("\n- = release has no -update.exe: its installs also include auto-updates.");
 }

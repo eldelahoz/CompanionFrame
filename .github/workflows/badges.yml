@@ -1,0 +1,37 @@
+name: Badges
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: badges
+
+jobs:
+  badges:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: node scripts/downloads.mjs --badge out
+      # main is protected and only takes PRs; the badges branch holds only these two files, force-pushed so it never grows.
+      - name: Publish to the badges branch
+        run: |
+          cd out
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add installs.json updates.json
+          git commit -q -m "chore(badges): update download counts"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:badges
