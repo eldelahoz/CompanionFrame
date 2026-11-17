@@ -2,6 +2,18 @@
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.5 (2026-11-17)
+
+<!-- Release notes generated using configuration in .github/release.yml at main -->
+
+## What's Changed
+### Fixed
+* fix(world): completed alerts tick themselves in the dailies tracker by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/52
+* fix(wfm): unusable order lists, unsure manual writes and unsure auto-closes no longer invite a duplicate write by @eldelahoz in https://github.com/eldelahoz/CompanionFrame/pull/55
+
+
+**Full Changelog**: https://github.com/eldelahoz/CompanionFrame/compare/v0.5.4...v0.5.5
+
 ## 0.5.4 (2026-11-12)
 
 <!-- Release notes generated using configuration in .github/release.yml at main -->
