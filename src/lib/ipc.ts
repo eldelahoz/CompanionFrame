@@ -885,6 +885,11 @@ export const wfmErrorOf = (e: { kind: string; detail?: string; status?: number; 
   }
   return Object.assign(new Error(e.detail ?? (e.kind === "rate_limited" ? "Rate limited by warframe.market." : e.kind)), { kind: e.kind, status: e.status });
 };
+/** True when a write may have reached warframe.market even though it failed (no answer, or a 5xx): the order may exist or be closed. */
+export const outcomeUnknown = (err: unknown): boolean => {
+  const e = err as { kind?: string; status?: number };
+  return e?.kind === "network" || (e?.kind === "api" && (e.status ?? 0) >= 500);
+};
 const unwrapWfm = <T>(r: { status: "ok"; data: T } | { status: "error"; error: Parameters<typeof wfmErrorOf>[0] }): T => {
   if (r.status === "error") throw wfmErrorOf(r.error);
   return r.data;

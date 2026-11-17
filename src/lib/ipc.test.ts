@@ -1,5 +1,5 @@
 import { beforeEach, expect, test } from "vitest";
-import { appInfo, getPersonalLoadouts, getPersonalProfile, getSettings, resetMock, setSettings, wfmContractsMy, wfmPrice, wfmPricesBulk, wfmRivenAuctionClose, wfmRivenSearch, wfmSendPlusRep, wfmStatsHistory } from "./ipc";
+import { appInfo, getPersonalLoadouts, getPersonalProfile, getSettings, resetMock, setSettings, wfmContractsMy, outcomeUnknown, wfmPrice, wfmPricesBulk, wfmRivenAuctionClose, wfmRivenSearch, wfmSendPlusRep, wfmStatsHistory } from "./ipc";
 
 beforeEach(resetMock);
 
@@ -47,4 +47,10 @@ test("personal stats mocks outside tauri", async () => {
   expect(p.profile?.career.MissionsCompleted).toBe(5400);
   expect(p.nextRefreshAt).toBeGreaterThan(Date.now());
   expect((await getPersonalLoadouts())[0].slots[0].item?.category).toBe("Suits");
+});
+
+test("outcomeUnknown: no answer or a 5xx may have been applied; known refusals and plain errors may not", () => {
+  const e = (kind: string, status?: number) => Object.assign(new Error(kind), { kind, status });
+  expect([e("network"), e("api", 500), e("api", 503)].map(outcomeUnknown)).toEqual([true, true, true]);
+  expect([e("api", 400), e("rate_limited", 429), e("unauthorized", 401), new Error("x"), null, undefined].map(outcomeUnknown)).toEqual([false, false, false, false, false, false]);
 });

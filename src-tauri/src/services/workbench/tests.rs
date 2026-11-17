@@ -1088,6 +1088,7 @@ struct FakeMatch {
     contracts_calls: AtomicUsize,
     closed: Mutex<Vec<String>>,
     close_err: bool,
+    close_with: Option<fn() -> WfmError>,
 }
 
 impl FakeMatch {
@@ -1106,6 +1107,7 @@ impl FakeMatch {
             contracts_calls: AtomicUsize::new(0),
             closed: Mutex::default(),
             close_err: false,
+            close_with: None,
         }
     }
     fn sell(self, orders: Vec<MyOrder>) -> Self {
@@ -1175,7 +1177,9 @@ impl MatchHost for Arc<FakeMatch> {
             .lock()
             .unwrap()
             .push(format!("order:{id}:{quantity}:{per_trade:?}"));
-        fut(if self.close_err {
+        fut(if let Some(e) = self.close_with {
+            Err(e())
+        } else if self.close_err {
             Err(WfmError::invalid("Network error"))
         } else {
             Ok(())
@@ -2097,4 +2101,48 @@ async fn close_all_closes_each_match_and_reports_only_the_accepted_ones() {
     let mut called = false;
     assert!(m.close_all(&two[..1], |_| called = true).await.is_empty());
     assert!(!called, "a refused close announces nothing");
+}
+
+fn unsure_net() -> WfmError {
+    WfmError::Network {
+        detail: "reset".into(),
+    }
+}
+fn unsure_503() -> WfmError {
+    WfmError::Api {
+        status: 503,
+        detail: "down".into(),
+    }
+}
+fn known_400() -> WfmError {
+    WfmError::Api {
+        status: 400,
+        detail: "bad".into(),
+    }
+}
+
+#[tokio::test]
+async fn an_unsure_close_is_not_resent_by_a_duplicate_delivery() {
+    for e in [unsure_net as fn() -> WfmError, unsure_503] {
+        let mut f = FakeMatch::new().sell(vec![order("o1", 50, 5, "Test Item", "test_item")]);
+        f.close_with = Some(e);
+        let (m, host) = f.matcher();
+        let t = sale(50, &[("Test Item", 1)]);
+        let first = m.match_trade(&t).await;
+        assert!(!m.close_match(&first[0]).await);
+        let again = m.match_trade(&t).await;
+        assert!(m.close_all(&again, |_| {}).await.is_empty());
+        assert_eq!(host.closed.lock().unwrap().len(), 1, "one /close only");
+    }
+}
+
+#[tokio::test]
+async fn a_known_failed_close_may_be_retried_by_a_later_delivery() {
+    let mut f = FakeMatch::new().sell(vec![order("o1", 50, 5, "Test Item", "test_item")]);
+    f.close_with = Some(known_400);
+    let (m, _) = f.matcher();
+    let t = sale(50, &[("Test Item", 1)]);
+    let first = m.match_trade(&t).await;
+    assert!(!m.close_match(&first[0]).await);
+    assert_eq!(ids(&m.match_trade(&t).await), ["o1"]);
 }

@@ -283,6 +283,19 @@ pub async fn wfm_orders_my_cached(
     })
 }
 
+/// A write that may have gone through: re-read WFM so the rows show what it really has.
+async fn refresh_if_unsure(
+    e: &WfmError,
+    client: &WfmClient,
+    db: &Db,
+    cache: &MyOrdersCache,
+    app: &AppHandle,
+) {
+    if e.outcome_unknown() {
+        let _ = cache.fetch(client, db, true, announce(app)).await;
+    }
+}
+
 /// The Refresh button: always asks WFM.
 #[tauri::command]
 #[specta::specta]
@@ -307,7 +320,13 @@ pub async fn wfm_order_create(
     order: CreateOrder,
 ) -> Result<MyOrder, WfmError> {
     let client = session.client();
-    let created = orders::create(client, &db, order, &SEND_PER_TRADE).await?;
+    let created = match orders::create(client, &db, order, &SEND_PER_TRADE).await {
+        Ok(o) => o,
+        Err(e) => {
+            refresh_if_unsure(&e, client, &db, &cache, &app).await;
+            return Err(e);
+        }
+    };
     let named = orders::named(client, &db, created).await;
     cache.upsert(named.clone(), announce(&app));
     Ok(named)
@@ -345,12 +364,20 @@ pub async fn wfm_order_delete(
 pub async fn wfm_order_close(
     app: AppHandle,
     session: State<'_, Session>,
+    db: State<'_, Db>,
     cache: State<'_, MyOrdersCache>,
     order_id: String,
     quantity: u32,
     per_trade: Option<u32>,
 ) -> Result<OrderAck, WfmError> {
-    let ack = orders::close(session.client(), &order_id, quantity, per_trade).await?;
+    let client = session.client();
+    let ack = match orders::close(client, &order_id, quantity, per_trade).await {
+        Ok(a) => a,
+        Err(e) => {
+            refresh_if_unsure(&e, client, &db, &cache, &app).await;
+            return Err(e);
+        }
+    };
     // `close` validated it already; this is the amount WFM took off the row.
     let closed = validators::close_quantity(quantity, per_trade)?;
     cache.lower(&ack.id, closed, announce(&app));
